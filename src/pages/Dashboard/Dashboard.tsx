@@ -23,7 +23,6 @@ import DashboardLayout from "../../layouts/DashboardLayout";
 import { useAuth } from "../../context/AuthContext";
 import { COLORS, getStatusColor } from "../../constants/colors";
 
-// Donut Chart Component
 const DonutChart = () => {
   const data = [
     {
@@ -43,9 +42,8 @@ const DonutChart = () => {
 
   const radius = 40;
   const strokeWidth = 12;
-  const gapAngle = 1.5; // Small gap in degrees
+  const gapAngle = 1.5;
 
-  // Calculate arc paths with gaps
   const createArc = (startAngle: number, endAngle: number) => {
     const start = (startAngle - 90) * (Math.PI / 180);
     const end = (endAngle - 90) * (Math.PI / 180);
@@ -105,7 +103,6 @@ const DonutChart = () => {
         </Box>
       </Box>
 
-      {/* Legend */}
       <Box sx={{ mt: 3 }}>
         {data.map((item, index) => (
           <Box
@@ -163,7 +160,6 @@ const DonutChart = () => {
   );
 };
 
-// Tasks Data
 const tasksData = [
   {
     id: "ACT-001",
@@ -261,7 +257,6 @@ const tasksData = [
   },
 ];
 
-// Task Row Component
 const TaskRow = ({ task }: { task: (typeof tasksData)[0] }) => {
   const [open, setOpen] = useState(task.id === "ACT-001");
   const statusColor = getStatusColor(task.status);
@@ -350,7 +345,6 @@ const TaskRow = ({ task }: { task: (typeof tasksData)[0] }) => {
         </TableCell>
       </TableRow>
 
-      {/* Expanded Content */}
       {task.linkedActions && (
         <TableRow>
           <TableCell
@@ -441,7 +435,6 @@ const Dashboard = () => {
       title="Dashboard"
       subtitle="Project overview and quick actions"
     >
-      {/* Welcome Card */}
       <Card
         sx={{
           bgcolor: COLORS.bgSecondary,
@@ -533,7 +526,6 @@ const Dashboard = () => {
         </Typography>
       </Card>
 
-      {/* Two Column Layout */}
       <Box
         sx={{
           display: "grid",
@@ -541,7 +533,6 @@ const Dashboard = () => {
           gap: 3,
         }}
       >
-        {/* Weekly Readiness Snapshot */}
         <Card
           sx={{
             bgcolor: COLORS.bgSecondary,
@@ -595,7 +586,6 @@ const Dashboard = () => {
           <DonutChart />
         </Card>
 
-        {/* Recent Tasks */}
         <Card
           sx={{
             bgcolor: COLORS.bgPrimary,

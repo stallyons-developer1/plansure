@@ -93,7 +93,12 @@ const DashboardLayout = ({
     return item.icon;
   };
 
-  const isActive = (path: string) => location.pathname === path;
+  const isActive = (path: string) => {
+    if (path === "/dashboard") {
+      return location.pathname === path;
+    }
+    return location.pathname.startsWith(path);
+  };
 
   const drawerContent = (
     <Box
@@ -104,7 +109,6 @@ const DashboardLayout = ({
         bgcolor: COLORS.bgPrimary,
       }}
     >
-      {/* Logo */}
       <Box sx={{ p: 2, pt: 3 }}>
         <Box
           component="img"
@@ -114,7 +118,6 @@ const DashboardLayout = ({
         />
       </Box>
 
-      {/* Main Menu */}
       <Box sx={{ px: 2, pt: 3 }}>
         <Typography
           sx={{
@@ -173,7 +176,6 @@ const DashboardLayout = ({
         </List>
       </Box>
 
-      {/* View Menu */}
       <Box sx={{ px: 2, pt: 3 }}>
         <Typography
           sx={{
@@ -232,10 +234,8 @@ const DashboardLayout = ({
         </List>
       </Box>
 
-      {/* Spacer */}
       <Box sx={{ flexGrow: 1 }} />
 
-      {/* User Profile */}
       <Box sx={{ p: 2 }}>
         <Divider sx={{ borderColor: COLORS.border, mb: 2 }} />
         <Box
@@ -300,7 +300,6 @@ const DashboardLayout = ({
         overflow: "hidden",
       }}
     >
-      {/* Mobile Drawer */}
       <Drawer
         variant="temporary"
         open={mobileOpen}
@@ -318,7 +317,6 @@ const DashboardLayout = ({
         {drawerContent}
       </Drawer>
 
-      {/* Desktop Drawer */}
       <Drawer
         variant="permanent"
         sx={{
@@ -333,7 +331,6 @@ const DashboardLayout = ({
         {drawerContent}
       </Drawer>
 
-      {/* Main Content */}
       <Box
         component="main"
         sx={{
@@ -346,7 +343,6 @@ const DashboardLayout = ({
           flexDirection: "column",
         }}
       >
-        {/* Header */}
         <Box
           sx={{
             px: { xs: 2, sm: 3 },
@@ -366,7 +362,6 @@ const DashboardLayout = ({
             </IconButton>
             <Box>
               <Typography
-                // variant="h5"
                 sx={{
                   color: COLORS.textPrimary,
                   fontWeight: 600,
@@ -393,7 +388,6 @@ const DashboardLayout = ({
           </IconButton>
         </Box>
 
-        {/* Page Content */}
         <Box sx={{ p: { xs: 2, sm: 3 }, flexGrow: 1, overflowY: "auto" }}>
           {children}
         </Box>

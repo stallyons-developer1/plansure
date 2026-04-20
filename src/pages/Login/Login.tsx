@@ -121,7 +121,6 @@ const Login = () => {
           alignItems: "center",
         }}
       >
-        {/* Logo Section */}
         <Box sx={{ textAlign: "center", mb: 3 }}>
           <Box
             sx={{
@@ -141,7 +140,6 @@ const Login = () => {
           </Box>
         </Box>
 
-        {/* Login Card */}
         <Card
           sx={{
             width: "100%",
@@ -284,7 +282,6 @@ const Login = () => {
           </Box>
         </Card>
 
-        {/* Footer */}
         <Typography
           sx={{
             mt: 4,

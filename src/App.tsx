@@ -2,8 +2,9 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
 import Login from "./pages/Login/Login";
 import Dashboard from "./pages/Dashboard/Dashboard";
+import Projects from "./pages/Projects/Projects";
+import ProjectWorkspace from "./pages/ProjectWorkspace/ProjectWorkspace";
 
-// Placeholder components - will be replaced with actual dashboards
 const AdminDashboard = () => (
   <div
     style={{
@@ -32,7 +33,6 @@ const PlannerDashboard = () => (
   </div>
 );
 
-// Protected Route wrapper
 const ProtectedRoute = ({
   children,
   allowedRoles,
@@ -97,7 +97,7 @@ function App() {
       />
 
       <Route
-        path="/dashboard/*"
+        path="/dashboard"
         element={
           <ProtectedRoute allowedRoles={["user"]}>
             <Dashboard />
@@ -105,7 +105,24 @@ function App() {
         }
       />
 
-      {/* Redirect root to login */}
+      <Route
+        path="/dashboard/projects"
+        element={
+          <ProtectedRoute allowedRoles={["user"]}>
+            <Projects />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/dashboard/projects/:projectId"
+        element={
+          <ProtectedRoute allowedRoles={["user"]}>
+            <ProjectWorkspace />
+          </ProtectedRoute>
+        }
+      />
+
       <Route path="/" element={<Navigate to="/login" replace />} />
     </Routes>
   );
