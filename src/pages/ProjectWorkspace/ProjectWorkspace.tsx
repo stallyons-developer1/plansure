@@ -1,8 +1,12 @@
-import { Box, Card, Typography, Button, Tabs, Tab } from "@mui/material";
+import { Box, Card, Typography, Tabs, Tab } from "@mui/material";
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import DashboardLayout from "../../layouts/DashboardLayout";
 import { COLORS } from "../../constants/colors";
+import ActivitiesTable, {
+  activitiesData,
+} from "../../components/ActivitiesTable";
+import ActivitiesSummary from "../../components/ActivitiesSummary";
 
 const projectsData: Record<
   string,
@@ -150,35 +154,51 @@ const StepIndicator = ({
   label,
   isActive,
   isCompleted,
+  onClick,
 }: {
   number: number;
   label: string;
   isActive: boolean;
   isCompleted: boolean;
+  onClick?: () => void;
 }) => (
-  <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+  <Box
+    sx={{
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      cursor: "pointer",
+    }}
+    onClick={onClick}
+  >
     <Box
       sx={{
-        width: 36,
-        height: 36,
+        width: 38,
+        height: 38,
         borderRadius: "50%",
-        bgcolor: isActive ? COLORS.green : "transparent",
-        border: `2px solid ${isActive || isCompleted ? COLORS.green : COLORS.textMuted}`,
+        bgcolor: isActive || isCompleted ? COLORS.blue : "transparent",
+        border: isActive || isCompleted ? "none" : `2px solid ${COLORS.border}`,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        color: isActive ? COLORS.bgPrimary : COLORS.textMuted,
-        fontWeight: 600,
-        fontSize: "14px",
+        color: isActive || isCompleted ? "#fff" : COLORS.border,
+        fontWeight: 500,
+        fontSize: "15px",
+        transition: "all 0.2s ease",
+        "&:hover": {
+          opacity: 0.8,
+        },
       }}
     >
       {number}
     </Box>
     <Typography
       sx={{
-        color: isActive ? COLORS.textPrimary : COLORS.textMuted,
-        fontSize: "12px",
+        color: isActive || isCompleted ? COLORS.textPrimary : COLORS.border,
+        fontSize: "14px",
+        fontWeight: 400,
         mt: 1,
+        mb: 0,
         textAlign: "center",
         whiteSpace: "nowrap",
       }}
@@ -194,40 +214,41 @@ const RAGDonutChart = ({
   data: { green: number; amber: number; red: number };
 }) => {
   const total = data.green + data.amber + data.red;
-  const radius = 70;
-  const strokeWidth = 28;
-  const gapAngle = 2;
+  const size = 240;
+  const strokeWidth = 36;
+  const radius = (size - strokeWidth) / 2;
+  const center = size / 2;
 
   const createArc = (startAngle: number, endAngle: number) => {
     const start = (startAngle - 90) * (Math.PI / 180);
     const end = (endAngle - 90) * (Math.PI / 180);
-    const x1 = 100 + radius * Math.cos(start);
-    const y1 = 100 + radius * Math.sin(start);
-    const x2 = 100 + radius * Math.cos(end);
-    const y2 = 100 + radius * Math.sin(end);
+    const x1 = center + radius * Math.cos(start);
+    const y1 = center + radius * Math.sin(start);
+    const x2 = center + radius * Math.cos(end);
+    const y2 = center + radius * Math.sin(end);
     const largeArc = endAngle - startAngle > 180 ? 1 : 0;
     return `M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2}`;
   };
 
   const segments = [
-    { value: data.green, color: COLORS.green },
-    { value: data.amber, color: COLORS.amber },
-    { value: data.red, color: COLORS.red },
+    { value: data.red, color: "#EF4444" },
+    { value: data.green, color: "#22C55E" },
+    { value: data.amber, color: "#F59E0B" },
   ];
 
   let currentAngle = 0;
   const arcs = segments.map((segment) => {
-    const startAngle = currentAngle + gapAngle / 2;
-    const sweepAngle = (segment.value / total) * 360 - gapAngle;
+    const startAngle = currentAngle;
+    const sweepAngle = (segment.value / total) * 360;
     const endAngle = startAngle + sweepAngle;
-    currentAngle += (segment.value / total) * 360;
+    currentAngle = endAngle;
     return { ...segment, path: createArc(startAngle, endAngle) };
   });
 
   return (
     <Box>
-      <Box sx={{ position: "relative", width: 200, height: 200, mx: "auto" }}>
-        <svg viewBox="0 0 200 200">
+      <Box sx={{ position: "relative", width: size, height: size, mx: "auto" }}>
+        <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size}>
           {arcs.map((arc, index) => (
             <path
               key={index}
@@ -244,47 +265,47 @@ const RAGDonutChart = ({
         sx={{
           display: "flex",
           justifyContent: "center",
-          gap: 3,
-          mt: 2,
+          gap: 4,
+          mt: 4,
         }}
       >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <Box
             sx={{
-              width: 10,
-              height: 10,
+              width: 12,
+              height: 12,
               borderRadius: "50%",
-              bgcolor: COLORS.green,
+              bgcolor: "#22C55E",
             }}
           />
-          <Typography sx={{ color: COLORS.textSecondary, fontSize: "12px" }}>
-            Green: {data.green}
+          <Typography sx={{ color: COLORS.textSecondary, fontSize: "14px" }}>
+            Green:&nbsp;&nbsp;{data.green}
           </Typography>
         </Box>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <Box
             sx={{
-              width: 10,
-              height: 10,
+              width: 12,
+              height: 12,
               borderRadius: "50%",
-              bgcolor: COLORS.amber,
+              bgcolor: "#F59E0B",
             }}
           />
-          <Typography sx={{ color: COLORS.textSecondary, fontSize: "12px" }}>
-            Amber: {data.amber}
+          <Typography sx={{ color: COLORS.textSecondary, fontSize: "14px" }}>
+            Amber:&nbsp;&nbsp;{data.amber}
           </Typography>
         </Box>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <Box
             sx={{
-              width: 10,
-              height: 10,
+              width: 12,
+              height: 12,
               borderRadius: "50%",
-              bgcolor: COLORS.red,
+              bgcolor: "#EF4444",
             }}
           />
-          <Typography sx={{ color: COLORS.textSecondary, fontSize: "12px" }}>
-            Red: {data.red}
+          <Typography sx={{ color: COLORS.textSecondary, fontSize: "14px" }}>
+            Red:&nbsp;&nbsp;{data.red}
           </Typography>
         </Box>
       </Box>
@@ -308,14 +329,19 @@ const StatCard = ({
       bgcolor: COLORS.bgSecondary,
       border: `1px solid ${COLORS.border}`,
       borderRadius: 2,
-      p: 2,
-      textAlign: "center",
+      height: 80,
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      p: 1.5,
     }}
   >
     <Typography
       sx={{
-        color: COLORS.textSecondary,
+        color: "#94A3B8",
         fontSize: "12px",
+        fontWeight: 500,
         mb: 0.5,
       }}
     >
@@ -324,8 +350,9 @@ const StatCard = ({
     <Typography
       sx={{
         color: valueColor,
-        fontSize: "28px",
+        fontSize: "24px",
         fontWeight: 700,
+        lineHeight: 1,
       }}
     >
       {value}
@@ -333,8 +360,10 @@ const StatCard = ({
     {subLabel && (
       <Typography
         sx={{
-          color: COLORS.textSecondary,
-          fontSize: "11px",
+          color: "#94A3B8",
+          fontSize: "12px",
+          fontWeight: 500,
+          mt: 0.25,
         }}
       >
         {subLabel}
@@ -347,8 +376,40 @@ const ProjectWorkspace = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState(0);
+  const [currentStep, setCurrentStep] = useState(1);
+  const [ragFilter, setRagFilter] = useState("all");
 
   const project = projectsData[projectId || "1"];
+
+  const filteredActivities = activitiesData.filter((activity) => {
+    if (ragFilter === "all") return true;
+    return activity.ragColor === ragFilter;
+  });
+
+  const greenCount = activitiesData.filter(
+    (a) => a.ragColor === "green",
+  ).length;
+  const amberCount = activitiesData.filter(
+    (a) => a.ragColor === "amber",
+  ).length;
+  const redCount = activitiesData.filter((a) => a.ragColor === "red").length;
+  const blockedCount = activitiesData.filter(
+    (a) => a.status === "Blocked",
+  ).length;
+
+  const steps = [
+    "Draft",
+    "Meeting Open",
+    "Execution",
+    "Close-Out Eligible",
+    "Closed",
+  ];
+
+  const handleStepClick = (stepNumber: number) => {
+    if (stepNumber === currentStep && currentStep < steps.length) {
+      setCurrentStep(currentStep + 1);
+    }
+  };
 
   if (!project) {
     return (
@@ -363,14 +424,6 @@ const ProjectWorkspace = () => {
     );
   }
 
-  const steps = [
-    "Draft",
-    "Meeting Open",
-    "Execution",
-    "Close-Out Eligible",
-    "Closed",
-  ];
-
   return (
     <DashboardLayout
       title="Project Workspace"
@@ -381,90 +434,148 @@ const ProjectWorkspace = () => {
           sx={{
             bgcolor: COLORS.bgSecondary,
             border: `1px solid ${COLORS.border}`,
-            borderRadius: 2,
-            p: { xs: 2, sm: 3 },
+            borderRadius: 3,
+            height: 210,
+            p: { xs: 2.5, sm: 3 },
             mb: 3,
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
           }}
         >
           <Box
             sx={{
               display: "flex",
-              flexDirection: { xs: "column", sm: "row" },
+              flexDirection: { xs: "column", md: "row" },
               justifyContent: "space-between",
-              alignItems: { xs: "flex-start", sm: "flex-start" },
-              gap: { xs: 2, sm: 0 },
-              mb: 2,
+              alignItems: { xs: "flex-start", md: "flex-start" },
+              gap: 2,
+              mb: 0,
             }}
           >
-            <Box sx={{ minWidth: 0, flex: 1 }}>
-              <Typography
-                sx={{
-                  color: COLORS.textSecondary,
-                  fontSize: "12px",
-                  mb: 0.5,
-                  cursor: "pointer",
-                  "&:hover": { textDecoration: "underline" },
-                }}
-                onClick={() => navigate("/dashboard/projects")}
-              >
-                Projects / {project.name}
-              </Typography>
+            <Box>
+              <Box sx={{ display: "flex", alignItems: "center", mb: 0.75 }}>
+                <Typography
+                  component="span"
+                  sx={{
+                    color: COLORS.border,
+                    fontSize: "12px",
+                    fontWeight: 400,
+                    cursor: "pointer",
+                    "&:hover": { textDecoration: "underline" },
+                  }}
+                  onClick={() => navigate("/dashboard/projects")}
+                >
+                  Projects
+                </Typography>
+                <Typography
+                  component="span"
+                  sx={{
+                    color: COLORS.textLight,
+                    fontSize: "12px",
+                    fontWeight: 400,
+                  }}
+                >
+                  &nbsp;/ {project.name}
+                </Typography>
+              </Box>
               <Typography
                 sx={{
                   color: COLORS.textPrimary,
-                  fontSize: { xs: "20px", sm: "24px" },
+                  fontSize: "26px",
                   fontWeight: 700,
-                  wordBreak: "break-word",
+                  mb: 0.5,
+                  lineHeight: 1.2,
                 }}
               >
                 {project.name}
               </Typography>
-              <Typography
-                sx={{
-                  color: COLORS.textSecondary,
-                  fontSize: "14px",
-                }}
-              >
-                Phase: {project.phase}
-              </Typography>
+              <Box sx={{ display: "flex", alignItems: "center" }}>
+                <Typography
+                  component="span"
+                  sx={{
+                    color: COLORS.border,
+                    fontSize: "14px",
+                    fontWeight: 400,
+                  }}
+                >
+                  Phase:
+                </Typography>
+                <Typography
+                  component="span"
+                  sx={{
+                    color: COLORS.textLight,
+                    fontSize: "14px",
+                    fontWeight: 400,
+                  }}
+                >
+                  &nbsp;{project.phase}
+                </Typography>
+              </Box>
             </Box>
-            <Box sx={{ textAlign: { xs: "left", sm: "right" }, flexShrink: 0 }}>
-              <Typography
+
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: { xs: "row", md: "row" },
+                alignItems: { xs: "flex-start", md: "center" },
+                gap: 2,
+              }}
+            >
+              <Box sx={{ textAlign: "right" }}>
+                <Typography
+                  sx={{
+                    color: COLORS.border,
+                    fontSize: "12px",
+                    fontWeight: 400,
+                  }}
+                >
+                  {project.week} ({project.weekDates})
+                </Typography>
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "flex-end",
+                  }}
+                >
+                  <Typography
+                    component="span"
+                    sx={{
+                      color: COLORS.border,
+                      fontSize: "12px",
+                      fontWeight: 400,
+                    }}
+                  >
+                    Planner:
+                  </Typography>
+                  <Typography
+                    component="span"
+                    sx={{
+                      color: COLORS.textLight,
+                      fontSize: "12px",
+                      fontWeight: 400,
+                    }}
+                  >
+                    &nbsp;{project.planner}
+                  </Typography>
+                </Box>
+              </Box>
+              <Box
                 sx={{
+                  bgcolor: COLORS.bgTertiary,
                   color: COLORS.textSecondary,
-                  fontSize: "12px",
-                }}
-              >
-                {project.week} ({project.weekDates})
-              </Typography>
-              <Typography
-                sx={{
-                  color: COLORS.textSecondary,
-                  fontSize: "12px",
-                  mb: 1,
-                }}
-              >
-                Planner:{" "}
-                <span style={{ color: COLORS.blue }}>{project.planner}</span>
-              </Typography>
-              <Button
-                variant="outlined"
-                sx={{
-                  color: COLORS.textSecondary,
-                  borderColor: COLORS.border,
-                  fontSize: "12px",
+                  px: 2.5,
+                  py: 1,
+                  borderRadius: "10px",
+                  fontSize: "13px",
                   fontWeight: 600,
-                  px: 2,
-                  py: 0.5,
-                  textTransform: "none",
-                  "&:hover": {
-                    borderColor: COLORS.textSecondary,
-                    bgcolor: COLORS.bgTertiary,
-                  },
+                  letterSpacing: "0.5px",
+                  textTransform: "uppercase",
                 }}
               >
-                DRAFT
-              </Button>
+                {steps[currentStep - 1]}
+              </Box>
             </Box>
           </Box>
 
@@ -472,13 +583,11 @@ const ProjectWorkspace = () => {
             sx={{
               display: "flex",
               alignItems: "flex-start",
-              justifyContent: "space-between",
+              justifyContent: "center",
               maxWidth: "100%",
               width: "100%",
-              mx: "auto",
               overflowX: "auto",
               overflowY: "hidden",
-              pb: 1,
               "&::-webkit-scrollbar": { display: "none" },
               msOverflowStyle: "none",
               scrollbarWidth: "none",
@@ -489,29 +598,27 @@ const ProjectWorkspace = () => {
                 key={step}
                 sx={{
                   display: "flex",
-                  alignItems: "center",
-                  flex: index < steps.length - 1 ? 1 : "none",
+                  alignItems: "flex-start",
                   minWidth: "fit-content",
                 }}
               >
                 <StepIndicator
                   number={index + 1}
                   label={step}
-                  isActive={index + 1 === project.currentStep}
-                  isCompleted={index + 1 < project.currentStep}
+                  isActive={index + 1 === currentStep}
+                  isCompleted={index + 1 < currentStep}
+                  onClick={() => handleStepClick(index + 1)}
                 />
                 {index < steps.length - 1 && (
                   <Box
                     sx={{
-                      flex: 1,
-                      minWidth: 20,
+                      width: 75,
                       height: 2,
                       bgcolor:
-                        index + 1 < project.currentStep
-                          ? COLORS.green
-                          : COLORS.textMuted,
-                      mx: 1,
-                      mt: -2.5,
+                        index + 1 < currentStep ? COLORS.blue : COLORS.border,
+                      mx: "46px",
+                      mt: "19px",
+                      transition: "all 0.2s ease",
                     }}
                   />
                 )}
@@ -520,19 +627,32 @@ const ProjectWorkspace = () => {
           </Box>
         </Card>
 
-        <Box sx={{ mb: 3 }}>
+        <Box
+          sx={{
+            mb: 3,
+            borderBottom: `2px solid ${COLORS.border}`,
+          }}
+        >
           <Tabs
             value={activeTab}
             onChange={(_, newValue) => setActiveTab(newValue)}
             sx={{
+              minHeight: "auto",
+              mb: "-2px",
               "& .MuiTabs-indicator": {
                 bgcolor: COLORS.blue,
+                height: "2px",
+                bottom: 0,
               },
               "& .MuiTab-root": {
-                color: COLORS.textSecondary,
+                color: COLORS.textMuted,
                 textTransform: "none",
                 fontSize: "14px",
                 fontWeight: 500,
+                minHeight: "auto",
+                py: 1.5,
+                px: 0,
+                mr: 4,
                 "&.Mui-selected": {
                   color: COLORS.blue,
                 },
@@ -597,7 +717,7 @@ const ProjectWorkspace = () => {
                 <Typography
                   sx={{
                     color: COLORS.textPrimary,
-                    fontSize: "14px",
+                    fontSize: "15px",
                     fontWeight: 600,
                     mb: 3,
                   }}
@@ -612,51 +732,53 @@ const ProjectWorkspace = () => {
                   bgcolor: COLORS.bgSecondary,
                   border: `1px solid ${COLORS.border}`,
                   borderRadius: 2,
-                  p: 3,
+                  p: { xs: 2, sm: 3 },
                 }}
               >
                 <Typography
                   sx={{
                     color: COLORS.textPrimary,
-                    fontSize: "14px",
+                    fontSize: "16px",
                     fontWeight: 600,
-                    mb: 2,
+                    mb: 3,
                   }}
                 >
                   Recent Cycle History
                 </Typography>
-                <Box
-                  sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}
-                >
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
                   {project.cycleHistory.map((cycle, index) => (
                     <Box
                       key={index}
                       sx={{
-                        bgcolor: COLORS.bgTertiary,
-                        borderRadius: 2,
-                        p: 2,
-                        display: "flex",
+                        bgcolor: "#161F32",
+                        border: `1px solid ${COLORS.border}`,
+                        borderRadius: "7px",
+                        minHeight: 57,
+                        px: { xs: 1.5, sm: 2.5 },
+                        py: { xs: 1.5, sm: 0 },
+                        display: "grid",
+                        gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr 1fr" },
                         alignItems: "center",
-                        justifyContent: "space-between",
-                        flexWrap: "wrap",
-                        gap: 1,
+                        gap: { xs: 1.5, sm: 0 },
                       }}
                     >
-                      <Box sx={{ minWidth: 100 }}>
+                      <Box>
                         <Typography
                           sx={{
-                            color: COLORS.textPrimary,
+                            color: "#fff",
                             fontSize: "14px",
-                            fontWeight: 600,
+                            fontWeight: 500,
+                            mb: 0,
+                            lineHeight: 1.2,
                           }}
                         >
                           {cycle.week}
                         </Typography>
                         <Typography
                           sx={{
-                            color: COLORS.textSecondary,
+                            color: "#94A3B8",
                             fontSize: "12px",
-                            whiteSpace: "nowrap",
+                            fontWeight: 400,
                           }}
                         >
                           {cycle.dates}
@@ -664,26 +786,41 @@ const ProjectWorkspace = () => {
                       </Box>
                       <Box
                         sx={{
-                          bgcolor:
-                            cycle.statusType === "green"
-                              ? COLORS.green
-                              : COLORS.amber,
-                          color: COLORS.bgPrimary,
-                          px: 1.5,
-                          py: 0.5,
-                          borderRadius: 1,
-                          fontSize: "11px",
-                          fontWeight: 600,
-                          whiteSpace: "nowrap",
+                          display: "flex",
+                          justifyContent: { xs: "flex-start", sm: "center" },
                         }}
                       >
-                        {cycle.status}
+                        <Box
+                          sx={{
+                            bgcolor:
+                              cycle.statusType === "green"
+                                ? `${COLORS.green}15`
+                                : `${COLORS.amber}15`,
+                            border: `1px solid ${
+                              cycle.statusType === "green"
+                                ? COLORS.green
+                                : COLORS.amber
+                            }`,
+                            color:
+                              cycle.statusType === "green"
+                                ? COLORS.green
+                                : COLORS.amber,
+                            px: { xs: 1.5, sm: 2.5 },
+                            py: 0.75,
+                            borderRadius: "20px",
+                            fontSize: "12px",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {cycle.status}
+                        </Box>
                       </Box>
                       <Typography
                         sx={{
-                          color: COLORS.textSecondary,
+                          color: "#94A3B8",
                           fontSize: "12px",
-                          whiteSpace: "nowrap",
+                          fontWeight: 400,
+                          textAlign: { xs: "left", sm: "right" },
                         }}
                       >
                         Score: {cycle.score}/100
@@ -697,33 +834,146 @@ const ProjectWorkspace = () => {
         )}
 
         {activeTab === 1 && (
-          <Card
-            sx={{
-              bgcolor: COLORS.bgSecondary,
-              border: `1px solid ${COLORS.border}`,
-              borderRadius: 2,
-              p: { xs: 2, sm: 3 },
-            }}
-          >
-            <Typography
+          <Box>
+            <Box
               sx={{
-                color: COLORS.textPrimary,
-                fontSize: "16px",
-                fontWeight: 600,
+                bgcolor: COLORS.bgSecondary,
+                border: `1px solid ${COLORS.border}`,
+                borderRadius: "12px",
+                height: 80,
+                px: 1.5,
+                display: "flex",
+                alignItems: "center",
+                gap: 1.5,
+                overflowX: "auto",
+                mb: 3,
+                "&::-webkit-scrollbar": { display: "none" },
               }}
             >
-              Activities & Lookahead
-            </Typography>
-            <Typography
-              sx={{
-                color: COLORS.textSecondary,
-                fontSize: "14px",
-                mt: 1,
-              }}
-            >
-              This section will show detailed activities and lookahead data.
-            </Typography>
-          </Card>
+              {[
+                {
+                  week: "Week 1",
+                  label: "Committed",
+                  color: COLORS.green,
+                  hasBg: false,
+                },
+                {
+                  week: "Week 2",
+                  label: "Committed",
+                  color: COLORS.green,
+                  hasBg: false,
+                },
+                {
+                  week: "Week 3",
+                  label: "Readiness",
+                  color: COLORS.amber,
+                  hasBg: true,
+                },
+                {
+                  week: "Week 4",
+                  label: "Readiness",
+                  color: COLORS.amber,
+                  hasBg: true,
+                },
+                {
+                  week: "Week 5",
+                  label: "Strategic",
+                  color: COLORS.red,
+                  hasBg: true,
+                },
+                {
+                  week: "Week 6",
+                  label: "Strategic",
+                  color: COLORS.red,
+                  hasBg: true,
+                },
+              ].map((item, index) => (
+                <Box
+                  key={index}
+                  sx={{
+                    flex: 1,
+                    minWidth: 140,
+                    height: 58,
+                    border: `2px solid ${item.color}`,
+                    borderRadius: "12px",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    bgcolor: item.hasBg ? `${item.color}10` : "transparent",
+                  }}
+                >
+                  <Typography
+                    sx={{
+                      color: item.color,
+                      fontSize: "12px",
+                      fontWeight: 500,
+                    }}
+                  >
+                    {item.week}
+                  </Typography>
+                  <Typography
+                    sx={{ color: "#8E9CB1", fontSize: "12px", fontWeight: 400 }}
+                  >
+                    {item.label}
+                  </Typography>
+                </Box>
+              ))}
+            </Box>
+
+            <Box sx={{ display: "flex", gap: 1, mb: 2 }}>
+              {[
+                { label: "All", value: "all" },
+                { label: "Green", value: "green" },
+                { label: "Amber", value: "amber" },
+                { label: "Red", value: "red" },
+              ].map((filter) => (
+                <Box
+                  key={filter.value}
+                  onClick={() => setRagFilter(filter.value)}
+                  sx={{
+                    px: 2.5,
+                    py: 1,
+                    borderRadius: "10px",
+                    fontSize: "14px",
+                    fontWeight: 500,
+                    cursor: "pointer",
+                    bgcolor:
+                      ragFilter === filter.value
+                        ? COLORS.blueBgMedium
+                        : "transparent",
+                    color:
+                      ragFilter === filter.value
+                        ? COLORS.blue
+                        : COLORS.textSecondary,
+                    border: `1px solid ${
+                      ragFilter === filter.value ? COLORS.blue : COLORS.border
+                    }`,
+                    transition: "all 0.2s ease",
+                    "&:hover": {
+                      bgcolor:
+                        ragFilter === filter.value
+                          ? COLORS.blueBgMedium
+                          : COLORS.whiteHoverLight,
+                    },
+                  }}
+                >
+                  {filter.label}
+                </Box>
+              ))}
+            </Box>
+
+            <ActivitiesTable activities={filteredActivities} />
+
+            <ActivitiesSummary
+              totalActivities={activitiesData.length}
+              greenCount={greenCount}
+              amberCount={amberCount}
+              redCount={redCount}
+              blockedCount={blockedCount}
+              lastUpdated="25 Mar 2026, 09:15"
+            />
+          </Box>
         )}
       </Box>
     </DashboardLayout>

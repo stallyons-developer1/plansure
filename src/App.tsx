@@ -4,6 +4,7 @@ import Login from "./pages/Login/Login";
 import Dashboard from "./pages/Dashboard/Dashboard";
 import Projects from "./pages/Projects/Projects";
 import ProjectWorkspace from "./pages/ProjectWorkspace/ProjectWorkspace";
+import Activities from "./pages/Activities/Activities";
 
 const AdminDashboard = () => (
   <div
@@ -119,6 +120,15 @@ function App() {
         element={
           <ProtectedRoute allowedRoles={["user"]}>
             <ProjectWorkspace />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/dashboard/activities"
+        element={
+          <ProtectedRoute allowedRoles={["user"]}>
+            <Activities />
           </ProtectedRoute>
         }
       />

@@ -12,6 +12,12 @@ import {
   IconButton,
   Avatar,
   Divider,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  CircularProgress,
 } from "@mui/material";
 import {
   HomeOutlined as DashboardIcon,
@@ -39,13 +45,28 @@ const DashboardLayout = ({
   subtitle,
 }: DashboardLayoutProps) => {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [logoutModalOpen, setLogoutModalOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const handleLogout = () => {
-    logout();
-    navigate("/login");
+  const handleLogoutClick = () => {
+    setLogoutModalOpen(true);
+  };
+
+  const handleLogoutConfirm = () => {
+    setIsLoggingOut(true);
+    setTimeout(() => {
+      setIsLoggingOut(false);
+      setLogoutModalOpen(false);
+      logout();
+      navigate("/login");
+    }, 2000);
+  };
+
+  const handleLogoutCancel = () => {
+    setLogoutModalOpen(false);
   };
 
   const mainMenuItems = [
@@ -278,7 +299,7 @@ const DashboardLayout = ({
             </Box>
           </Box>
           <IconButton
-            onClick={handleLogout}
+            onClick={handleLogoutClick}
             sx={{
               color: COLORS.textMuted,
               "&:hover": { color: COLORS.redLight },
@@ -392,6 +413,98 @@ const DashboardLayout = ({
           {children}
         </Box>
       </Box>
+
+      <Dialog
+        open={logoutModalOpen}
+        onClose={handleLogoutCancel}
+        slotProps={{
+          backdrop: {
+            sx: {
+              bgcolor: "rgba(0, 0, 0, 0.7)",
+            },
+          },
+        }}
+        PaperProps={{
+          sx: {
+            bgcolor: "#0F172A",
+            border: `1px solid ${COLORS.border}`,
+            borderRadius: "12px",
+            minWidth: 320,
+            backgroundImage: "none",
+            boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
+          },
+        }}
+      >
+        {isLoggingOut ? (
+          <DialogContent
+            sx={{
+              bgcolor: "#0F172A",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              py: 4,
+            }}
+          >
+            <CircularProgress size={40} sx={{ color: COLORS.blue }} />
+          </DialogContent>
+        ) : (
+          <>
+            <DialogTitle
+              sx={{
+                color: COLORS.textPrimary,
+                fontSize: "18px",
+                fontWeight: 600,
+                pb: 1,
+                bgcolor: "#0F172A",
+              }}
+            >
+              Logout
+            </DialogTitle>
+            <DialogContent sx={{ bgcolor: "#0F172A" }}>
+              <Typography
+                sx={{ color: COLORS.textSecondary, fontSize: "14px" }}
+              >
+                Are you sure you want to logout?
+              </Typography>
+            </DialogContent>
+          </>
+        )}
+        {!isLoggingOut && (
+          <DialogActions sx={{ px: 3, pb: 2.5, gap: 1, bgcolor: "#0F172A" }}>
+            <Button
+              onClick={handleLogoutCancel}
+              sx={{
+                color: COLORS.textSecondary,
+                bgcolor: "transparent",
+                border: `1px solid ${COLORS.border}`,
+                borderRadius: "8px",
+                textTransform: "none",
+                px: 3,
+                "&:hover": {
+                  bgcolor: COLORS.bgTertiary,
+                },
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleLogoutConfirm}
+              sx={{
+                color: COLORS.white,
+                bgcolor: COLORS.red,
+                borderRadius: "8px",
+                textTransform: "none",
+                px: 3,
+                "&:hover": {
+                  bgcolor: COLORS.redLight,
+                },
+              }}
+            >
+              Logout
+            </Button>
+          </DialogActions>
+        )}
+      </Dialog>
     </Box>
   );
 };
