@@ -30,20 +30,27 @@ import { COLORS } from "../constants/colors";
 import logo from "../assets/logo.png";
 import projectsIcon from "../assets/sidebar/projects.png";
 import activitiesIcon from "../assets/sidebar/activitiesClipboard.png";
+import actionIcon from "../assets/sidebar/action.png";
+import uploadIcon from "../assets/sidebar/upload.png";
+import weeklyDashboardIcon from "../assets/sidebar/dashboard.png";
+import governanceIcon from "../assets/sidebar/governance.png";
+import exportIcon from "../assets/sidebar/export.png";
 
 const DRAWER_WIDTH = 240;
 
-interface DashboardLayoutProps {
+interface PlannerLayoutProps {
   children: React.ReactNode;
   title: string;
   subtitle?: string;
+  headerAction?: React.ReactNode;
 }
 
-const DashboardLayout = ({
+const PlannerLayout = ({
   children,
   title,
   subtitle,
-}: DashboardLayoutProps) => {
+  headerAction,
+}: PlannerLayoutProps) => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [logoutModalOpen, setLogoutModalOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -73,40 +80,84 @@ const DashboardLayout = ({
     {
       text: "Dashboard",
       icon: <DashboardIcon />,
-      path: "/dashboard",
+      path: "/planner",
       isCustomIcon: false,
     },
     {
       text: "Projects",
       iconSrc: projectsIcon,
-      path: "/dashboard/projects",
+      path: "/planner/projects",
       isCustomIcon: true,
       iconSize: { width: 16, height: 16 },
     },
   ];
 
-  const viewMenuItems = [
+  const weeklyControlItems = [
+    {
+      text: "Programs Upload",
+      iconSrc: uploadIcon,
+      path: "/planner/programs-upload",
+      isCustomIcon: true,
+      iconSize: { width: 24, height: 24 },
+    },
     {
       text: "Activities & Lookahead",
       iconSrc: activitiesIcon,
-      path: "/dashboard/activities",
+      path: "/planner/activities",
       isCustomIcon: true,
-      iconSize: { width: 16, height: 18 },
+      iconSize: { width: 14, height: 18 },
+    },
+    {
+      text: "Action",
+      iconSrc: actionIcon,
+      path: "/planner/action",
+      isCustomIcon: true,
+      iconSize: { width: 18, height: 18 },
+    },
+    {
+      text: "Weekly Dashboard",
+      iconSrc: weeklyDashboardIcon,
+      path: "/planner/weekly-dashboard",
+      isCustomIcon: true,
+      iconSize: { width: 18, height: 18 },
     },
   ];
 
-  const renderIcon = (item: any) => {
-    if (item.isCustomIcon) {
+  const governanceItems = [
+    {
+      text: "Governance Dashboard",
+      iconSrc: governanceIcon,
+      path: "/planner/governance",
+      isCustomIcon: true,
+      iconSize: { width: 18, height: 18 },
+    },
+    {
+      text: "Export",
+      iconSrc: exportIcon,
+      path: "/planner/export",
+      isCustomIcon: true,
+      iconSize: { width: 16, height: 20 },
+    },
+  ];
+
+  const renderIcon = (item: {
+    isCustomIcon: boolean;
+    icon?: React.ReactNode;
+    iconSrc?: string;
+    iconSize?: { width: number; height: number };
+    path: string;
+  }) => {
+    if (item.isCustomIcon && item.iconSrc) {
       return (
         <Box
           component="img"
           src={item.iconSrc}
           sx={{
-            width: item.iconSize.width,
-            height: item.iconSize.height,
+            width: item.iconSize?.width || 16,
+            height: item.iconSize?.height || 16,
             filter: isActive(item.path)
               ? "brightness(0) saturate(100%) invert(45%) sepia(98%) saturate(1752%) hue-rotate(199deg) brightness(101%) contrast(96%)"
-              : "none",
+              : "brightness(0) saturate(100%) invert(60%) sepia(10%) saturate(500%) hue-rotate(180deg) brightness(95%) contrast(90%)",
           }}
         />
       );
@@ -115,11 +166,69 @@ const DashboardLayout = ({
   };
 
   const isActive = (path: string) => {
-    if (path === "/dashboard") {
+    if (path === "/planner") {
       return location.pathname === path;
     }
     return location.pathname.startsWith(path);
   };
+
+  const renderMenuSection = (title: string, items: typeof mainMenuItems) => (
+    <Box sx={{ px: 2, pt: 3 }}>
+      <Typography
+        sx={{
+          color: COLORS.border,
+          fontSize: "12px",
+          fontWeight: 500,
+          letterSpacing: "0.1em",
+          mb: 1,
+        }}
+      >
+        {title}
+      </Typography>
+      <List disablePadding>
+        {items.map((item) => (
+          <ListItem key={item.text} disablePadding sx={{ mb: 0.5 }}>
+            <ListItemButton
+              onClick={() => navigate(item.path)}
+              sx={{
+                borderRadius: 2,
+                bgcolor: isActive(item.path)
+                  ? COLORS.blueBgMedium
+                  : "transparent",
+                "&:hover": {
+                  bgcolor: isActive(item.path)
+                    ? COLORS.blueBgHover
+                    : COLORS.whiteHover,
+                },
+              }}
+            >
+              <ListItemIcon
+                sx={{
+                  minWidth: 30,
+                  color: isActive(item.path) ? COLORS.blue : COLORS.textMuted,
+                }}
+              >
+                {renderIcon(item)}
+              </ListItemIcon>
+              <ListItemText
+                primary={item.text}
+                slotProps={{
+                  primary: {
+                    sx: {
+                      fontSize: "14px",
+                      fontWeight: 500,
+                      color: isActive(item.path) ? COLORS.blue : COLORS.border,
+                      whiteSpace: "nowrap",
+                    },
+                  },
+                }}
+              />
+            </ListItemButton>
+          </ListItem>
+        ))}
+      </List>
+    </Box>
+  );
 
   const drawerContent = (
     <Box
@@ -139,121 +248,9 @@ const DashboardLayout = ({
         />
       </Box>
 
-      <Box sx={{ px: 2, pt: 3 }}>
-        <Typography
-          sx={{
-            color: COLORS.border,
-            fontSize: "12px",
-            fontWeight: 500,
-            letterSpacing: "0.1em",
-            mb: 1,
-          }}
-        >
-          MAIN
-        </Typography>
-        <List disablePadding>
-          {mainMenuItems.map((item) => (
-            <ListItem key={item.text} disablePadding sx={{ mb: 0.5 }}>
-              <ListItemButton
-                onClick={() => navigate(item.path)}
-                sx={{
-                  borderRadius: 2,
-                  bgcolor: isActive(item.path)
-                    ? COLORS.blueBgMedium
-                    : "transparent",
-                  "&:hover": {
-                    bgcolor: isActive(item.path)
-                      ? COLORS.blueBgHover
-                      : COLORS.whiteHover,
-                  },
-                }}
-              >
-                <ListItemIcon
-                  sx={{
-                    minWidth: 30,
-                    color: isActive(item.path) ? COLORS.blue : COLORS.textMuted,
-                  }}
-                >
-                  {renderIcon(item)}
-                </ListItemIcon>
-                <ListItemText
-                  primary={item.text}
-                  slotProps={{
-                    primary: {
-                      sx: {
-                        fontSize: "14px",
-                        fontWeight: isActive(item.path) ? 500 : 500,
-                        color: isActive(item.path)
-                          ? COLORS.blue
-                          : COLORS.border,
-                        whiteSpace: "nowrap",
-                      },
-                    },
-                  }}
-                />
-              </ListItemButton>
-            </ListItem>
-          ))}
-        </List>
-      </Box>
-
-      <Box sx={{ px: 2, pt: 3 }}>
-        <Typography
-          sx={{
-            color: COLORS.border,
-            fontSize: "12px",
-            fontWeight: 500,
-            letterSpacing: "0.1em",
-            mb: 1,
-          }}
-        >
-          VIEW
-        </Typography>
-        <List disablePadding>
-          {viewMenuItems.map((item) => (
-            <ListItem key={item.text} disablePadding sx={{ mb: 0.5 }}>
-              <ListItemButton
-                onClick={() => navigate(item.path)}
-                sx={{
-                  borderRadius: 2,
-                  bgcolor: isActive(item.path)
-                    ? COLORS.blueBgMedium
-                    : "transparent",
-                  "&:hover": {
-                    bgcolor: isActive(item.path)
-                      ? COLORS.blueBgHover
-                      : COLORS.whiteHover,
-                  },
-                }}
-              >
-                <ListItemIcon
-                  sx={{
-                    minWidth: 25,
-                    color: isActive(item.path) ? COLORS.blue : COLORS.textMuted,
-                  }}
-                >
-                  {renderIcon(item)}
-                </ListItemIcon>
-                <ListItemText
-                  primary={item.text}
-                  slotProps={{
-                    primary: {
-                      sx: {
-                        fontSize: "14px",
-                        fontWeight: isActive(item.path) ? 500 : 500,
-                        color: isActive(item.path)
-                          ? COLORS.blue
-                          : COLORS.border,
-                        whiteSpace: "nowrap",
-                      },
-                    },
-                  }}
-                />
-              </ListItemButton>
-            </ListItem>
-          ))}
-        </List>
-      </Box>
+      {renderMenuSection("MAIN", mainMenuItems)}
+      {renderMenuSection("WEEKLY CONTROL", weeklyControlItems)}
+      {renderMenuSection("GOVERNANCE", governanceItems)}
 
       <Box sx={{ flexGrow: 1 }} />
 
@@ -275,7 +272,7 @@ const DashboardLayout = ({
                 fontSize: "0.875rem",
               }}
             >
-              {user?.email?.charAt(0).toUpperCase() || "U"}
+              {user?.email?.charAt(0).toUpperCase() || "P"}
             </Avatar>
             <Box>
               <Typography
@@ -285,7 +282,7 @@ const DashboardLayout = ({
                   fontWeight: 500,
                 }}
               >
-                {user?.email?.split("@")[0] || "User"}
+                {user?.email?.split("@")[0] || "Planner"}
               </Typography>
               <Typography
                 sx={{
@@ -294,7 +291,7 @@ const DashboardLayout = ({
                   textTransform: "capitalize",
                 }}
               >
-                {user?.role || "User"}
+                {user?.role || "Planner"}
               </Typography>
             </Box>
           </Box>
@@ -404,9 +401,12 @@ const DashboardLayout = ({
               )}
             </Box>
           </Box>
-          <IconButton sx={{ color: COLORS.textSecondary }}>
-            <NotificationsIcon />
-          </IconButton>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+            {headerAction}
+            <IconButton sx={{ color: COLORS.textSecondary }}>
+              <NotificationsIcon />
+            </IconButton>
+          </Box>
         </Box>
 
         <Box sx={{ p: { xs: 2, sm: 3 }, flexGrow: 1, overflowY: "auto" }}>
@@ -509,4 +509,4 @@ const DashboardLayout = ({
   );
 };
 
-export default DashboardLayout;
+export default PlannerLayout;

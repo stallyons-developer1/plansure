@@ -168,13 +168,14 @@ const StepIndicator = ({
       flexDirection: "column",
       alignItems: "center",
       cursor: "pointer",
+      minWidth: { xs: 70, sm: 90, md: "auto" },
     }}
     onClick={onClick}
   >
     <Box
       sx={{
-        width: 38,
-        height: 38,
+        width: { xs: 32, sm: 36, md: 38 },
+        height: { xs: 32, sm: 36, md: 38 },
         borderRadius: "50%",
         bgcolor: isActive || isCompleted ? COLORS.blue : "transparent",
         border: isActive || isCompleted ? "none" : `2px solid ${COLORS.border}`,
@@ -183,7 +184,7 @@ const StepIndicator = ({
         justifyContent: "center",
         color: isActive || isCompleted ? "#fff" : COLORS.border,
         fontWeight: 500,
-        fontSize: "15px",
+        fontSize: { xs: "13px", sm: "14px", md: "15px" },
         transition: "all 0.2s ease",
         "&:hover": {
           opacity: 0.8,
@@ -195,9 +196,9 @@ const StepIndicator = ({
     <Typography
       sx={{
         color: isActive || isCompleted ? COLORS.textPrimary : COLORS.border,
-        fontSize: "14px",
+        fontSize: { xs: "11px", sm: "12px", md: "14px" },
         fontWeight: 400,
-        mt: 1,
+        mt: { xs: 0.5, sm: 0.75, md: 1 },
         mb: 0,
         textAlign: "center",
         whiteSpace: "nowrap",
@@ -435,12 +436,13 @@ const ProjectWorkspace = () => {
             bgcolor: COLORS.bgSecondary,
             border: `1px solid ${COLORS.border}`,
             borderRadius: 3,
-            height: 210,
-            p: { xs: 2.5, sm: 3 },
+            minHeight: { xs: "auto", md: 210 },
+            p: { xs: 2, sm: 2.5, md: 3 },
             mb: 3,
             display: "flex",
             flexDirection: "column",
             justifyContent: "space-between",
+            gap: { xs: 2.5, md: 0 },
           }}
         >
           <Box
@@ -449,17 +451,17 @@ const ProjectWorkspace = () => {
               flexDirection: { xs: "column", md: "row" },
               justifyContent: "space-between",
               alignItems: { xs: "flex-start", md: "flex-start" },
-              gap: 2,
+              gap: { xs: 1.5, md: 2 },
               mb: 0,
             }}
           >
             <Box>
-              <Box sx={{ display: "flex", alignItems: "center", mb: 0.75 }}>
+              <Box sx={{ display: "flex", alignItems: "center", mb: 0.75, flexWrap: "wrap" }}>
                 <Typography
                   component="span"
                   sx={{
                     color: COLORS.border,
-                    fontSize: "12px",
+                    fontSize: { xs: "11px", sm: "12px" },
                     fontWeight: 400,
                     cursor: "pointer",
                     "&:hover": { textDecoration: "underline" },
@@ -472,7 +474,7 @@ const ProjectWorkspace = () => {
                   component="span"
                   sx={{
                     color: COLORS.textLight,
-                    fontSize: "12px",
+                    fontSize: { xs: "11px", sm: "12px" },
                     fontWeight: 400,
                   }}
                 >
@@ -482,7 +484,7 @@ const ProjectWorkspace = () => {
               <Typography
                 sx={{
                   color: COLORS.textPrimary,
-                  fontSize: "26px",
+                  fontSize: { xs: "20px", sm: "24px", md: "26px" },
                   fontWeight: 700,
                   mb: 0.5,
                   lineHeight: 1.2,
@@ -495,7 +497,7 @@ const ProjectWorkspace = () => {
                   component="span"
                   sx={{
                     color: COLORS.border,
-                    fontSize: "14px",
+                    fontSize: { xs: "12px", sm: "14px" },
                     fontWeight: 400,
                   }}
                 >
@@ -505,7 +507,7 @@ const ProjectWorkspace = () => {
                   component="span"
                   sx={{
                     color: COLORS.textLight,
-                    fontSize: "14px",
+                    fontSize: { xs: "12px", sm: "14px" },
                     fontWeight: 400,
                   }}
                 >
@@ -517,17 +519,19 @@ const ProjectWorkspace = () => {
             <Box
               sx={{
                 display: "flex",
-                flexDirection: { xs: "row", md: "row" },
-                alignItems: { xs: "flex-start", md: "center" },
-                gap: 2,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: { xs: 1.5, sm: 2 },
+                flexWrap: "wrap",
               }}
             >
-              <Box sx={{ textAlign: "right" }}>
+              <Box sx={{ textAlign: { xs: "left", md: "right" } }}>
                 <Typography
                   sx={{
                     color: COLORS.border,
-                    fontSize: "12px",
+                    fontSize: { xs: "11px", sm: "12px" },
                     fontWeight: 400,
+                    whiteSpace: "nowrap",
                   }}
                 >
                   {project.week} ({project.weekDates})
@@ -536,14 +540,14 @@ const ProjectWorkspace = () => {
                   sx={{
                     display: "flex",
                     alignItems: "center",
-                    justifyContent: "flex-end",
+                    justifyContent: { xs: "flex-start", md: "flex-end" },
                   }}
                 >
                   <Typography
                     component="span"
                     sx={{
                       color: COLORS.border,
-                      fontSize: "12px",
+                      fontSize: { xs: "11px", sm: "12px" },
                       fontWeight: 400,
                     }}
                   >
@@ -553,7 +557,7 @@ const ProjectWorkspace = () => {
                     component="span"
                     sx={{
                       color: COLORS.textLight,
-                      fontSize: "12px",
+                      fontSize: { xs: "11px", sm: "12px" },
                       fontWeight: 400,
                     }}
                   >
@@ -565,13 +569,14 @@ const ProjectWorkspace = () => {
                 sx={{
                   bgcolor: COLORS.bgTertiary,
                   color: COLORS.textSecondary,
-                  px: 2.5,
-                  py: 1,
+                  px: { xs: 1.5, sm: 2.5 },
+                  py: { xs: 0.75, sm: 1 },
                   borderRadius: "10px",
-                  fontSize: "13px",
+                  fontSize: { xs: "11px", sm: "13px" },
                   fontWeight: 600,
                   letterSpacing: "0.5px",
                   textTransform: "uppercase",
+                  whiteSpace: "nowrap",
                 }}
               >
                 {steps[currentStep - 1]}
@@ -583,11 +588,13 @@ const ProjectWorkspace = () => {
             sx={{
               display: "flex",
               alignItems: "flex-start",
-              justifyContent: "center",
+              justifyContent: { xs: "flex-start", lg: "center" },
               maxWidth: "100%",
               width: "100%",
               overflowX: "auto",
               overflowY: "hidden",
+              pb: 1,
+              px: { xs: 1, sm: 0 },
               "&::-webkit-scrollbar": { display: "none" },
               msOverflowStyle: "none",
               scrollbarWidth: "none",
@@ -612,12 +619,12 @@ const ProjectWorkspace = () => {
                 {index < steps.length - 1 && (
                   <Box
                     sx={{
-                      width: 75,
+                      width: { xs: 40, sm: 55, md: 75 },
                       height: 2,
                       bgcolor:
                         index + 1 < currentStep ? COLORS.blue : COLORS.border,
-                      mx: "46px",
-                      mt: "19px",
+                      mx: { xs: "16px", sm: "28px", md: "46px" },
+                      mt: { xs: "15px", sm: "17px", md: "19px" },
                       transition: "all 0.2s ease",
                     }}
                   />

@@ -5,6 +5,12 @@ import Dashboard from "./pages/Dashboard/Dashboard";
 import Projects from "./pages/Projects/Projects";
 import ProjectWorkspace from "./pages/ProjectWorkspace/ProjectWorkspace";
 import Activities from "./pages/Activities/Activities";
+import PlannerDashboard from "./pages/Planner/PlannerDashboard";
+import PlannerProjects from "./pages/Planner/PlannerProjects";
+import PlannerProjectWorkspace from "./pages/Planner/PlannerProjectWorkspace";
+import ProgramsUpload from "./pages/Planner/ProgramsUpload";
+import PlannerActivities from "./pages/Planner/PlannerActivities";
+import PlannerActions from "./pages/Planner/PlannerActions";
 
 const AdminDashboard = () => (
   <div
@@ -17,20 +23,6 @@ const AdminDashboard = () => (
   >
     <h1>Admin Dashboard</h1>
     <p>Welcome, Admin!</p>
-  </div>
-);
-
-const PlannerDashboard = () => (
-  <div
-    style={{
-      padding: "40px",
-      color: "#f1f5f9",
-      background: "#0f172a",
-      minHeight: "100vh",
-    }}
-  >
-    <h1>Planner Dashboard</h1>
-    <p>Welcome, Planner!</p>
   </div>
 );
 
@@ -89,10 +81,55 @@ function App() {
       />
 
       <Route
-        path="/planner/*"
+        path="/planner"
         element={
           <ProtectedRoute allowedRoles={["planner"]}>
             <PlannerDashboard />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/planner/projects"
+        element={
+          <ProtectedRoute allowedRoles={["planner"]}>
+            <PlannerProjects />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/planner/projects/:projectId"
+        element={
+          <ProtectedRoute allowedRoles={["planner"]}>
+            <PlannerProjectWorkspace />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/planner/programs-upload"
+        element={
+          <ProtectedRoute allowedRoles={["planner"]}>
+            <ProgramsUpload />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/planner/activities"
+        element={
+          <ProtectedRoute allowedRoles={["planner"]}>
+            <PlannerActivities />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/planner/action"
+        element={
+          <ProtectedRoute allowedRoles={["planner"]}>
+            <PlannerActions />
           </ProtectedRoute>
         }
       />

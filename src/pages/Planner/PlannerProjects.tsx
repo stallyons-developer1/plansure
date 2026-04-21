@@ -8,21 +8,41 @@ import {
   InputAdornment,
   LinearProgress,
   Link,
+  Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  IconButton,
 } from "@mui/material";
 import {
   Search as SearchIcon,
   Settings as SettingsIcon,
   BarChart as BarChartIcon,
+  Add as AddIcon,
+  Close as CloseIcon,
 } from "@mui/icons-material";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import DashboardLayout from "../../layouts/DashboardLayout";
+import PlannerLayout from "../../layouts/PlannerLayout";
 import { COLORS } from "../../constants/colors";
 import activitiesIcon from "../../assets/activities.png";
 import openActionsIcon from "../../assets/sidebar/activitiesClipboard.png";
 import governanceScoreIcon from "../../assets/governancescore.png";
 
-const projectsData = [
+interface Project {
+  id: number;
+  name: string;
+  status: string;
+  phase: string;
+  governanceScore: number;
+  governanceStatus: string;
+  activities: number;
+  openActions: number;
+  progress: number;
+}
+
+const initialProjectsData: Project[] = [
   {
     id: 1,
     name: "Crossrail Phase 2",
@@ -145,7 +165,7 @@ const ProjectCard = ({
   project,
   onViewDashboard,
 }: {
-  project: (typeof projectsData)[0];
+  project: Project;
   onViewDashboard: () => void;
 }) => {
   const statusColor = project.status === "Active" ? COLORS.green : COLORS.amber;
@@ -440,12 +460,18 @@ const ProjectCard = ({
   );
 };
 
-const Projects = () => {
+const PlannerProjects = () => {
   const navigate = useNavigate();
+  const [projects, setProjects] = useState<Project[]>(initialProjectsData);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [newProjectModalOpen, setNewProjectModalOpen] = useState(false);
+  const [projectName, setProjectName] = useState("");
+  const [phase, setPhase] = useState("");
+  const [description, setDescription] = useState("");
+  const [startDate, setStartDate] = useState("");
 
-  const filteredProjects = projectsData.filter((project) => {
+  const filteredProjects = projects.filter((project) => {
     const matchesSearch =
       project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       project.phase.toLowerCase().includes(searchQuery.toLowerCase());
@@ -455,8 +481,65 @@ const Projects = () => {
     return matchesSearch && matchesStatus;
   });
 
+  const handleOpenModal = () => {
+    setNewProjectModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setNewProjectModalOpen(false);
+    setProjectName("");
+    setPhase("");
+    setDescription("");
+    setStartDate("");
+  };
+
+  const handleCreateProject = () => {
+    if (!projectName || !phase || !startDate) return;
+
+    const newProject: Project = {
+      id: projects.length + 1,
+      name: projectName,
+      status: "Active",
+      phase: `${phase.charAt(0).toUpperCase() + phase.slice(1)} phase-Week 1`,
+      governanceScore: 0,
+      governanceStatus: "green",
+      activities: 0,
+      openActions: 0,
+      progress: 0,
+    };
+
+    setProjects([...projects, newProject]);
+    handleCloseModal();
+  };
+
+  const newProjectButton = (
+    <Button
+      startIcon={<AddIcon />}
+      onClick={handleOpenModal}
+      sx={{
+        bgcolor: COLORS.blue,
+        color: COLORS.white,
+        textTransform: "none",
+        px: 2,
+        py: 1,
+        borderRadius: "8px",
+        fontSize: "14px",
+        fontWeight: 500,
+        "&:hover": {
+          bgcolor: COLORS.blueHover,
+        },
+      }}
+    >
+      New Project
+    </Button>
+  );
+
   return (
-    <DashboardLayout title="Projects" subtitle="Manage your projects">
+    <PlannerLayout
+      title="Projects"
+      subtitle="Manage your projects"
+      headerAction={newProjectButton}
+    >
       <Box
         sx={{
           bgcolor: COLORS.bgSecondary,
@@ -596,14 +679,338 @@ const Projects = () => {
           <ProjectCard
             key={project.id}
             project={project}
-            onViewDashboard={() =>
-              navigate(`/dashboard/projects/${project.id}`)
-            }
+            onViewDashboard={() => navigate(`/planner/projects/${project.id}`)}
           />
         ))}
       </Box>
-    </DashboardLayout>
+
+      <Dialog
+        open={newProjectModalOpen}
+        onClose={handleCloseModal}
+        maxWidth="sm"
+        fullWidth
+        slotProps={{
+          backdrop: {
+            sx: {
+              bgcolor: "rgba(0, 0, 0, 0.8)",
+            },
+          },
+          paper: {
+            sx: {
+              bgcolor: COLORS.bgSecondary,
+              border: `1px solid ${COLORS.white}`,
+              borderRadius: "12px",
+              backgroundImage: "none",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
+              maxWidth: 480,
+            },
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            pb: 1,
+            pt: 1,
+            borderBottom: `1px solid ${COLORS.white}`,
+          }}
+        >
+          <Box>
+            <Typography
+              sx={{
+                color: COLORS.textPrimary,
+                fontSize: "18px",
+                fontWeight: 600,
+              }}
+            >
+              New Project
+            </Typography>
+            <Typography
+              sx={{
+                color: COLORS.textSecondary,
+                fontSize: "12px",
+                fontWeight: 400,
+              }}
+            >
+              Create a new project to track
+            </Typography>
+          </Box>
+          <IconButton
+            onClick={handleCloseModal}
+            sx={{ color: COLORS.textMuted, mr: -1, p: 0.5 }}
+          >
+            <CloseIcon sx={{ fontSize: 20 }} />
+          </IconButton>
+        </DialogTitle>
+
+        <DialogContent sx={{ px: 3, py: 3 }}>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <Box>
+              <Typography
+                sx={{
+                  color: COLORS.border,
+                  fontSize: "12px",
+                  fontWeight: 500,
+                  mb: 0.5,
+                  mt: 2,
+                }}
+              >
+                Project Name <span style={{ color: COLORS.red }}>*</span>
+              </Typography>
+              <TextField
+                fullWidth
+                placeholder="e.g. Crossrail Phase 3"
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value)}
+                sx={{
+                  "& .MuiOutlinedInput-root": {
+                    bgcolor: COLORS.bgPrimary,
+                    borderRadius: "8px",
+                    "& fieldset": {
+                      borderColor: COLORS.white,
+                    },
+                    "&:hover fieldset": {
+                      borderColor: COLORS.white,
+                    },
+                    "&.Mui-focused fieldset": {
+                      borderColor: COLORS.white,
+                      borderWidth: 1,
+                    },
+                  },
+                  "& .MuiOutlinedInput-input": {
+                    color: COLORS.textPrimary,
+                    fontSize: "14px",
+                    py: 1.2,
+                    "&::placeholder": {
+                      color: COLORS.textMuted,
+                      opacity: 1,
+                    },
+                  },
+                }}
+              />
+            </Box>
+
+            <Box>
+              <Typography
+                sx={{
+                  color: COLORS.border,
+                  fontSize: "12px",
+                  fontWeight: 500,
+                  mb: 0.5,
+                  mt: 2,
+                }}
+              >
+                Phase <span style={{ color: COLORS.red }}>*</span>
+              </Typography>
+              <Select
+                fullWidth
+                value={phase}
+                onChange={(e) => setPhase(e.target.value)}
+                displayEmpty
+                sx={{
+                  bgcolor: COLORS.bgPrimary,
+                  borderRadius: "8px",
+                  "& .MuiOutlinedInput-notchedOutline": {
+                    borderColor: COLORS.white,
+                  },
+                  "&:hover .MuiOutlinedInput-notchedOutline": {
+                    borderColor: COLORS.white,
+                  },
+                  "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                    borderColor: COLORS.white,
+                    borderWidth: 1,
+                  },
+                  "& .MuiSelect-select": {
+                    color: phase ? COLORS.textPrimary : COLORS.textMuted,
+                    fontSize: "14px",
+                    py: 1.2,
+                  },
+                  "& .MuiSvgIcon-root": {
+                    color: COLORS.textSecondary,
+                  },
+                }}
+                MenuProps={{
+                  slotProps: {
+                    paper: {
+                      sx: {
+                        bgcolor: COLORS.bgSecondary,
+                        border: `1px solid ${COLORS.borderLight}`,
+                        borderRadius: "8px",
+                        mt: 0.5,
+                        "& .MuiMenuItem-root": {
+                          color: COLORS.textPrimary,
+                          fontSize: "14px",
+                          "&:hover": {
+                            bgcolor: COLORS.bgTertiary,
+                          },
+                          "&.Mui-selected": {
+                            bgcolor: COLORS.blueBgMedium,
+                            "&:hover": {
+                              bgcolor: COLORS.blueBgHover,
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                }}
+              >
+                <MenuItem value="" disabled>
+                  Select phase
+                </MenuItem>
+                <MenuItem value="pre-construction">Pre-construction</MenuItem>
+                <MenuItem value="design">Design</MenuItem>
+                <MenuItem value="construction">Construction</MenuItem>
+                <MenuItem value="commissioning">Commissioning</MenuItem>
+              </Select>
+            </Box>
+
+            <Box>
+              <Typography
+                sx={{
+                  color: COLORS.border,
+                  fontSize: "12px",
+                  fontWeight: 500,
+                  mb: 0.5,
+                  mt: 2,
+                }}
+              >
+                Description
+              </Typography>
+              <TextField
+                fullWidth
+                multiline
+                rows={3}
+                placeholder="Brief description of the project scope and objectives..."
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                sx={{
+                  "& .MuiOutlinedInput-root": {
+                    bgcolor: COLORS.bgPrimary,
+                    borderRadius: "8px",
+                    "& fieldset": {
+                      borderColor: COLORS.white,
+                    },
+                    "&:hover fieldset": {
+                      borderColor: COLORS.white,
+                    },
+                    "&.Mui-focused fieldset": {
+                      borderColor: COLORS.white,
+                      borderWidth: 1,
+                    },
+                  },
+                  "& .MuiOutlinedInput-input": {
+                    color: COLORS.textPrimary,
+                    fontSize: "14px",
+                    "&::placeholder": {
+                      color: COLORS.textMuted,
+                      opacity: 1,
+                    },
+                  },
+                }}
+              />
+            </Box>
+
+            <Box>
+              <Typography
+                sx={{
+                  color: COLORS.border,
+                  fontSize: "12px",
+                  fontWeight: 500,
+                  mb: 0.5,
+                  mt: 2,
+                }}
+              >
+                Start Date <span style={{ color: COLORS.red }}>*</span>
+              </Typography>
+              <TextField
+                fullWidth
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                placeholder="mm/dd/yyyy"
+                sx={{
+                  "& .MuiOutlinedInput-root": {
+                    bgcolor: COLORS.bgPrimary,
+                    borderRadius: "8px",
+                    "& fieldset": {
+                      borderColor: COLORS.white,
+                    },
+                    "&:hover fieldset": {
+                      borderColor: COLORS.white,
+                    },
+                    "&.Mui-focused fieldset": {
+                      borderColor: COLORS.white,
+                      borderWidth: 1,
+                    },
+                  },
+                  "& .MuiOutlinedInput-input": {
+                    color: startDate ? COLORS.textPrimary : COLORS.textMuted,
+                    fontSize: "14px",
+                    py: 1.2,
+                    "&::-webkit-calendar-picker-indicator": {
+                      filter: "invert(1)",
+                      cursor: "pointer",
+                      opacity: 0.6,
+                    },
+                  },
+                }}
+              />
+            </Box>
+          </Box>
+        </DialogContent>
+
+        <DialogActions
+          sx={{
+            px: 3,
+            py: 2,
+            borderTop: `1px solid ${COLORS.white}`,
+            gap: 1.5,
+          }}
+        >
+          <Button
+            onClick={handleCloseModal}
+            sx={{
+              color: COLORS.white,
+              bgcolor: COLORS.bgPrimary,
+              border: `1px solid ${COLORS.white}`,
+              borderRadius: "8px",
+              textTransform: "none",
+              px: 2,
+              py: 1,
+              fontSize: "14px",
+              fontWeight: 400,
+              "&:hover": {
+                bgcolor: COLORS.bgTertiary,
+              },
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleCreateProject}
+            sx={{
+              color: COLORS.white,
+              bgcolor: COLORS.blue,
+              borderRadius: "8px",
+              textTransform: "none",
+              px: 2,
+              py: 1,
+              fontSize: "14px",
+              fontWeight: 500,
+              "&:hover": {
+                bgcolor: COLORS.blueHover,
+              },
+            }}
+          >
+            Create Project
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </PlannerLayout>
   );
 };
 
-export default Projects;
+export default PlannerProjects;

@@ -9,8 +9,10 @@ export const COLORS = {
   textSecondary: "#94a3b8",
   textMuted: "#64748b",
   textLight: "#e2e8f0",
+  darkBlack: "#0E1729",
 
   blue: "#3b82f6",
+  disabledBlue: "#2A4D86",
   blueHover: "#2563eb",
   blueDisabled: "#1e40af",
   blueBgLight: "rgba(59, 130, 246, 0.08)",

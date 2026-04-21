@@ -1,8 +1,9 @@
-import DashboardLayout from "../../layouts/DashboardLayout";
+import PlannerLayout from "../../layouts/PlannerLayout";
 import ActivitiesLookahead from "../../components/ActivitiesLookahead";
 import { activitiesData } from "../../components/ActivitiesTable";
 
-const weekTimelineData = [
+// Planner-specific week timeline data - this can be different from user side
+const plannerWeekTimelineData = [
   { week: 1, dateRange: "25 Mar - 31 Mar", color: "green" as const, isCurrent: true },
   { week: 2, dateRange: "01 Apr - 07 Apr", color: "green" as const, isCurrent: false },
   { week: 3, dateRange: "08 Apr - 14 Apr", color: "amber" as const, isCurrent: false },
@@ -11,19 +12,22 @@ const weekTimelineData = [
   { week: 6, dateRange: "29 Apr - 05 May", color: "red" as const, isCurrent: false },
 ];
 
-const Activities = () => {
+// For now using the same activities data, but this can be replaced with planner-specific data
+const plannerActivitiesData = activitiesData;
+
+const PlannerActivities = () => {
   return (
-    <DashboardLayout
+    <PlannerLayout
       title="Activities & Lookahead"
       subtitle="Manage project activities and lookahead planning"
     >
       <ActivitiesLookahead
-        activities={activitiesData}
-        weeks={weekTimelineData}
+        activities={plannerActivitiesData}
+        weeks={plannerWeekTimelineData}
         lastUpdated="25 Mar 2026, 09:15"
       />
-    </DashboardLayout>
+    </PlannerLayout>
   );
 };
 
-export default Activities;
+export default PlannerActivities;
