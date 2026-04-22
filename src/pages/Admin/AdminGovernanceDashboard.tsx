@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Box, Typography } from "@mui/material";
 import {
-  LineChart,
   Line,
   BarChart,
   Bar,
@@ -12,15 +11,11 @@ import {
   ResponsiveContainer,
   Area,
   ComposedChart,
-  Legend,
 } from "recharts";
 import {
-  CheckCircle as CheckCircleIcon,
-  Warning as WarningIcon,
   KeyboardArrowUp as ArrowUpIcon,
   KeyboardArrowDown as ArrowDownIcon,
   Remove as RemoveIcon,
-  CheckCircleOutlined as CheckCircleOutlinedIcon,
   WarningAmberOutlined as WarningAmberOutlinedIcon,
 } from "@mui/icons-material";
 import AdminLayout from "../../layouts/AdminLayout";
@@ -289,7 +284,7 @@ const actionsData = [
 ];
 
 const ragTrendData = [
-  { week: "W13", green: 25, amber: 8, red: 4 },
+  { week: "W13", green: 25, amber: 8, red: 3 },
   { week: "W14", green: 22, amber: 10, red: 5 },
   { week: "W15", green: 20, amber: 8, red: 4 },
   { week: "W16", green: 24, amber: 9, red: 5 },
@@ -331,7 +326,7 @@ const CustomLegend = ({
 }: {
   items: { label: string; color: string }[];
 }) => (
-  <Box sx={{ display: "flex", justifyContent: "center", gap: 3, mb: 2 }}>
+  <Box sx={{ display: "flex", justifyContent: "center", gap: 1, mb: 2 }}>
     {items.map((item) => (
       <Box
         key={item.label}
@@ -455,6 +450,7 @@ const AdminGovernanceDashboard = () => {
               md: "1.5fr 1fr 1fr 1fr 1fr 1.5fr",
             },
             gap: 3,
+            px: 5,
             alignItems: "center",
           }}
         >
@@ -462,7 +458,7 @@ const AdminGovernanceDashboard = () => {
             <Typography
               sx={{
                 color: COLORS.textMuted,
-                fontSize: "11px",
+                fontSize: "12px",
                 fontWeight: 600,
                 letterSpacing: "0.5px",
                 mb: 0.75,
@@ -474,7 +470,7 @@ const AdminGovernanceDashboard = () => {
               sx={{
                 color: COLORS.textPrimary,
                 fontSize: "14px",
-                fontWeight: 500,
+                fontWeight: 600,
               }}
             >
               Crossrail Phase 2
@@ -485,7 +481,7 @@ const AdminGovernanceDashboard = () => {
             <Typography
               sx={{
                 color: COLORS.textMuted,
-                fontSize: "11px",
+                fontSize: "12px",
                 fontWeight: 600,
                 letterSpacing: "0.5px",
                 mb: 0.75,
@@ -497,7 +493,7 @@ const AdminGovernanceDashboard = () => {
               sx={{
                 color: COLORS.textPrimary,
                 fontSize: "14px",
-                fontWeight: 500,
+                fontWeight: 600,
               }}
             >
               Construction
@@ -508,7 +504,7 @@ const AdminGovernanceDashboard = () => {
             <Typography
               sx={{
                 color: COLORS.textMuted,
-                fontSize: "11px",
+                fontSize: "12px",
                 fontWeight: 600,
                 letterSpacing: "0.5px",
                 mb: 0.75,
@@ -520,7 +516,7 @@ const AdminGovernanceDashboard = () => {
               sx={{
                 color: COLORS.textPrimary,
                 fontSize: "14px",
-                fontWeight: 500,
+                fontWeight: 600,
               }}
             >
               24
@@ -531,7 +527,7 @@ const AdminGovernanceDashboard = () => {
             <Typography
               sx={{
                 color: COLORS.textMuted,
-                fontSize: "11px",
+                fontSize: "12px",
                 fontWeight: 600,
                 letterSpacing: "0.5px",
                 mb: 0.75,
@@ -543,7 +539,7 @@ const AdminGovernanceDashboard = () => {
               sx={{
                 color: COLORS.green,
                 fontSize: "14px",
-                fontWeight: 500,
+                fontWeight: 600,
               }}
             >
               21
@@ -554,7 +550,7 @@ const AdminGovernanceDashboard = () => {
             <Typography
               sx={{
                 color: COLORS.textMuted,
-                fontSize: "11px",
+                fontSize: "12px",
                 fontWeight: 600,
                 letterSpacing: "0.5px",
                 mb: 0.75,
@@ -566,7 +562,7 @@ const AdminGovernanceDashboard = () => {
               sx={{
                 color: COLORS.amber,
                 fontSize: "14px",
-                fontWeight: 500,
+                fontWeight: 600,
               }}
             >
               3
@@ -577,7 +573,7 @@ const AdminGovernanceDashboard = () => {
             <Typography
               sx={{
                 color: COLORS.textMuted,
-                fontSize: "11px",
+                fontSize: "12px",
                 fontWeight: 600,
                 letterSpacing: "0.5px",
                 mb: 0.75,

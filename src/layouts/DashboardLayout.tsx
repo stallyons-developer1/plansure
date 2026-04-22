@@ -18,6 +18,8 @@ import {
   DialogActions,
   Button,
   CircularProgress,
+  Popover,
+  Badge,
 } from "@mui/material";
 import {
   HomeOutlined as DashboardIcon,
@@ -39,6 +41,37 @@ interface DashboardLayoutProps {
   subtitle?: string;
 }
 
+const sampleNotifications = [
+  {
+    id: 1,
+    title: "New project assigned",
+    message: "You have been assigned to Project Alpha",
+    time: "2 min ago",
+    read: false,
+  },
+  {
+    id: 2,
+    title: "Action overdue",
+    message: "Action #1234 is overdue by 2 days",
+    time: "1 hour ago",
+    read: false,
+  },
+  {
+    id: 3,
+    title: "Weekly report ready",
+    message: "Your weekly governance report is ready",
+    time: "3 hours ago",
+    read: true,
+  },
+  {
+    id: 4,
+    title: "RAG status changed",
+    message: "Project Beta status changed to Amber",
+    time: "Yesterday",
+    read: true,
+  },
+];
+
 const DashboardLayout = ({
   children,
   title,
@@ -47,9 +80,30 @@ const DashboardLayout = ({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [logoutModalOpen, setLogoutModalOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [notificationAnchor, setNotificationAnchor] = useState<HTMLElement | null>(null);
+  const [notifications, setNotifications] = useState(sampleNotifications);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
+  const handleNotificationClick = (event: React.MouseEvent<HTMLElement>) => {
+    setNotificationAnchor(event.currentTarget);
+  };
+
+  const handleNotificationClose = () => {
+    setNotificationAnchor(null);
+  };
+
+  const handleMarkAllRead = () => {
+    setNotifications(notifications.map((n) => ({ ...n, read: true })));
+  };
+
+  const handleViewAll = () => {
+    handleNotificationClose();
+    navigate("/dashboard/notifications");
+  };
 
   const handleLogoutClick = () => {
     setLogoutModalOpen(true);
@@ -424,9 +478,189 @@ const DashboardLayout = ({
               )}
             </Box>
           </Box>
-          <IconButton sx={{ color: COLORS.textSecondary }}>
-            <NotificationsIcon />
+          <IconButton
+            onClick={handleNotificationClick}
+            sx={{ color: COLORS.textSecondary }}
+          >
+            <Badge
+              badgeContent={unreadCount}
+              color="error"
+              sx={{
+                "& .MuiBadge-badge": {
+                  bgcolor: COLORS.red,
+                  color: COLORS.white,
+                  fontSize: "10px",
+                  minWidth: "18px",
+                  height: "18px",
+                },
+              }}
+            >
+              <NotificationsIcon />
+            </Badge>
           </IconButton>
+          <Popover
+            open={Boolean(notificationAnchor)}
+            anchorEl={notificationAnchor}
+            onClose={handleNotificationClose}
+            anchorOrigin={{
+              vertical: "bottom",
+              horizontal: "right",
+            }}
+            transformOrigin={{
+              vertical: "top",
+              horizontal: "right",
+            }}
+            slotProps={{
+              paper: {
+                sx: {
+                  bgcolor: "#0F172A",
+                  border: `1px solid ${COLORS.border}`,
+                  borderRadius: "12px",
+                  width: 360,
+                  maxHeight: 480,
+                  mt: 1,
+                  boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
+                },
+              },
+            }}
+          >
+            <Box
+              sx={{
+                p: 2,
+                borderBottom: `1px solid ${COLORS.border}`,
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <Typography
+                sx={{
+                  color: COLORS.textPrimary,
+                  fontWeight: 600,
+                  fontSize: "16px",
+                }}
+              >
+                Notifications
+              </Typography>
+              {unreadCount > 0 && (
+                <Box
+                  sx={{
+                    bgcolor: COLORS.red,
+                    color: COLORS.white,
+                    fontSize: "12px",
+                    fontWeight: 500,
+                    px: 1.5,
+                    py: 0.25,
+                    borderRadius: "12px",
+                  }}
+                >
+                  {unreadCount} new
+                </Box>
+              )}
+            </Box>
+            <Box sx={{ maxHeight: 300, overflowY: "auto" }}>
+              {notifications.map((notification) => (
+                <Box
+                  key={notification.id}
+                  sx={{
+                    p: 2,
+                    borderBottom: `1px solid ${COLORS.border}`,
+                    cursor: "pointer",
+                    bgcolor: notification.read ? "transparent" : "rgba(59, 130, 246, 0.05)",
+                    "&:hover": {
+                      bgcolor: COLORS.bgTertiary,
+                    },
+                  }}
+                >
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "flex-start",
+                      mb: 0.5,
+                    }}
+                  >
+                    <Typography
+                      sx={{
+                        color: COLORS.textPrimary,
+                        fontWeight: notification.read ? 400 : 600,
+                        fontSize: "14px",
+                      }}
+                    >
+                      {notification.title}
+                    </Typography>
+                    {!notification.read && (
+                      <Box
+                        sx={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: "50%",
+                          bgcolor: COLORS.blue,
+                          flexShrink: 0,
+                          mt: 0.5,
+                        }}
+                      />
+                    )}
+                  </Box>
+                  <Typography
+                    sx={{
+                      color: COLORS.textMuted,
+                      fontSize: "13px",
+                      mb: 0.5,
+                    }}
+                  >
+                    {notification.message}
+                  </Typography>
+                  <Typography
+                    sx={{
+                      color: COLORS.textMuted,
+                      fontSize: "12px",
+                    }}
+                  >
+                    {notification.time}
+                  </Typography>
+                </Box>
+              ))}
+            </Box>
+            <Box
+              sx={{
+                p: 2,
+                display: "flex",
+                justifyContent: "space-between",
+                borderTop: `1px solid ${COLORS.border}`,
+              }}
+            >
+              <Button
+                onClick={handleMarkAllRead}
+                sx={{
+                  color: COLORS.textSecondary,
+                  textTransform: "none",
+                  fontSize: "13px",
+                  "&:hover": {
+                    bgcolor: "transparent",
+                    color: COLORS.textPrimary,
+                  },
+                }}
+              >
+                Mark all read
+              </Button>
+              <Button
+                onClick={handleViewAll}
+                sx={{
+                  color: COLORS.blue,
+                  textTransform: "none",
+                  fontSize: "13px",
+                  fontWeight: 500,
+                  "&:hover": {
+                    bgcolor: "transparent",
+                    color: COLORS.blueHover,
+                  },
+                }}
+              >
+                View all
+              </Button>
+            </Box>
+          </Popover>
         </Box>
 
         <Box sx={{ p: { xs: 2, sm: 3 }, flexGrow: 1, overflowY: "auto" }}>

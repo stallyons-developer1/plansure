@@ -792,16 +792,32 @@ const AdminActions = () => {
           overflow: "hidden",
         }}
       >
-        <Box sx={{ overflowX: "auto" }}>
-          <Box sx={{ minWidth: 1000 }}>
+        <Box
+          sx={{
+            overflowX: "auto",
+            "&::-webkit-scrollbar": {
+              height: 8,
+            },
+            "&::-webkit-scrollbar-track": {
+              bgcolor: COLORS.bgPrimary,
+            },
+            "&::-webkit-scrollbar-thumb": {
+              bgcolor: COLORS.border,
+              borderRadius: 4,
+            },
+          }}
+        >
+          <Box sx={{ minWidth: "max-content" }}>
             <Box
               sx={{
                 display: "grid",
                 gridTemplateColumns:
-                  "100px 1fr 130px 90px 120px 110px 80px 90px 80px",
+                  "minmax(90px, 0.8fr) minmax(180px, 2fr) minmax(120px, 1fr) minmax(80px, 0.7fr) minmax(130px, 1.2fr) minmax(100px, 1fr) minmax(70px, 0.7fr) minmax(80px, 0.8fr) minmax(70px, 0.6fr)",
                 gap: 2,
                 px: 3,
                 py: 1.5,
+                width: "100%",
+                boxSizing: "border-box",
                 borderBottom: `1px solid ${COLORS.border}`,
               }}
             >
@@ -823,6 +839,7 @@ const AdminActions = () => {
                     fontSize: "11px",
                     fontWeight: 600,
                     letterSpacing: "0.5px",
+                    whiteSpace: "nowrap",
                   }}
                 >
                   {header}
@@ -836,10 +853,12 @@ const AdminActions = () => {
                 sx={{
                   display: "grid",
                   gridTemplateColumns:
-                    "100px 1fr 130px 90px 120px 110px 80px 90px 80px",
+                    "minmax(90px, 0.8fr) minmax(180px, 2fr) minmax(120px, 1fr) minmax(80px, 0.7fr) minmax(130px, 1.2fr) minmax(100px, 1fr) minmax(70px, 0.7fr) minmax(80px, 0.8fr) minmax(70px, 0.6fr)",
                   gap: 2,
                   px: 3,
                   py: 2,
+                  width: "100%",
+                  boxSizing: "border-box",
                   borderBottom: `1px solid ${COLORS.border}`,
                   alignItems: "center",
                   "&:hover": { bgcolor: COLORS.bgTertiary },

@@ -26,6 +26,8 @@ import AdminGovernanceDashboard from "./pages/Admin/AdminGovernanceDashboard";
 import AdminExports from "./pages/Admin/AdminExports";
 import UserManagement from "./pages/Admin/UserManagement";
 import AuditLogs from "./pages/Admin/AuditLogs";
+import AdminNotifications from "./pages/Admin/AdminNotifications";
+import PlannerNotifications from "./pages/Planner/PlannerNotifications";
 
 
 const ProtectedRoute = ({
@@ -173,6 +175,15 @@ function App() {
       />
 
       <Route
+        path="/admin/notifications"
+        element={
+          <ProtectedRoute allowedRoles={["admin"]}>
+            <AdminNotifications />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
         path="/planner"
         element={
           <ProtectedRoute allowedRoles={["planner"]}>
@@ -249,6 +260,15 @@ function App() {
         element={
           <ProtectedRoute allowedRoles={["planner"]}>
             <PlannerGovernanceDashboard />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/planner/notifications"
+        element={
+          <ProtectedRoute allowedRoles={["planner"]}>
+            <PlannerNotifications />
           </ProtectedRoute>
         }
       />

@@ -130,6 +130,8 @@ const UserManagement = () => {
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
   const [selectedRole, setSelectedRole] = useState("");
   const [selectedProject, setSelectedProject] = useState("");
+  const [inviteName, setInviteName] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
 
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -140,6 +142,42 @@ const UserManagement = () => {
   );
   const [editProjectAccess, setEditProjectAccess] = useState("");
   const [editStatus, setEditStatus] = useState<"Active" | "Inactive">("Active");
+
+  const handleCloseInviteModal = () => {
+    setInviteModalOpen(false);
+    setInviteName("");
+    setInviteEmail("");
+    setSelectedRole("");
+    setSelectedProject("");
+  };
+
+  const handleSendInvite = () => {
+    if (!inviteName || !inviteEmail || !selectedRole || !selectedProject) {
+      return;
+    }
+
+    const getInitials = (name: string) => {
+      const parts = name.split(" ");
+      if (parts.length >= 2) {
+        return (parts[0][0] + parts[1][0]).toUpperCase();
+      }
+      return name.substring(0, 2).toUpperCase();
+    };
+
+    const newUser: User = {
+      id: String(users.length + 1),
+      name: inviteName,
+      initials: getInitials(inviteName),
+      email: inviteEmail,
+      role: selectedRole as "Admin" | "Planner" | "User",
+      projectAccess: selectedProject,
+      status: "Active",
+      lastLogin: "Pending invite",
+    };
+
+    setUsers([...users, newUser]);
+    handleCloseInviteModal();
+  };
 
   const handleOpenEditModal = (user: User) => {
     setEditingUser(user);
@@ -743,7 +781,7 @@ const UserManagement = () => {
 
       <Dialog
         open={inviteModalOpen}
-        onClose={() => setInviteModalOpen(false)}
+        onClose={handleCloseInviteModal}
         maxWidth="sm"
         fullWidth
         slotProps={{
@@ -784,7 +822,7 @@ const UserManagement = () => {
             Invite User
           </Typography>
           <IconButton
-            onClick={() => setInviteModalOpen(false)}
+            onClick={handleCloseInviteModal}
             sx={{ color: COLORS.textMuted, mr: -1, p: 0.5 }}
           >
             <CloseIcon sx={{ fontSize: 20 }} />
@@ -803,10 +841,13 @@ const UserManagement = () => {
             >
               Full Name <span style={{ color: COLORS.red }}>*</span>
             </Typography>
-            <input
+            <Box
+              component="input"
               type="text"
               placeholder="e.g. John Smith"
-              style={{
+              value={inviteName}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInviteName(e.target.value)}
+              sx={{
                 width: "100%",
                 padding: "12px 14px",
                 background: COLORS.bgPrimary,
@@ -816,6 +857,11 @@ const UserManagement = () => {
                 fontSize: "14px",
                 outline: "none",
                 boxSizing: "border-box",
+                "&:-webkit-autofill, &:-webkit-autofill:hover, &:-webkit-autofill:focus": {
+                  WebkitBoxShadow: `0 0 0 1000px ${COLORS.bgPrimary} inset !important`,
+                  WebkitTextFillColor: `${COLORS.textPrimary} !important`,
+                  caretColor: COLORS.textPrimary,
+                },
               }}
             />
           </Box>
@@ -832,10 +878,13 @@ const UserManagement = () => {
             >
               Email Address <span style={{ color: COLORS.red }}>*</span>
             </Typography>
-            <input
+            <Box
+              component="input"
               type="email"
               placeholder="e.g. john.smith@company.com"
-              style={{
+              value={inviteEmail}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInviteEmail(e.target.value)}
+              sx={{
                 width: "100%",
                 padding: "12px 14px",
                 background: COLORS.bgPrimary,
@@ -845,6 +894,11 @@ const UserManagement = () => {
                 fontSize: "14px",
                 outline: "none",
                 boxSizing: "border-box",
+                "&:-webkit-autofill, &:-webkit-autofill:hover, &:-webkit-autofill:focus": {
+                  WebkitBoxShadow: `0 0 0 1000px ${COLORS.bgPrimary} inset !important`,
+                  WebkitTextFillColor: `${COLORS.textPrimary} !important`,
+                  caretColor: COLORS.textPrimary,
+                },
               }}
             />
           </Box>
@@ -1070,7 +1124,7 @@ const UserManagement = () => {
           }}
         >
           <Button
-            onClick={() => setInviteModalOpen(false)}
+            onClick={handleCloseInviteModal}
             sx={{
               color: COLORS.white,
               bgcolor: COLORS.bgPrimary,
@@ -1089,6 +1143,7 @@ const UserManagement = () => {
             Cancel
           </Button>
           <Button
+            onClick={handleSendInvite}
             sx={{
               color: COLORS.white,
               bgcolor: COLORS.blue,
@@ -1170,12 +1225,13 @@ const UserManagement = () => {
             >
               Full Name <span style={{ color: COLORS.red }}>*</span>
             </Typography>
-            <input
+            <Box
+              component="input"
               type="text"
               placeholder="e.g. John Smith"
               value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-              style={{
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditName(e.target.value)}
+              sx={{
                 width: "100%",
                 padding: "12px 14px",
                 background: COLORS.bgPrimary,
@@ -1185,6 +1241,11 @@ const UserManagement = () => {
                 fontSize: "14px",
                 outline: "none",
                 boxSizing: "border-box",
+                "&:-webkit-autofill, &:-webkit-autofill:hover, &:-webkit-autofill:focus": {
+                  WebkitBoxShadow: `0 0 0 1000px ${COLORS.bgPrimary} inset !important`,
+                  WebkitTextFillColor: `${COLORS.textPrimary} !important`,
+                  caretColor: COLORS.textPrimary,
+                },
               }}
             />
           </Box>
@@ -1201,12 +1262,13 @@ const UserManagement = () => {
             >
               Email Address <span style={{ color: COLORS.red }}>*</span>
             </Typography>
-            <input
+            <Box
+              component="input"
               type="email"
               placeholder="e.g. john.smith@company.com"
               value={editEmail}
-              onChange={(e) => setEditEmail(e.target.value)}
-              style={{
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditEmail(e.target.value)}
+              sx={{
                 width: "100%",
                 padding: "12px 14px",
                 background: COLORS.bgPrimary,
@@ -1216,6 +1278,11 @@ const UserManagement = () => {
                 fontSize: "14px",
                 outline: "none",
                 boxSizing: "border-box",
+                "&:-webkit-autofill, &:-webkit-autofill:hover, &:-webkit-autofill:focus": {
+                  WebkitBoxShadow: `0 0 0 1000px ${COLORS.bgPrimary} inset !important`,
+                  WebkitTextFillColor: `${COLORS.textPrimary} !important`,
+                  caretColor: COLORS.textPrimary,
+                },
               }}
             />
           </Box>
