@@ -348,17 +348,23 @@ const AdminActions = () => {
             bgcolor: COLORS.blue,
             color: COLORS.white,
             textTransform: "none",
-            px: 2.5,
+            px: { xs: 1.5, sm: 2.5 },
             py: 1,
             borderRadius: "8px",
             fontSize: "14px",
             fontWeight: 500,
+            minWidth: "auto",
             "&:hover": {
               bgcolor: COLORS.blueHover,
             },
+            "& .MuiButton-startIcon": {
+              mr: { xs: 0, sm: 1 },
+            },
           }}
         >
-          Create Action
+          <Box component="span" sx={{ display: { xs: "none", sm: "inline" } }}>
+            Create Action
+          </Box>
         </Button>
       }
     >
