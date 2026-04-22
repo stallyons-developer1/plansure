@@ -21,7 +21,7 @@ import lockIcon from "../../assets/lock.png";
 import uploadIcon from "../../assets/sidebar/upload.png";
 import { useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import PlannerLayout from "../../layouts/PlannerLayout";
+import AdminLayout from "../../layouts/AdminLayout";
 import { COLORS } from "../../constants/colors";
 import ProjectHeader from "../../components/ProjectHeader";
 import StatCard from "../../components/StatCard";
@@ -246,7 +246,7 @@ const weeklyControlStats = {
   readyToClose: "No",
 };
 
-const PlannerProjectWorkspace = () => {
+const AdminProjectWorkspace = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState(0);
@@ -421,17 +421,17 @@ const PlannerProjectWorkspace = () => {
 
   if (!project) {
     return (
-      <PlannerLayout
+      <AdminLayout
         title="Project Workspace"
         subtitle="Manage weekly control cycle"
       >
         <Box sx={{ color: COLORS.textPrimary }}>Project not found</Box>
-      </PlannerLayout>
+      </AdminLayout>
     );
   }
 
   return (
-    <PlannerLayout
+    <AdminLayout
       title="Project Workspace"
       subtitle="Manage weekly control cycle"
     >
@@ -439,7 +439,7 @@ const PlannerProjectWorkspace = () => {
         <ProjectHeader
           breadcrumb={{
             label: "Projects",
-            onClick: () => navigate("/planner/projects"),
+            onClick: () => navigate("/admin/projects"),
           }}
           projectName={project.name}
           phase={project.phase}
@@ -2801,8 +2801,8 @@ const PlannerProjectWorkspace = () => {
           </DialogActions>
         </Dialog>
       </Box>
-    </PlannerLayout>
+    </AdminLayout>
   );
 };
 
-export default PlannerProjectWorkspace;
+export default AdminProjectWorkspace;

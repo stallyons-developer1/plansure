@@ -11,20 +11,22 @@ import PlannerProjectWorkspace from "./pages/Planner/PlannerProjectWorkspace";
 import ProgramsUpload from "./pages/Planner/ProgramsUpload";
 import PlannerActivities from "./pages/Planner/PlannerActivities";
 import PlannerActions from "./pages/Planner/PlannerActions";
+import PlannerExports from "./pages/Planner/PlannerExports";
+import PlannerWeeklyDashboard from "./pages/Planner/PlannerWeeklyDashboard";
+import PlannerGovernanceDashboard from "./pages/Planner/PlannerGovernanceDashboard";
+// Admin imports
+import AdminDashboard from "./pages/Admin/AdminDashboard";
+import AdminProjects from "./pages/Admin/AdminProjects";
+import AdminProjectWorkspace from "./pages/Admin/AdminProjectWorkspace";
+import AdminProgramsUpload from "./pages/Admin/AdminProgramsUpload";
+import AdminActivities from "./pages/Admin/AdminActivities";
+import AdminActions from "./pages/Admin/AdminActions";
+import AdminWeeklyDashboard from "./pages/Admin/AdminWeeklyDashboard";
+import AdminGovernanceDashboard from "./pages/Admin/AdminGovernanceDashboard";
+import AdminExports from "./pages/Admin/AdminExports";
+import UserManagement from "./pages/Admin/UserManagement";
+import AuditLogs from "./pages/Admin/AuditLogs";
 
-const AdminDashboard = () => (
-  <div
-    style={{
-      padding: "40px",
-      color: "#f1f5f9",
-      background: "#0f172a",
-      minHeight: "100vh",
-    }}
-  >
-    <h1>Admin Dashboard</h1>
-    <p>Welcome, Admin!</p>
-  </div>
-);
 
 const ProtectedRoute = ({
   children,
@@ -72,10 +74,100 @@ function App() {
       />
 
       <Route
-        path="/admin/*"
+        path="/admin"
         element={
           <ProtectedRoute allowedRoles={["admin"]}>
             <AdminDashboard />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/admin/projects"
+        element={
+          <ProtectedRoute allowedRoles={["admin"]}>
+            <AdminProjects />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/admin/projects/:projectId"
+        element={
+          <ProtectedRoute allowedRoles={["admin"]}>
+            <AdminProjectWorkspace />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/admin/programs-upload"
+        element={
+          <ProtectedRoute allowedRoles={["admin"]}>
+            <AdminProgramsUpload />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/admin/activities"
+        element={
+          <ProtectedRoute allowedRoles={["admin"]}>
+            <AdminActivities />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/admin/action"
+        element={
+          <ProtectedRoute allowedRoles={["admin"]}>
+            <AdminActions />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/admin/weekly-dashboard"
+        element={
+          <ProtectedRoute allowedRoles={["admin"]}>
+            <AdminWeeklyDashboard />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/admin/governance"
+        element={
+          <ProtectedRoute allowedRoles={["admin"]}>
+            <AdminGovernanceDashboard />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/admin/export"
+        element={
+          <ProtectedRoute allowedRoles={["admin"]}>
+            <AdminExports />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/admin/users"
+        element={
+          <ProtectedRoute allowedRoles={["admin"]}>
+            <UserManagement />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/admin/audit-logs"
+        element={
+          <ProtectedRoute allowedRoles={["admin"]}>
+            <AuditLogs />
           </ProtectedRoute>
         }
       />
@@ -130,6 +222,33 @@ function App() {
         element={
           <ProtectedRoute allowedRoles={["planner"]}>
             <PlannerActions />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/planner/export"
+        element={
+          <ProtectedRoute allowedRoles={["planner"]}>
+            <PlannerExports />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/planner/weekly-dashboard"
+        element={
+          <ProtectedRoute allowedRoles={["planner"]}>
+            <PlannerWeeklyDashboard />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/planner/governance"
+        element={
+          <ProtectedRoute allowedRoles={["planner"]}>
+            <PlannerGovernanceDashboard />
           </ProtectedRoute>
         }
       />

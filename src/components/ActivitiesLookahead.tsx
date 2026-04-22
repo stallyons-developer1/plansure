@@ -67,7 +67,6 @@ const ActivitiesLookahead = ({
 
   return (
     <Box>
-      {/* Filter Bar */}
       <Box
         sx={{
           border: `1px solid ${COLORS.border}`,
@@ -248,7 +247,6 @@ const ActivitiesLookahead = ({
         </Select>
       </Box>
 
-      {/* 6-Week Lookahead Timeline */}
       <Box
         sx={{
           bgcolor: COLORS.bgSecondary,
@@ -353,10 +351,8 @@ const ActivitiesLookahead = ({
         </Box>
       </Box>
 
-      {/* Activities Table */}
       <ActivitiesTable activities={filteredActivities} />
 
-      {/* Summary Footer */}
       <ActivitiesSummary
         totalActivities={activities.length}
         greenCount={greenCount}

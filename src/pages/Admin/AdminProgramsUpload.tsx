@@ -17,7 +17,7 @@ import {
   VisibilityOutlined as ViewIcon,
   Close as CloseIcon,
 } from "@mui/icons-material";
-import PlannerLayout from "../../layouts/PlannerLayout";
+import AdminLayout from "../../layouts/AdminLayout";
 import { COLORS } from "../../constants/colors";
 import { useAuth } from "../../context/AuthContext";
 import uploadIcon from "../../assets/sidebar/upload.png";
@@ -33,7 +33,7 @@ interface UploadedFile {
   fileUrl: string;
 }
 
-const ProgramsUpload = () => {
+const AdminProgramsUpload = () => {
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadHistory, setUploadHistory] = useState<UploadedFile[]>([]);
   const [viewingPdf, setViewingPdf] = useState<string | null>(null);
@@ -114,10 +114,7 @@ const ProgramsUpload = () => {
   };
 
   return (
-    <PlannerLayout
-      title="Programs Upload"
-      subtitle="Upload master schedule PDF"
-    >
+    <AdminLayout title="Programs Upload" subtitle="Upload master schedule PDF">
       <Box sx={{ maxWidth: "100%", overflow: "hidden" }}>
         <input
           type="file"
@@ -680,8 +677,8 @@ const ProgramsUpload = () => {
           </Box>
         </Dialog>
       </Box>
-    </PlannerLayout>
+    </AdminLayout>
   );
 };
 
-export default ProgramsUpload;
+export default AdminProgramsUpload;

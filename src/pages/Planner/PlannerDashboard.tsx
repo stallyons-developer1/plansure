@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import { Box, Card, Typography, Button } from "@mui/material";
 import {
   CalendarTodayOutlined as CalendarIcon,
@@ -23,6 +24,7 @@ const greenFilter =
 
 const PlannerDashboard = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const userName = user?.email?.split("@")[0] || "Planner";
 
   return (
@@ -133,6 +135,7 @@ const PlannerDashboard = () => {
             }}
           >
             <Button
+              onClick={() => navigate("/planner/programs-upload")}
               startIcon={
                 <Box
                   component="img"
@@ -161,6 +164,7 @@ const PlannerDashboard = () => {
               Upload Programme
             </Button>
             <Button
+              onClick={() => navigate("/planner/weekly-dashboard")}
               startIcon={
                 <Box
                   component="img"

@@ -239,7 +239,14 @@ const PlannerLayout = ({
         bgcolor: COLORS.bgPrimary,
       }}
     >
-      <Box sx={{ px: 2, py: 1.94, borderBottom: `1px solid ${COLORS.border}` }}>
+      <Box
+        sx={{
+          px: 2,
+          py: 1.94,
+          borderBottom: `1px solid ${COLORS.border}`,
+          flexShrink: 0,
+        }}
+      >
         <Box
           component="img"
           src={logo}
@@ -248,62 +255,71 @@ const PlannerLayout = ({
         />
       </Box>
 
-      {renderMenuSection("MAIN", mainMenuItems)}
-      {renderMenuSection("WEEKLY CONTROL", weeklyControlItems)}
-      {renderMenuSection("GOVERNANCE", governanceItems)}
+      <Box
+        sx={{
+          flex: 1,
+          overflowY: "auto",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        {renderMenuSection("MAIN", mainMenuItems)}
+        {renderMenuSection("WEEKLY CONTROL", weeklyControlItems)}
+        {renderMenuSection("GOVERNANCE", governanceItems)}
 
-      <Box sx={{ flexGrow: 1 }} />
+        <Box sx={{ flexGrow: 1 }} />
 
-      <Box sx={{ p: 2 }}>
-        <Divider sx={{ borderColor: COLORS.border, mb: 2 }} />
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-            <Avatar
-              sx={{
-                width: 36,
-                height: 36,
-                bgcolor: COLORS.blue,
-                fontSize: "0.875rem",
-              }}
-            >
-              {user?.email?.charAt(0).toUpperCase() || "P"}
-            </Avatar>
-            <Box>
-              <Typography
-                sx={{
-                  color: COLORS.textPrimary,
-                  fontSize: "0.875rem",
-                  fontWeight: 500,
-                }}
-              >
-                {user?.email?.split("@")[0] || "Planner"}
-              </Typography>
-              <Typography
-                sx={{
-                  color: COLORS.textMuted,
-                  fontSize: "0.75rem",
-                  textTransform: "capitalize",
-                }}
-              >
-                {user?.role || "Planner"}
-              </Typography>
-            </Box>
-          </Box>
-          <IconButton
-            onClick={handleLogoutClick}
+        <Box sx={{ p: 2 }}>
+          <Divider sx={{ borderColor: COLORS.border, mb: 2 }} />
+          <Box
             sx={{
-              color: COLORS.textMuted,
-              "&:hover": { color: COLORS.redLight },
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
             }}
           >
-            <LogoutIcon fontSize="small" />
-          </IconButton>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+              <Avatar
+                sx={{
+                  width: 36,
+                  height: 36,
+                  bgcolor: COLORS.blue,
+                  fontSize: "0.875rem",
+                }}
+              >
+                {user?.email?.charAt(0).toUpperCase() || "P"}
+              </Avatar>
+              <Box>
+                <Typography
+                  sx={{
+                    color: COLORS.textPrimary,
+                    fontSize: "0.875rem",
+                    fontWeight: 500,
+                  }}
+                >
+                  {user?.email?.split("@")[0] || "Planner"}
+                </Typography>
+                <Typography
+                  sx={{
+                    color: COLORS.textMuted,
+                    fontSize: "0.75rem",
+                    textTransform: "capitalize",
+                  }}
+                >
+                  {user?.role || "Planner"}
+                </Typography>
+              </Box>
+            </Box>
+            <IconButton
+              onClick={handleLogoutClick}
+              sx={{
+                color: COLORS.textMuted,
+                "&:hover": { color: COLORS.redLight },
+              }}
+            >
+              <LogoutIcon fontSize="small" />
+            </IconButton>
+          </Box>
         </Box>
       </Box>
     </Box>

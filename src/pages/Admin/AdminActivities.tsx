@@ -1,8 +1,8 @@
-import PlannerLayout from "../../layouts/PlannerLayout";
+import AdminLayout from "../../layouts/AdminLayout";
 import ActivitiesLookahead from "../../components/ActivitiesLookahead";
 import { activitiesData } from "../../components/ActivitiesTable";
 
-const plannerWeekTimelineData = [
+const adminWeekTimelineData = [
   {
     week: 1,
     dateRange: "25 Mar - 31 Mar",
@@ -41,21 +41,21 @@ const plannerWeekTimelineData = [
   },
 ];
 
-const plannerActivitiesData = activitiesData;
+const adminActivitiesData = activitiesData;
 
-const PlannerActivities = () => {
+const AdminActivities = () => {
   return (
-    <PlannerLayout
+    <AdminLayout
       title="Activities & Lookahead"
       subtitle="Manage project activities and lookahead planning"
     >
       <ActivitiesLookahead
-        activities={plannerActivitiesData}
-        weeks={plannerWeekTimelineData}
+        activities={adminActivitiesData}
+        weeks={adminWeekTimelineData}
         lastUpdated="25 Mar 2026, 09:15"
       />
-    </PlannerLayout>
+    </AdminLayout>
   );
 };
 
-export default PlannerActivities;
+export default AdminActivities;

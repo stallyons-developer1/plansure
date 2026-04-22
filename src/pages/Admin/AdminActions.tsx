@@ -25,7 +25,7 @@ import {
   KeyboardArrowDown as ArrowDownIcon,
   AccessTime as TimeIcon,
 } from "@mui/icons-material";
-import PlannerLayout from "../../layouts/PlannerLayout";
+import AdminLayout from "../../layouts/AdminLayout";
 import { COLORS } from "../../constants/colors";
 import actionIcon from "../../assets/sidebar/action.png";
 import editIcon from "../../assets/tabler_edit.png";
@@ -147,7 +147,7 @@ const assigneeOptions = [
   { value: "maria", initials: "ML", name: "Maria L." },
 ];
 
-const PlannerActions = () => {
+const AdminActions = () => {
   const [actions, setActions] = useState<Action[]>(initialActionsData);
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
@@ -337,7 +337,7 @@ const PlannerActions = () => {
     "brightness(0) saturate(100%) invert(45%) sepia(98%) saturate(1752%) hue-rotate(199deg) brightness(101%) contrast(96%)";
 
   return (
-    <PlannerLayout
+    <AdminLayout
       title="Actions"
       subtitle="Readiness actions management"
       headerAction={
@@ -2018,8 +2018,8 @@ const PlannerActions = () => {
           </Box>
         )}
       </Drawer>
-    </PlannerLayout>
+    </AdminLayout>
   );
 };
 
-export default PlannerActions;
+export default AdminActions;
