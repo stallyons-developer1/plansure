@@ -37,13 +37,16 @@ const ProtectedRoute = ({
   children: React.ReactNode;
   allowedRoles?: string[];
 }) => {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, logout } = useAuth();
 
+  // Not logged in - redirect to login
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
 
+  // Logged in but wrong role - logout and redirect to login
   if (allowedRoles && user && !allowedRoles.includes(user.role)) {
+    logout();
     return <Navigate to="/login" replace />;
   }
 
