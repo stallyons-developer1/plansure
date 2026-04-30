@@ -46,7 +46,8 @@ const ProtectedRoute = ({
 
   // Logged in but wrong role - logout and redirect to login
   if (allowedRoles && user && !allowedRoles.includes(user.role)) {
-    logout();
+    // Call logout (async) but don't await - we're redirecting anyway
+    void logout();
     return <Navigate to="/login" replace />;
   }
 

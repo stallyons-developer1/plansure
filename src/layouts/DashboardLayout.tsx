@@ -109,14 +109,17 @@ const DashboardLayout = ({
     setLogoutModalOpen(true);
   };
 
-  const handleLogoutConfirm = () => {
+  const handleLogoutConfirm = async () => {
     setIsLoggingOut(true);
-    setTimeout(() => {
+    // Show loader for 2 seconds
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    try {
+      await logout();
+    } finally {
       setIsLoggingOut(false);
       setLogoutModalOpen(false);
-      logout();
       navigate("/login");
-    }, 2000);
+    }
   };
 
   const handleLogoutCancel = () => {
@@ -348,7 +351,7 @@ const DashboardLayout = ({
                   fontSize: "0.875rem",
                 }}
               >
-                {user?.email?.charAt(0).toUpperCase() || "U"}
+                {user?.name?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || "U"}
               </Avatar>
               <Box>
                 <Typography
@@ -358,7 +361,7 @@ const DashboardLayout = ({
                     fontWeight: 500,
                   }}
                 >
-                  {user?.email?.split("@")[0] || "User"}
+                  {user?.name || user?.email?.split("@")[0] || "User"}
                 </Typography>
                 <Typography
                   sx={{

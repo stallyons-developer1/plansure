@@ -344,7 +344,7 @@ const AdminProgramsUpload = () => {
               <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
                 <FileIcon sx={{ color: COLORS.textMuted, fontSize: 16 }} />
                 <Typography sx={{ color: COLORS.textMuted, fontSize: "12px" }}>
-                  PDF formate
+                  PDF format
                 </Typography>
               </Box>
               <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>

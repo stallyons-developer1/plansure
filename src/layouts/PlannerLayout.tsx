@@ -116,14 +116,17 @@ const PlannerLayout = ({
     setLogoutModalOpen(true);
   };
 
-  const handleLogoutConfirm = () => {
+  const handleLogoutConfirm = async () => {
     setIsLoggingOut(true);
-    setTimeout(() => {
+    // Show loader for 2 seconds
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    try {
+      await logout();
+    } finally {
       setIsLoggingOut(false);
       setLogoutModalOpen(false);
-      logout();
       navigate("/login");
-    }, 2000);
+    }
   };
 
   const handleLogoutCancel = () => {
@@ -341,7 +344,7 @@ const PlannerLayout = ({
                   fontSize: "0.875rem",
                 }}
               >
-                {user?.email?.charAt(0).toUpperCase() || "P"}
+                {user?.name?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || "P"}
               </Avatar>
               <Box>
                 <Typography
@@ -351,7 +354,7 @@ const PlannerLayout = ({
                     fontWeight: 500,
                   }}
                 >
-                  {user?.email?.split("@")[0] || "Planner"}
+                  {user?.name || user?.email?.split("@")[0] || "Planner"}
                 </Typography>
                 <Typography
                   sx={{

@@ -10,32 +10,47 @@ import {
   FormControlLabel,
   InputAdornment,
   IconButton,
-  Alert,
   CircularProgress,
+  Collapse,
 } from "@mui/material";
 import { Visibility, VisibilityOff } from "@mui/icons-material";
 import { useAuth } from "../../context/AuthContext";
 import { COLORS } from "../../constants/colors";
 import logo from "../../assets/logo.png";
 
-const inputStyles = {
-  "& .MuiInputLabel-root": {
-    color: COLORS.textMuted,
-    "&.Mui-focused": {
-      color: COLORS.textSecondary,
-    },
-  },
+const baseInputStyles = {
   "& .MuiOutlinedInput-root": {
     bgcolor: COLORS.bgSecondary,
     borderRadius: "8px",
+    transition: "all 0.2s ease",
     "& fieldset": {
       borderColor: COLORS.borderDark,
+      transition: "border-color 0.2s ease",
     },
     "&:hover fieldset": {
       borderColor: COLORS.borderLight,
     },
     "&.Mui-focused fieldset": {
       borderColor: COLORS.blue,
+    },
+    "&.Mui-error fieldset": {
+      borderColor: COLORS.redLight,
+    },
+    "&.Mui-error:hover fieldset": {
+      borderColor: COLORS.redLight,
+    },
+    "&.Mui-error.Mui-focused fieldset": {
+      borderColor: COLORS.redLight,
+    },
+  },
+  "& .MuiInputLabel-root": {
+    color: COLORS.textMuted,
+    transition: "color 0.2s ease",
+    "&.Mui-focused": {
+      color: COLORS.textSecondary,
+    },
+    "&.Mui-error": {
+      color: COLORS.redLight,
     },
   },
   "& .MuiOutlinedInput-input": {
@@ -54,7 +69,19 @@ const inputStyles = {
       WebkitBoxShadow: `0 0 0 100px ${COLORS.bgSecondary} inset`,
     },
   },
+  "& .MuiFormHelperText-root": {
+    color: COLORS.redLight,
+    marginLeft: 0,
+    marginTop: "6px",
+    fontSize: "12px",
+    minHeight: "18px",
+  },
 };
+
+interface FieldErrors {
+  email?: string;
+  password?: string;
+}
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -62,19 +89,34 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
-  const { login } = useAuth();
+  const { login, isLoading } = useAuth();
   const navigate = useNavigate();
+
+  const clearErrors = () => {
+    if (error || fieldErrors.email || fieldErrors.password) {
+      setError("");
+      setFieldErrors({});
+    }
+  };
+
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setEmail(e.target.value);
+    clearErrors();
+  };
+
+  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPassword(e.target.value);
+    clearErrors();
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    setIsLoading(true);
+    setFieldErrors({});
 
-    await new Promise((resolve) => setTimeout(resolve, 500));
-
-    const result = login(email, password);
+    const result = await login(email, password);
 
     if (result.success) {
       const user = JSON.parse(localStorage.getItem("plansure_user") || "{}");
@@ -92,10 +134,20 @@ const Login = () => {
           navigate("/dashboard");
       }
     } else {
-      setError(result.error || "Login failed");
+      if (result.errors) {
+        const errors: FieldErrors = {};
+        result.errors.forEach((err) => {
+          if (err.field === "email") {
+            errors.email = err.message;
+          } else if (err.field === "password") {
+            errors.password = err.message;
+          }
+        });
+        setFieldErrors(errors);
+      } else if (result.error) {
+        setError(result.error);
+      }
     }
-
-    setIsLoading(false);
   };
 
   return (
@@ -172,58 +224,73 @@ const Login = () => {
             Sign in to your account
           </Typography>
 
-          {error && (
-            <Alert
-              severity="error"
+          <Collapse in={!!error}>
+            <Box
               sx={{
                 mb: 2.5,
+                p: 1.5,
                 bgcolor: COLORS.errorBg,
                 border: `1px solid ${COLORS.errorBorder}`,
-                color: COLORS.redLight,
-                "& .MuiAlert-icon": { color: COLORS.redLight },
+                borderRadius: "8px",
               }}
             >
-              {error}
-            </Alert>
-          )}
+              <Typography
+                sx={{
+                  color: COLORS.redLight,
+                  fontSize: "14px",
+                  textAlign: "center",
+                }}
+              >
+                {error}
+              </Typography>
+            </Box>
+          </Collapse>
 
           <Box component="form" onSubmit={handleSubmit}>
-            <TextField
-              fullWidth
-              label="Email address"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              disabled={isLoading}
-              sx={{ mb: 2, ...inputStyles }}
-            />
+            <Box sx={{ mb: 2 }}>
+              <TextField
+                fullWidth
+                label="Email address"
+                type="email"
+                value={email}
+                onChange={handleEmailChange}
+                required
+                disabled={isLoading}
+                error={!!fieldErrors.email}
+                helperText={fieldErrors.email || "\u00A0"}
+                sx={baseInputStyles}
+              />
+            </Box>
 
-            <TextField
-              fullWidth
-              label="Password"
-              type={showPassword ? "text" : "password"}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              disabled={isLoading}
-              slotProps={{
-                input: {
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton
-                        onClick={() => setShowPassword(!showPassword)}
-                        edge="end"
-                        sx={{ color: COLORS.textMuted }}
-                      >
-                        {showPassword ? <VisibilityOff /> : <Visibility />}
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                },
-              }}
-              sx={{ mb: 1.5, ...inputStyles }}
-            />
+            <Box sx={{ mb: 1 }}>
+              <TextField
+                fullWidth
+                label="Password"
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={handlePasswordChange}
+                required
+                disabled={isLoading}
+                error={!!fieldErrors.password}
+                helperText={fieldErrors.password || "\u00A0"}
+                slotProps={{
+                  input: {
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton
+                          onClick={() => setShowPassword(!showPassword)}
+                          edge="end"
+                          sx={{ color: COLORS.textMuted }}
+                        >
+                          {showPassword ? <VisibilityOff /> : <Visibility />}
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  },
+                }}
+                sx={baseInputStyles}
+              />
+            </Box>
 
             <FormControlLabel
               control={

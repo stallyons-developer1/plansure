@@ -118,14 +118,17 @@ const AdminLayout = ({
     setLogoutModalOpen(true);
   };
 
-  const handleLogoutConfirm = () => {
+  const handleLogoutConfirm = async () => {
     setIsLoggingOut(true);
-    setTimeout(() => {
+    // Show loader for 2 seconds
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    try {
+      await logout();
+    } finally {
       setIsLoggingOut(false);
       setLogoutModalOpen(false);
-      logout();
       navigate("/login");
-    }, 2000);
+    }
   };
 
   const handleLogoutCancel = () => {
@@ -359,7 +362,7 @@ const AdminLayout = ({
                   fontSize: "0.875rem",
                 }}
               >
-                {user?.email?.charAt(0).toUpperCase() || "A"}
+                {user?.name?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || "A"}
               </Avatar>
               <Box>
                 <Typography
@@ -369,7 +372,7 @@ const AdminLayout = ({
                     fontWeight: 500,
                   }}
                 >
-                  {user?.email?.split("@")[0] || "Admin"}
+                  {user?.name || user?.email?.split("@")[0] || "Admin"}
                 </Typography>
                 <Typography
                   sx={{

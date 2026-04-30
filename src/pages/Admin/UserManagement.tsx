@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Box,
   Typography,
@@ -11,6 +12,7 @@ import {
   RadioGroup,
   FormControlLabel,
   IconButton,
+  CircularProgress,
 } from "@mui/material";
 import {
   Add as AddIcon,
@@ -21,127 +23,98 @@ import {
   CalendarTodayOutlined as PlannerIcon,
   PersonOutlined as UserIcon,
   BlockOutlined as BlockIcon,
+  FolderOutlined as FolderIcon,
 } from "@mui/icons-material";
 import AdminLayout from "../../layouts/AdminLayout";
 import { COLORS } from "../../constants/colors";
 import editIcon from "../../assets/tabler_edit.png";
+import { userAPI, projectAPI } from "../../services/api";
 
 interface User {
-  id: string;
+  _id: string;
   name: string;
   initials: string;
   email: string;
-  role: "Admin" | "Planner" | "User";
+  role: "admin" | "planner" | "user";
   projectAccess: string;
-  status: "Active" | "Inactive";
-  lastLogin: string;
+  status: "active" | "pending" | "blocked";
+  lastLogin: string | null;
 }
 
-const initialUsers: User[] = [
-  {
-    id: "1",
-    name: "James Whitfield",
-    initials: "JW",
-    email: "j.whitfield@plansure.io",
-    role: "Admin",
-    projectAccess: "All Projects",
-    status: "Active",
-    lastLogin: "25 Mar 2026, 08:12",
-  },
-  {
-    id: "2",
-    name: "Diana Chen",
-    initials: "DC",
-    email: "d.chen@plansure.io",
-    role: "Admin",
-    projectAccess: "All Projects",
-    status: "Active",
-    lastLogin: "24 Mar 2026, 17:45",
-  },
-  {
-    id: "3",
-    name: "Kamran Rashid",
-    initials: "KR",
-    email: "k.rashid@plansure.io",
-    role: "Planner",
-    projectAccess: "Crossrail Phase 2,",
-    status: "Active",
-    lastLogin: "25 Mar 2026, 09:30",
-  },
-  {
-    id: "4",
-    name: "Sarah Mitchell",
-    initials: "SM",
-    email: "s.mitchell@plansure.io",
-    role: "Planner",
-    projectAccess: "Crossrail Phase",
-    status: "Active",
-    lastLogin: "24 Mar 2026, 14:20",
-  },
-  {
-    id: "5",
-    name: "Emily Rodriguez",
-    initials: "ER",
-    email: "e.rodriguez@plansure.io",
-    role: "User",
-    projectAccess: "Crossrail Phase 2",
-    status: "Active",
-    lastLogin: "25 Mar 2026, 10:15",
-  },
-  {
-    id: "6",
-    name: "Rachel Nguyen",
-    initials: "RN",
-    email: "r.nguyen@plansure.io",
-    role: "User",
-    projectAccess: "Thames Tideway",
-    status: "Inactive",
-    lastLogin: "10 Feb 2026, 09:00",
-  },
-];
+interface Project {
+  _id: string;
+  name: string;
+}
 
-const roleColors = {
-  Admin: { bg: "rgba(239, 68, 68, 0.15)", color: "#ef4444" },
-  Planner: { bg: "rgba(245, 158, 11, 0.15)", color: "#f59e0b" },
-  User: { bg: "rgba(34, 197, 94, 0.15)", color: "#22c55e" },
+const roleColors: Record<string, { bg: string; color: string }> = {
+  admin: { bg: "rgba(239, 68, 68, 0.15)", color: "#ef4444" },
+  planner: { bg: "rgba(245, 158, 11, 0.15)", color: "#f59e0b" },
+  user: { bg: "rgba(34, 197, 94, 0.15)", color: "#22c55e" },
 };
 
-const statusColors = {
-  Active: { bg: "rgba(34, 197, 94, 0.15)", color: "#22c55e", dot: "#22c55e" },
-  Inactive: {
-    bg: "rgba(107, 114, 128, 0.15)",
-    color: "#6b7280",
-    dot: "#6b7280",
-  },
+const statusColors: Record<string, { bg: string; color: string; dot: string }> = {
+  active: { bg: "rgba(34, 197, 94, 0.15)", color: "#22c55e", dot: "#22c55e" },
+  pending: { bg: "rgba(245, 158, 11, 0.15)", color: "#f59e0b", dot: "#f59e0b" },
+  blocked: { bg: "rgba(107, 114, 128, 0.15)", color: "#6b7280", dot: "#6b7280" },
 };
 
-const avatarStyles: Record<string, { bg: string; color: string }> = {
-  JW: { bg: "rgba(239, 68, 68, 0.2)", color: "#ef4444" },
-  DC: { bg: "rgba(239, 68, 68, 0.2)", color: "#ef4444" },
-  KR: { bg: "rgba(245, 158, 11, 0.2)", color: "#f59e0b" },
-  SM: { bg: "rgba(245, 158, 11, 0.2)", color: "#f59e0b" },
-  ER: { bg: "rgba(34, 197, 94, 0.2)", color: "#22c55e" },
-  RN: { bg: "rgba(34, 197, 94, 0.2)", color: "#22c55e" },
+const getAvatarStyle = (role: string) => {
+  switch (role) {
+    case "admin":
+      return { bg: "rgba(239, 68, 68, 0.2)", color: "#ef4444" };
+    case "planner":
+      return { bg: "rgba(245, 158, 11, 0.2)", color: "#f59e0b" };
+    default:
+      return { bg: "rgba(34, 197, 94, 0.2)", color: "#22c55e" };
+  }
 };
 
 const UserManagement = () => {
-  const [users, setUsers] = useState<User[]>(initialUsers);
+  const navigate = useNavigate();
+  const [users, setUsers] = useState<User[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [inviteLoading, setInviteLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
   const [selectedRole, setSelectedRole] = useState("");
   const [selectedProject, setSelectedProject] = useState("");
   const [inviteName, setInviteName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteError, setInviteError] = useState("");
 
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editName, setEditName] = useState("");
   const [editEmail, setEditEmail] = useState("");
-  const [editRole, setEditRole] = useState<"Admin" | "Planner" | "User">(
-    "User",
-  );
-  const [editProjectAccess, setEditProjectAccess] = useState("");
-  const [editStatus, setEditStatus] = useState<"Active" | "Inactive">("Active");
+  const [editRole, setEditRole] = useState<"admin" | "planner" | "user">("user");
+  const [editStatus, setEditStatus] = useState<"active" | "blocked">("active");
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState("");
+
+  // Block/Unblock modal state
+  const [blockModalOpen, setBlockModalOpen] = useState(false);
+  const [userToBlock, setUserToBlock] = useState<User | null>(null);
+  const [blockLoading, setBlockLoading] = useState(false);
+
+  // Fetch users and projects on mount
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [usersRes, projectsRes] = await Promise.all([
+          userAPI.getAll(),
+          projectAPI.getAll(),
+        ]);
+        setUsers(usersRes.users || []);
+        setProjects(projectsRes.projects || []);
+      } catch (error) {
+        console.error("Error fetching data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
 
   const handleCloseInviteModal = () => {
     setInviteModalOpen(false);
@@ -149,34 +122,50 @@ const UserManagement = () => {
     setInviteEmail("");
     setSelectedRole("");
     setSelectedProject("");
+    setInviteError("");
   };
 
-  const handleSendInvite = () => {
+  const handleSendInvite = async () => {
     if (!inviteName || !inviteEmail || !selectedRole || !selectedProject) {
       return;
     }
 
-    const getInitials = (name: string) => {
-      const parts = name.split(" ");
-      if (parts.length >= 2) {
-        return (parts[0][0] + parts[1][0]).toUpperCase();
+    setInviteLoading(true);
+    setInviteError("");
+
+    try {
+      const response = await userAPI.invite({
+        name: inviteName,
+        email: inviteEmail,
+        role: selectedRole.toLowerCase(),
+        projectId: selectedProject,
+      });
+
+      if (response.success) {
+        // Refresh users list
+        const usersRes = await userAPI.getAll();
+        setUsers(usersRes.users || []);
+        handleCloseInviteModal();
       }
-      return name.substring(0, 2).toUpperCase();
-    };
+    } catch (error: unknown) {
+      console.log("=== INVITE USER ERROR DEBUG ===");
+      console.log("Full error:", error);
+      console.log("Error response:", (error as any).response);
+      console.log("Error response data:", (error as any).response?.data);
+      console.log("Error status:", (error as any).response?.status);
+      console.log("================================");
 
-    const newUser: User = {
-      id: String(users.length + 1),
-      name: inviteName,
-      initials: getInitials(inviteName),
-      email: inviteEmail,
-      role: selectedRole as "Admin" | "Planner" | "User",
-      projectAccess: selectedProject,
-      status: "Active",
-      lastLogin: "Pending invite",
-    };
-
-    setUsers([...users, newUser]);
-    handleCloseInviteModal();
+      const err = error as { response?: { data?: { errors?: { message: string }[]; message?: string } } };
+      if (err.response?.data?.errors) {
+        setInviteError(err.response.data.errors.map((e) => e.message).join(", "));
+      } else if (err.response?.data?.message) {
+        setInviteError(err.response.data.message);
+      } else {
+        setInviteError("Failed to send invite. Please try again.");
+      }
+    } finally {
+      setInviteLoading(false);
+    }
   };
 
   const handleOpenEditModal = (user: User) => {
@@ -184,8 +173,7 @@ const UserManagement = () => {
     setEditName(user.name);
     setEditEmail(user.email);
     setEditRole(user.role);
-    setEditProjectAccess(user.projectAccess);
-    setEditStatus(user.status);
+    setEditStatus(user.status === "blocked" ? "blocked" : "active");
     setEditModalOpen(true);
   };
 
@@ -194,38 +182,62 @@ const UserManagement = () => {
     setEditingUser(null);
     setEditName("");
     setEditEmail("");
-    setEditRole("User");
-    setEditProjectAccess("");
-    setEditStatus("Active");
+    setEditRole("user");
+    setEditStatus("active");
+    setEditError("");
   };
 
-  const handleSaveChanges = () => {
-    if (!editingUser) return;
+  const handleSaveChanges = async () => {
+    if (!editingUser || !editName.trim()) return;
 
-    const getInitials = (name: string) => {
-      const parts = name.split(" ");
-      if (parts.length >= 2) {
-        return (parts[0][0] + parts[1][0]).toUpperCase();
-      }
-      return name.substring(0, 2).toUpperCase();
-    };
+    setEditLoading(true);
+    setEditError("");
 
-    const updatedUsers = users.map((user) =>
-      user.id === editingUser.id
-        ? {
-            ...user,
-            name: editName,
-            initials: getInitials(editName),
-            email: editEmail,
-            role: editRole,
-            projectAccess: editProjectAccess,
-            status: editStatus,
-          }
-        : user,
-    );
+    try {
+      await userAPI.update(editingUser._id, {
+        name: editName,
+        role: editRole,
+        status: editStatus,
+      });
 
-    setUsers(updatedUsers);
-    handleCloseEditModal();
+      // Refresh users list
+      const usersRes = await userAPI.getAll();
+      setUsers(usersRes.users || []);
+      handleCloseEditModal();
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { message?: string } } };
+      setEditError(err.response?.data?.message || "Failed to update user. Please try again.");
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  // Open block confirmation modal
+  const handleOpenBlockModal = (user: User) => {
+    setUserToBlock(user);
+    setBlockModalOpen(true);
+  };
+
+  const handleCloseBlockModal = () => {
+    setBlockModalOpen(false);
+    setUserToBlock(null);
+  };
+
+  const handleConfirmBlock = async () => {
+    if (!userToBlock) return;
+
+    setBlockLoading(true);
+    try {
+      await userAPI.block(userToBlock._id);
+      // Refresh users list
+      const usersRes = await userAPI.getAll();
+      setUsers(usersRes.users || []);
+      handleCloseBlockModal();
+    } catch (error) {
+      console.error("Error blocking/unblocking user:", error);
+    } finally {
+      setBlockLoading(false);
+    }
   };
 
   const filteredUsers = users.filter(
@@ -235,9 +247,32 @@ const UserManagement = () => {
   );
 
   const totalUsers = users.length;
-  const adminCount = users.filter((u) => u.role === "Admin").length;
-  const plannerCount = users.filter((u) => u.role === "Planner").length;
-  const userCount = users.filter((u) => u.role === "User").length;
+  const adminCount = users.filter((u) => u.role === "admin").length;
+  const plannerCount = users.filter((u) => u.role === "planner").length;
+  const userCount = users.filter((u) => u.role === "user").length;
+
+  const formatRole = (role: string) => role.charAt(0).toUpperCase() + role.slice(1);
+  const formatStatus = (status: string) => status.charAt(0).toUpperCase() + status.slice(1);
+  const formatLastLogin = (lastLogin: string | null) => {
+    if (!lastLogin) return "Never";
+    return new Date(lastLogin).toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  if (loading) {
+    return (
+      <AdminLayout title="User Management" subtitle="Manage users and roles">
+        <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: 400 }}>
+          <CircularProgress sx={{ color: COLORS.blue }} />
+        </Box>
+      </AdminLayout>
+    );
+  }
 
   return (
     <AdminLayout
@@ -617,7 +652,7 @@ const UserManagement = () => {
 
             {filteredUsers.map((user) => (
               <Box
-                key={user.id}
+                key={user._id}
                 sx={{
                   display: "grid",
                   gridTemplateColumns:
@@ -642,9 +677,7 @@ const UserManagement = () => {
                       width: 40,
                       height: 40,
                       borderRadius: "50%",
-                      bgcolor:
-                        avatarStyles[user.initials]?.bg ||
-                        "rgba(59, 130, 246, 0.2)",
+                      bgcolor: getAvatarStyle(user.role).bg,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -652,8 +685,7 @@ const UserManagement = () => {
                   >
                     <Typography
                       sx={{
-                        color:
-                          avatarStyles[user.initials]?.color || COLORS.blue,
+                        color: getAvatarStyle(user.role).color,
                         fontSize: "14px",
                         fontWeight: 600,
                       }}
@@ -684,8 +716,8 @@ const UserManagement = () => {
                       display: "inline-flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      bgcolor: roleColors[user.role].bg,
-                      color: roleColors[user.role].color,
+                      bgcolor: roleColors[user.role]?.bg || "rgba(107, 114, 128, 0.15)",
+                      color: roleColors[user.role]?.color || "#6b7280",
                       px: 2.5,
                       py: 0.75,
                       borderRadius: "20px",
@@ -694,7 +726,7 @@ const UserManagement = () => {
                       minWidth: "70px",
                     }}
                   >
-                    {user.role}
+                    {formatRole(user.role)}
                   </Box>
                 </Box>
 
@@ -714,7 +746,7 @@ const UserManagement = () => {
                       display: "inline-flex",
                       alignItems: "center",
                       gap: 0.75,
-                      bgcolor: statusColors[user.status].bg,
+                      bgcolor: statusColors[user.status]?.bg || "rgba(107, 114, 128, 0.15)",
                       px: 2,
                       py: 0.75,
                       borderRadius: "20px",
@@ -725,17 +757,17 @@ const UserManagement = () => {
                         width: 8,
                         height: 8,
                         borderRadius: "50%",
-                        bgcolor: statusColors[user.status].dot,
+                        bgcolor: statusColors[user.status]?.dot || "#6b7280",
                       }}
                     />
                     <Typography
                       sx={{
-                        color: statusColors[user.status].color,
+                        color: statusColors[user.status]?.color || "#6b7280",
                         fontSize: "13px",
                         fontWeight: 500,
                       }}
                     >
-                      {user.status}
+                      {formatStatus(user.status)}
                     </Typography>
                   </Box>
                 </Box>
@@ -747,7 +779,7 @@ const UserManagement = () => {
                     textAlign: "center",
                   }}
                 >
-                  {user.lastLogin}
+                  {formatLastLogin(user.lastLogin)}
                 </Typography>
 
                 <Box sx={{ display: "flex", justifyContent: "center", gap: 2 }}>
@@ -764,9 +796,10 @@ const UserManagement = () => {
                     }}
                   />
                   <BlockIcon
+                    onClick={() => handleOpenBlockModal(user)}
                     sx={{
                       fontSize: 20,
-                      color: COLORS.textMuted,
+                      color: user.status === "blocked" ? "#ef4444" : COLORS.textMuted,
                       cursor: "pointer",
                       opacity: 0.5,
                       "&:hover": { opacity: 1 },
@@ -829,6 +862,21 @@ const UserManagement = () => {
           </IconButton>
         </DialogTitle>
         <DialogContent sx={{ px: 3, py: 3 }}>
+          {inviteError && (
+            <Box
+              sx={{
+                p: 1.5,
+                bgcolor: "rgba(239, 68, 68, 0.1)",
+                border: "1px solid rgba(239, 68, 68, 0.3)",
+                borderRadius: "8px",
+                mt: 1,
+              }}
+            >
+              <Typography sx={{ color: "#ef4444", fontSize: "14px" }}>
+                {inviteError}
+              </Typography>
+            </Box>
+          )}
           <Box>
             <Typography
               sx={{
@@ -1063,56 +1111,96 @@ const UserManagement = () => {
             >
               Project Assignment <span style={{ color: COLORS.red }}>*</span>
             </Typography>
-            <RadioGroup
-              value={selectedProject}
-              onChange={(e) => setSelectedProject(e.target.value)}
-              sx={{ mt: 1 }}
-            >
-              {[
-                "Crossrail Phase 2",
-                "Thames Tideway Tunnel",
-                "HS2 Northern Section",
-              ].map((project) => (
-                <Box
-                  key={project}
+            {projects.length === 0 ? (
+              <Box
+                sx={{
+                  bgcolor: COLORS.bgPrimary,
+                  border: `1px solid ${COLORS.border}`,
+                  borderRadius: "8px",
+                  p: 3,
+                  mt: 1,
+                  textAlign: "center",
+                }}
+              >
+                <FolderIcon sx={{ fontSize: 40, color: COLORS.textMuted, mb: 1 }} />
+                <Typography
                   sx={{
-                    bgcolor: COLORS.bgPrimary,
-                    border: `1px solid ${selectedProject === project ? COLORS.blue : COLORS.white}`,
+                    color: COLORS.textSecondary,
+                    fontSize: "14px",
+                    mb: 2,
+                  }}
+                >
+                  No projects available. Create a project first to assign users.
+                </Typography>
+                <Button
+                  onClick={() => {
+                    handleCloseInviteModal();
+                    navigate("/admin/projects");
+                  }}
+                  sx={{
+                    bgcolor: COLORS.blue,
+                    color: COLORS.white,
+                    textTransform: "none",
+                    px: 3,
+                    py: 1,
                     borderRadius: "8px",
-                    mb: 1,
-                    transition: "border-color 0.2s ease",
+                    fontSize: "14px",
                     "&:hover": {
-                      borderColor:
-                        selectedProject === project
-                          ? COLORS.blue
-                          : COLORS.textMuted,
+                      bgcolor: COLORS.blueHover,
                     },
                   }}
                 >
-                  <FormControlLabel
-                    value={project}
-                    control={
-                      <Radio
-                        sx={{
-                          color: COLORS.textMuted,
-                          "&.Mui-checked": {
-                            color: COLORS.blue,
-                          },
-                        }}
-                      />
-                    }
-                    label={
-                      <Typography
-                        sx={{ color: COLORS.textPrimary, fontSize: "14px" }}
-                      >
-                        {project}
-                      </Typography>
-                    }
-                    sx={{ m: 0, p: 1.5, width: "100%" }}
-                  />
-                </Box>
-              ))}
-            </RadioGroup>
+                  Create Project
+                </Button>
+              </Box>
+            ) : (
+              <RadioGroup
+                value={selectedProject}
+                onChange={(e) => setSelectedProject(e.target.value)}
+                sx={{ mt: 1 }}
+              >
+                {projects.map((project) => (
+                  <Box
+                    key={project._id}
+                    sx={{
+                      bgcolor: COLORS.bgPrimary,
+                      border: `1px solid ${selectedProject === project._id ? COLORS.blue : COLORS.white}`,
+                      borderRadius: "8px",
+                      mb: 1,
+                      transition: "border-color 0.2s ease",
+                      "&:hover": {
+                        borderColor:
+                          selectedProject === project._id
+                            ? COLORS.blue
+                            : COLORS.textMuted,
+                      },
+                    }}
+                  >
+                    <FormControlLabel
+                      value={project._id}
+                      control={
+                        <Radio
+                          sx={{
+                            color: COLORS.textMuted,
+                            "&.Mui-checked": {
+                              color: COLORS.blue,
+                            },
+                          }}
+                        />
+                      }
+                      label={
+                        <Typography
+                          sx={{ color: COLORS.textPrimary, fontSize: "14px" }}
+                        >
+                          {project.name}
+                        </Typography>
+                      }
+                      sx={{ m: 0, p: 1.5, width: "100%" }}
+                    />
+                  </Box>
+                ))}
+              </RadioGroup>
+            )}
           </Box>
         </DialogContent>
         <DialogActions
@@ -1144,6 +1232,7 @@ const UserManagement = () => {
           </Button>
           <Button
             onClick={handleSendInvite}
+            disabled={inviteLoading || projects.length === 0}
             sx={{
               color: COLORS.white,
               bgcolor: COLORS.blue,
@@ -1156,9 +1245,13 @@ const UserManagement = () => {
               "&:hover": {
                 bgcolor: COLORS.blueHover,
               },
+              "&.Mui-disabled": {
+                bgcolor: COLORS.blue,
+                opacity: 0.7,
+              },
             }}
           >
-            Send Invite
+            {inviteLoading ? <CircularProgress size={20} sx={{ color: COLORS.white }} /> : "Send Invite"}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1213,6 +1306,21 @@ const UserManagement = () => {
           </IconButton>
         </DialogTitle>
         <DialogContent sx={{ px: 3, py: 3 }}>
+          {editError && (
+            <Box
+              sx={{
+                p: 1.5,
+                bgcolor: "rgba(239, 68, 68, 0.1)",
+                border: "1px solid rgba(239, 68, 68, 0.3)",
+                borderRadius: "8px",
+                mt: 1,
+              }}
+            >
+              <Typography sx={{ color: "#ef4444", fontSize: "14px" }}>
+                {editError}
+              </Typography>
+            </Box>
+          )}
           <Box>
             <Typography
               sx={{
@@ -1304,20 +1412,20 @@ const UserManagement = () => {
               sx={{ display: "flex", flexDirection: "column", gap: 1.5, mt: 1 }}
             >
               <Box
-                onClick={() => setEditRole("Admin")}
+                onClick={() => setEditRole("admin")}
                 sx={{
                   display: "flex",
                   alignItems: "flex-start",
                   gap: 2,
                   p: 2,
                   bgcolor: COLORS.bgPrimary,
-                  border: `1px solid ${editRole === "Admin" ? COLORS.blue : COLORS.white}`,
+                  border: `1px solid ${editRole === "admin" ? COLORS.blue : COLORS.white}`,
                   borderRadius: "8px",
                   cursor: "pointer",
                   transition: "border-color 0.2s ease",
                   "&:hover": {
                     borderColor:
-                      editRole === "Admin" ? COLORS.blue : COLORS.textMuted,
+                      editRole === "admin" ? COLORS.blue : COLORS.textMuted,
                   },
                 }}
               >
@@ -1347,20 +1455,20 @@ const UserManagement = () => {
               </Box>
 
               <Box
-                onClick={() => setEditRole("Planner")}
+                onClick={() => setEditRole("planner")}
                 sx={{
                   display: "flex",
                   alignItems: "flex-start",
                   gap: 2,
                   p: 2,
                   bgcolor: COLORS.bgPrimary,
-                  border: `1px solid ${editRole === "Planner" ? COLORS.blue : COLORS.white}`,
+                  border: `1px solid ${editRole === "planner" ? COLORS.blue : COLORS.white}`,
                   borderRadius: "8px",
                   cursor: "pointer",
                   transition: "border-color 0.2s ease",
                   "&:hover": {
                     borderColor:
-                      editRole === "Planner" ? COLORS.blue : COLORS.textMuted,
+                      editRole === "planner" ? COLORS.blue : COLORS.textMuted,
                   },
                 }}
               >
@@ -1390,20 +1498,20 @@ const UserManagement = () => {
               </Box>
 
               <Box
-                onClick={() => setEditRole("User")}
+                onClick={() => setEditRole("user")}
                 sx={{
                   display: "flex",
                   alignItems: "flex-start",
                   gap: 2,
                   p: 2,
                   bgcolor: COLORS.bgPrimary,
-                  border: `1px solid ${editRole === "User" ? COLORS.blue : COLORS.white}`,
+                  border: `1px solid ${editRole === "user" ? COLORS.blue : COLORS.white}`,
                   borderRadius: "8px",
                   cursor: "pointer",
                   transition: "border-color 0.2s ease",
                   "&:hover": {
                     borderColor:
-                      editRole === "User" ? COLORS.blue : COLORS.textMuted,
+                      editRole === "user" ? COLORS.blue : COLORS.textMuted,
                   },
                 }}
               >
@@ -1443,76 +1551,11 @@ const UserManagement = () => {
                 mt: 2,
               }}
             >
-              Project Access <span style={{ color: COLORS.red }}>*</span>
-            </Typography>
-            <RadioGroup
-              value={editProjectAccess}
-              onChange={(e) => setEditProjectAccess(e.target.value)}
-              sx={{ mt: 1 }}
-            >
-              {[
-                "All Projects",
-                "Crossrail Phase 2",
-                "Thames Tideway Tunnel",
-                "HS2 Northern Section",
-              ].map((project) => (
-                <Box
-                  key={project}
-                  sx={{
-                    bgcolor: COLORS.bgPrimary,
-                    border: `1px solid ${editProjectAccess === project ? COLORS.blue : COLORS.white}`,
-                    borderRadius: "8px",
-                    mb: 1,
-                    transition: "border-color 0.2s ease",
-                    "&:hover": {
-                      borderColor:
-                        editProjectAccess === project
-                          ? COLORS.blue
-                          : COLORS.textMuted,
-                    },
-                  }}
-                >
-                  <FormControlLabel
-                    value={project}
-                    control={
-                      <Radio
-                        sx={{
-                          color: COLORS.textMuted,
-                          "&.Mui-checked": {
-                            color: COLORS.blue,
-                          },
-                        }}
-                      />
-                    }
-                    label={
-                      <Typography
-                        sx={{ color: COLORS.textPrimary, fontSize: "14px" }}
-                      >
-                        {project}
-                      </Typography>
-                    }
-                    sx={{ m: 0, p: 1.5, width: "100%" }}
-                  />
-                </Box>
-              ))}
-            </RadioGroup>
-          </Box>
-
-          <Box>
-            <Typography
-              sx={{
-                color: COLORS.border,
-                fontSize: "12px",
-                fontWeight: 500,
-                mb: 0.5,
-                mt: 2,
-              }}
-            >
               Status <span style={{ color: COLORS.red }}>*</span>
             </Typography>
             <Box sx={{ display: "flex", gap: 2, mt: 1 }}>
               <Box
-                onClick={() => setEditStatus("Active")}
+                onClick={() => setEditStatus("active")}
                 sx={{
                   flex: 1,
                   display: "flex",
@@ -1521,13 +1564,13 @@ const UserManagement = () => {
                   gap: 1,
                   p: 1.5,
                   bgcolor: COLORS.bgPrimary,
-                  border: `1px solid ${editStatus === "Active" ? COLORS.green : COLORS.white}`,
+                  border: `1px solid ${editStatus === "active" ? COLORS.green : COLORS.white}`,
                   borderRadius: "8px",
                   cursor: "pointer",
                   transition: "border-color 0.2s ease",
                   "&:hover": {
                     borderColor:
-                      editStatus === "Active" ? COLORS.green : COLORS.textMuted,
+                      editStatus === "active" ? COLORS.green : COLORS.textMuted,
                   },
                 }}
               >
@@ -1542,7 +1585,7 @@ const UserManagement = () => {
                 <Typography
                   sx={{
                     color:
-                      editStatus === "Active"
+                      editStatus === "active"
                         ? COLORS.green
                         : COLORS.textSecondary,
                     fontSize: "14px",
@@ -1553,7 +1596,7 @@ const UserManagement = () => {
                 </Typography>
               </Box>
               <Box
-                onClick={() => setEditStatus("Inactive")}
+                onClick={() => setEditStatus("blocked")}
                 sx={{
                   flex: 1,
                   display: "flex",
@@ -1562,13 +1605,13 @@ const UserManagement = () => {
                   gap: 1,
                   p: 1.5,
                   bgcolor: COLORS.bgPrimary,
-                  border: `1px solid ${editStatus === "Inactive" ? "#6b7280" : COLORS.white}`,
+                  border: `1px solid ${editStatus === "blocked" ? "#6b7280" : COLORS.white}`,
                   borderRadius: "8px",
                   cursor: "pointer",
                   transition: "border-color 0.2s ease",
                   "&:hover": {
                     borderColor:
-                      editStatus === "Inactive" ? "#6b7280" : COLORS.textMuted,
+                      editStatus === "blocked" ? "#6b7280" : COLORS.textMuted,
                   },
                 }}
               >
@@ -1583,14 +1626,14 @@ const UserManagement = () => {
                 <Typography
                   sx={{
                     color:
-                      editStatus === "Inactive"
+                      editStatus === "blocked"
                         ? "#6b7280"
                         : COLORS.textSecondary,
                     fontSize: "14px",
                     fontWeight: 500,
                   }}
                 >
-                  Inactive
+                  Blocked
                 </Typography>
               </Box>
             </Box>
@@ -1625,6 +1668,7 @@ const UserManagement = () => {
           </Button>
           <Button
             onClick={handleSaveChanges}
+            disabled={editLoading}
             sx={{
               color: COLORS.white,
               bgcolor: COLORS.blue,
@@ -1637,13 +1681,135 @@ const UserManagement = () => {
               "&:hover": {
                 bgcolor: COLORS.blueHover,
               },
+              "&.Mui-disabled": {
+                bgcolor: COLORS.blue,
+                opacity: 0.7,
+              },
             }}
           >
-            Save Changes
+            {editLoading ? <CircularProgress size={20} sx={{ color: COLORS.white }} /> : "Save Changes"}
           </Button>
         </DialogActions>
       </Dialog>
-    </AdminLayout>
+
+      {/* Block/Unblock Confirmation Modal */}
+      <Dialog
+        open={blockModalOpen}
+        onClose={handleCloseBlockModal}
+        maxWidth="xs"
+        fullWidth
+        slotProps={{
+          backdrop: {
+            sx: {
+              bgcolor: "rgba(0, 0, 0, 0.8)",
+            },
+          },
+          paper: {
+            sx: {
+              bgcolor: COLORS.bgSecondary,
+              border: `1px solid ${COLORS.border}`,
+              borderRadius: "12px",
+              backgroundImage: "none",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
+            },
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            pb: 1,
+            pt: 2,
+          }}
+        >
+          <Typography
+            sx={{
+              color: COLORS.textPrimary,
+              fontSize: "18px",
+              fontWeight: 600,
+            }}
+          >
+            {userToBlock?.status === "blocked" ? "Unblock User" : "Block User"}
+          </Typography>
+          <IconButton
+            onClick={handleCloseBlockModal}
+            sx={{ color: COLORS.textMuted, mr: -1, p: 0.5 }}
+          >
+            <CloseIcon sx={{ fontSize: 20 }} />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ px: 3, py: 2 }}>
+          <Typography sx={{ color: COLORS.textSecondary, fontSize: "14px" }}>
+            Are you sure you want to {userToBlock?.status === "blocked" ? "unblock" : "block"}{" "}
+            <strong style={{ color: COLORS.textPrimary }}>{userToBlock?.name}</strong>?
+          </Typography>
+          {userToBlock?.status !== "blocked" && (
+            <Typography sx={{ color: COLORS.textMuted, fontSize: "13px", mt: 1 }}>
+              This user will not be able to access the system until unblocked.
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions
+          sx={{
+            px: 3,
+            py: 2,
+            gap: 1.5,
+          }}
+        >
+          <Button
+            onClick={handleCloseBlockModal}
+            sx={{
+              color: COLORS.white,
+              bgcolor: COLORS.bgPrimary,
+              border: `1px solid ${COLORS.border}`,
+              borderRadius: "8px",
+              textTransform: "none",
+              px: 3,
+              py: 1,
+              fontSize: "14px",
+              fontWeight: 400,
+              "&:hover": {
+                bgcolor: COLORS.bgTertiary,
+              },
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirmBlock}
+            disabled={blockLoading}
+            sx={{
+              color: COLORS.white,
+              bgcolor: userToBlock?.status === "blocked" ? COLORS.green : "#ef4444",
+              borderRadius: "8px",
+              textTransform: "none",
+              px: 3,
+              py: 1,
+              fontSize: "14px",
+              fontWeight: 500,
+              "&:hover": {
+                bgcolor: userToBlock?.status === "blocked" ? "#16a34a" : "#dc2626",
+              },
+              "&.Mui-disabled": {
+                bgcolor: userToBlock?.status === "blocked" ? COLORS.green : "#ef4444",
+                opacity: 0.7,
+              },
+            }}
+          >
+            {blockLoading ? (
+              <CircularProgress size={20} sx={{ color: COLORS.white }} />
+            ) : userToBlock?.status === "blocked" ? (
+              "Yes, Unblock"
+            ) : (
+              "Yes, Block"
+            )}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      </AdminLayout>
   );
 };
 

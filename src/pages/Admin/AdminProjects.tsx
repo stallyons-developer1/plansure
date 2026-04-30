@@ -14,6 +14,8 @@ import {
   DialogContent,
   DialogActions,
   IconButton,
+  CircularProgress,
+  Skeleton,
 } from "@mui/material";
 import {
   Search as SearchIcon,
@@ -22,61 +24,32 @@ import {
   Add as AddIcon,
   Close as CloseIcon,
 } from "@mui/icons-material";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import AdminLayout from "../../layouts/AdminLayout";
 import { COLORS } from "../../constants/colors";
+import { projectAPI } from "../../services/api";
 import activitiesIcon from "../../assets/activities.png";
 import openActionsIcon from "../../assets/sidebar/activitiesClipboard.png";
 import governanceScoreIcon from "../../assets/governancescore.png";
 
 interface Project {
-  id: number;
+  _id: string;
   name: string;
   status: string;
   phase: string;
-  governanceScore: number;
-  governanceStatus: string;
-  activities: number;
-  openActions: number;
-  progress: number;
+  description?: string;
+  startDate: string;
+  endDate?: string;
+  governanceScore?: number;
+  createdAt: string;
 }
 
-const initialProjectsData: Project[] = [
-  {
-    id: 1,
-    name: "Crossrail Phase 2",
-    status: "Active",
-    phase: "Construction phase-Week 24",
-    governanceScore: 78,
-    governanceStatus: "green",
-    activities: 50,
-    openActions: 14,
-    progress: 62,
-  },
-  {
-    id: 2,
-    name: "HS2 Northern Section",
-    status: "On Hold",
-    phase: "Design phase-Week 12",
-    governanceScore: 78,
-    governanceStatus: "amber",
-    activities: 50,
-    openActions: 14,
-    progress: 62,
-  },
-  {
-    id: 3,
-    name: "Thames Tideway",
-    status: "Active",
-    phase: "Pre-construction phase-Week 8",
-    governanceScore: 78,
-    governanceStatus: "green",
-    activities: 50,
-    openActions: 14,
-    progress: 62,
-  },
-];
+interface FieldErrors {
+  name?: string;
+  phase?: string;
+  startDate?: string;
+}
 
 const GovernanceScoreIcon = ({ color }: { color: string }) => {
   const getFilter = () => {
@@ -168,9 +141,10 @@ const ProjectCard = ({
   project: Project;
   onViewDashboard: () => void;
 }) => {
-  const statusColor = project.status === "Active" ? COLORS.green : COLORS.amber;
-  const governanceColor =
-    project.governanceStatus === "green" ? COLORS.green : COLORS.amber;
+  const statusColor = project.status === "active" ? COLORS.green : COLORS.amber;
+  const governanceScore = project.governanceScore || 0;
+  const governanceColor = governanceScore >= 70 ? COLORS.green : COLORS.amber;
+  const governanceStatus = governanceScore >= 70 ? "green" : "amber";
 
   return (
     <Card
@@ -225,6 +199,7 @@ const ProjectCard = ({
               color: statusColor,
               fontSize: "12px",
               fontWeight: 500,
+              textTransform: "capitalize",
             }}
           >
             {project.status}
@@ -273,7 +248,7 @@ const ProjectCard = ({
                 fontWeight: 700,
               }}
             >
-              {project.governanceScore}
+              {governanceScore}
             </Typography>
             <Box
               sx={{
@@ -286,7 +261,7 @@ const ProjectCard = ({
                 fontWeight: 700,
               }}
             >
-              {project.governanceStatus.toUpperCase()}
+              {governanceStatus.toUpperCase()}
             </Box>
           </Box>
         </Box>
@@ -319,7 +294,7 @@ const ProjectCard = ({
                 fontWeight: 700,
               }}
             >
-              {project.activities}
+              0
             </Typography>
             <Typography
               sx={{
@@ -351,7 +326,7 @@ const ProjectCard = ({
                 fontWeight: 700,
               }}
             >
-              {project.openActions}
+              0
             </Typography>
             <Typography
               sx={{
@@ -391,12 +366,12 @@ const ProjectCard = ({
               fontWeight: 400,
             }}
           >
-            {project.progress}%
+            0%
           </Typography>
         </Box>
         <LinearProgress
           variant="determinate"
-          value={project.progress}
+          value={0}
           sx={{
             height: 6,
             borderRadius: 3,
@@ -462,7 +437,8 @@ const ProjectCard = ({
 
 const AdminProjects = () => {
   const navigate = useNavigate();
-  const [projects, setProjects] = useState<Project[]>(initialProjectsData);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [newProjectModalOpen, setNewProjectModalOpen] = useState(false);
@@ -470,6 +446,27 @@ const AdminProjects = () => {
   const [phase, setPhase] = useState("");
   const [description, setDescription] = useState("");
   const [startDate, setStartDate] = useState("");
+  const [isCreating, setIsCreating] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+
+  // Fetch projects on mount
+  useEffect(() => {
+    fetchProjects();
+  }, []);
+
+  const fetchProjects = async () => {
+    setIsLoading(true);
+    try {
+      const response = await projectAPI.getAll();
+      if (response.success) {
+        setProjects(response.projects);
+      }
+    } catch (error) {
+      console.error("Failed to fetch projects:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const filteredProjects = projects.filter((project) => {
     const matchesSearch =
@@ -491,25 +488,49 @@ const AdminProjects = () => {
     setPhase("");
     setDescription("");
     setStartDate("");
+    setFieldErrors({});
   };
 
-  const handleCreateProject = () => {
-    if (!projectName || !phase || !startDate) return;
+  const clearFieldError = (field: keyof FieldErrors) => {
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
+    }
+  };
 
-    const newProject: Project = {
-      id: projects.length + 1,
-      name: projectName,
-      status: "Active",
-      phase: `${phase.charAt(0).toUpperCase() + phase.slice(1)} phase-Week 1`,
-      governanceScore: 0,
-      governanceStatus: "green",
-      activities: 0,
-      openActions: 0,
-      progress: 0,
-    };
+  const handleCreateProject = async () => {
+    setFieldErrors({});
+    setIsCreating(true);
 
-    setProjects([...projects, newProject]);
-    handleCloseModal();
+    try {
+      const response = await projectAPI.create({
+        name: projectName,
+        phase,
+        startDate,
+        description: description || undefined,
+      });
+
+      if (response.success) {
+        setProjects([response.project, ...projects]);
+        handleCloseModal();
+      }
+    } catch (error: unknown) {
+      const err = error as {
+        response?: {
+          data?: { errors?: { field: string; message: string }[] };
+        };
+      };
+      if (err.response?.data?.errors) {
+        const errors: FieldErrors = {};
+        err.response.data.errors.forEach((e) => {
+          if (e.field === "name") errors.name = e.message;
+          if (e.field === "phase") errors.phase = e.message;
+          if (e.field === "startDate") errors.startDate = e.message;
+        });
+        setFieldErrors(errors);
+      }
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   const newProjectButton = (
@@ -681,13 +702,79 @@ const AdminProjects = () => {
           gap: 3,
         }}
       >
-        {filteredProjects.map((project) => (
-          <ProjectCard
-            key={project.id}
-            project={project}
-            onViewDashboard={() => navigate(`/admin/projects/${project.id}`)}
-          />
-        ))}
+        {isLoading ? (
+          // Loading skeletons
+          Array.from({ length: 3 }).map((_, index) => (
+            <Card
+              key={index}
+              sx={{
+                bgcolor: COLORS.bgSecondary,
+                border: `1px solid ${COLORS.border}`,
+                borderRadius: 2,
+                p: 2.5,
+              }}
+            >
+              <Skeleton
+                variant="text"
+                width="70%"
+                height={28}
+                sx={{ bgcolor: COLORS.bgTertiary }}
+              />
+              <Skeleton
+                variant="text"
+                width="50%"
+                height={20}
+                sx={{ bgcolor: COLORS.bgTertiary, mb: 2 }}
+              />
+              <Skeleton
+                variant="rectangular"
+                height={80}
+                sx={{ bgcolor: COLORS.bgTertiary, borderRadius: 2, mb: 2 }}
+              />
+              <Box sx={{ display: "flex", gap: 2, mb: 2 }}>
+                <Skeleton
+                  variant="rectangular"
+                  width="50%"
+                  height={60}
+                  sx={{ bgcolor: COLORS.bgTertiary, borderRadius: 2 }}
+                />
+                <Skeleton
+                  variant="rectangular"
+                  width="50%"
+                  height={60}
+                  sx={{ bgcolor: COLORS.bgTertiary, borderRadius: 2 }}
+                />
+              </Box>
+              <Skeleton
+                variant="rectangular"
+                height={6}
+                sx={{ bgcolor: COLORS.bgTertiary, borderRadius: 3 }}
+              />
+            </Card>
+          ))
+        ) : filteredProjects.length === 0 ? (
+          <Box
+            sx={{
+              gridColumn: "1 / -1",
+              textAlign: "center",
+              py: 8,
+            }}
+          >
+            <Typography sx={{ color: COLORS.textMuted, fontSize: "16px" }}>
+              {searchQuery || statusFilter !== "all"
+                ? "No projects match your filters"
+                : "No projects yet. Create your first project!"}
+            </Typography>
+          </Box>
+        ) : (
+          filteredProjects.map((project) => (
+            <ProjectCard
+              key={project._id}
+              project={project}
+              onViewDashboard={() => navigate(`/admin/projects/${project._id}`)}
+            />
+          ))
+        )}
       </Box>
 
       <Dialog
@@ -769,19 +856,25 @@ const AdminProjects = () => {
                 fullWidth
                 placeholder="e.g. Crossrail Phase 3"
                 value={projectName}
-                onChange={(e) => setProjectName(e.target.value)}
+                onChange={(e) => {
+                  setProjectName(e.target.value);
+                  clearFieldError("name");
+                }}
+                error={!!fieldErrors.name}
+                helperText={fieldErrors.name || "\u00A0"}
+                disabled={isCreating}
                 sx={{
                   "& .MuiOutlinedInput-root": {
                     bgcolor: COLORS.bgPrimary,
                     borderRadius: "8px",
                     "& fieldset": {
-                      borderColor: COLORS.white,
+                      borderColor: fieldErrors.name ? COLORS.red : COLORS.white,
                     },
                     "&:hover fieldset": {
-                      borderColor: COLORS.white,
+                      borderColor: fieldErrors.name ? COLORS.red : COLORS.white,
                     },
                     "&.Mui-focused fieldset": {
-                      borderColor: COLORS.white,
+                      borderColor: fieldErrors.name ? COLORS.red : COLORS.white,
                       borderWidth: 1,
                     },
                   },
@@ -793,6 +886,12 @@ const AdminProjects = () => {
                       color: COLORS.textMuted,
                       opacity: 1,
                     },
+                  },
+                  "& .MuiFormHelperText-root": {
+                    color: COLORS.red,
+                    marginLeft: 0,
+                    marginTop: "4px",
+                    fontSize: "12px",
                   },
                 }}
               />
@@ -813,19 +912,24 @@ const AdminProjects = () => {
               <Select
                 fullWidth
                 value={phase}
-                onChange={(e) => setPhase(e.target.value)}
+                onChange={(e) => {
+                  setPhase(e.target.value);
+                  clearFieldError("phase");
+                }}
                 displayEmpty
+                error={!!fieldErrors.phase}
+                disabled={isCreating}
                 sx={{
                   bgcolor: COLORS.bgPrimary,
                   borderRadius: "8px",
                   "& .MuiOutlinedInput-notchedOutline": {
-                    borderColor: COLORS.white,
+                    borderColor: fieldErrors.phase ? COLORS.red : COLORS.white,
                   },
                   "&:hover .MuiOutlinedInput-notchedOutline": {
-                    borderColor: COLORS.white,
+                    borderColor: fieldErrors.phase ? COLORS.red : COLORS.white,
                   },
                   "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
-                    borderColor: COLORS.white,
+                    borderColor: fieldErrors.phase ? COLORS.red : COLORS.white,
                     borderWidth: 1,
                   },
                   "& .MuiSelect-select": {
@@ -866,11 +970,24 @@ const AdminProjects = () => {
                 <MenuItem value="" disabled>
                   Select phase
                 </MenuItem>
-                <MenuItem value="pre-construction">Pre-construction</MenuItem>
-                <MenuItem value="design">Design</MenuItem>
-                <MenuItem value="construction">Construction</MenuItem>
-                <MenuItem value="commissioning">Commissioning</MenuItem>
+                <MenuItem value="Planning">Planning</MenuItem>
+                <MenuItem value="Design">Design</MenuItem>
+                <MenuItem value="Pre-Construction">Pre-Construction</MenuItem>
+                <MenuItem value="Construction">Construction</MenuItem>
+                <MenuItem value="Commissioning">Commissioning</MenuItem>
+                <MenuItem value="Handover">Handover</MenuItem>
               </Select>
+              {fieldErrors.phase && (
+                <Typography
+                  sx={{
+                    color: COLORS.red,
+                    fontSize: "12px",
+                    mt: 0.5,
+                  }}
+                >
+                  {fieldErrors.phase}
+                </Typography>
+              )}
             </Box>
 
             <Box>
@@ -892,6 +1009,7 @@ const AdminProjects = () => {
                 placeholder="Brief description of the project scope and objectives..."
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
+                disabled={isCreating}
                 sx={{
                   "& .MuiOutlinedInput-root": {
                     bgcolor: COLORS.bgPrimary,
@@ -935,20 +1053,31 @@ const AdminProjects = () => {
                 fullWidth
                 type="date"
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
+                onChange={(e) => {
+                  setStartDate(e.target.value);
+                  clearFieldError("startDate");
+                }}
                 placeholder="mm/dd/yyyy"
+                error={!!fieldErrors.startDate}
+                helperText={fieldErrors.startDate || "\u00A0"}
+                disabled={isCreating}
+                slotProps={{
+                  htmlInput: {
+                    min: new Date().toISOString().split("T")[0],
+                  },
+                }}
                 sx={{
                   "& .MuiOutlinedInput-root": {
                     bgcolor: COLORS.bgPrimary,
                     borderRadius: "8px",
                     "& fieldset": {
-                      borderColor: COLORS.white,
+                      borderColor: fieldErrors.startDate ? COLORS.red : COLORS.white,
                     },
                     "&:hover fieldset": {
-                      borderColor: COLORS.white,
+                      borderColor: fieldErrors.startDate ? COLORS.red : COLORS.white,
                     },
                     "&.Mui-focused fieldset": {
-                      borderColor: COLORS.white,
+                      borderColor: fieldErrors.startDate ? COLORS.red : COLORS.white,
                       borderWidth: 1,
                     },
                   },
@@ -961,6 +1090,12 @@ const AdminProjects = () => {
                       cursor: "pointer",
                       opacity: 0.6,
                     },
+                  },
+                  "& .MuiFormHelperText-root": {
+                    color: COLORS.red,
+                    marginLeft: 0,
+                    marginTop: "4px",
+                    fontSize: "12px",
                   },
                 }}
               />
@@ -978,6 +1113,7 @@ const AdminProjects = () => {
         >
           <Button
             onClick={handleCloseModal}
+            disabled={isCreating}
             sx={{
               color: COLORS.white,
               bgcolor: COLORS.bgPrimary,
@@ -991,12 +1127,17 @@ const AdminProjects = () => {
               "&:hover": {
                 bgcolor: COLORS.bgTertiary,
               },
+              "&.Mui-disabled": {
+                color: COLORS.textMuted,
+                borderColor: COLORS.border,
+              },
             }}
           >
             Cancel
           </Button>
           <Button
             onClick={handleCreateProject}
+            disabled={isCreating}
             sx={{
               color: COLORS.white,
               bgcolor: COLORS.blue,
@@ -1006,12 +1147,21 @@ const AdminProjects = () => {
               py: 1,
               fontSize: "14px",
               fontWeight: 500,
+              minWidth: 120,
               "&:hover": {
                 bgcolor: COLORS.blueHover,
               },
+              "&.Mui-disabled": {
+                bgcolor: COLORS.blueDisabled,
+                color: "rgba(255, 255, 255, 0.5)",
+              },
             }}
           >
-            Create Project
+            {isCreating ? (
+              <CircularProgress size={20} sx={{ color: COLORS.white }} />
+            ) : (
+              "Create Project"
+            )}
           </Button>
         </DialogActions>
       </Dialog>
