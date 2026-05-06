@@ -958,10 +958,6 @@ const PlannerProjectWorkspace = () => {
           currentStep={currentStep}
           steps={steps}
           onStepClick={handleStepClick}
-          onMeetingOpen={() => {
-            setCurrentStep(1);
-            setActiveTab(0);
-          }}
         />
 
         <Box

@@ -20,7 +20,6 @@ import {
   Close as CloseIcon,
   KeyboardArrowDown as ArrowDownIcon,
   KeyboardArrowRight as ArrowRightIcon,
-  Refresh as RefreshIcon,
 } from "@mui/icons-material";
 import editIcon from "../../assets/tabler_edit.png";
 import viewIcon from "../../assets/Frame.png";
@@ -195,12 +194,14 @@ const AdminProjectWorkspace = () => {
   // Programme upload states
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
-  const [isRecalculating, setIsRecalculating] = useState(false);
   const [isLoadingProgramme, setIsLoadingProgramme] = useState(true);
   const [uploadedProgramme, setUploadedProgramme] = useState<{
     _id: string;
     name: string;
     totalActivities: number;
+    cycleStatus: string;
+    isLocked: boolean;
+    overrideReason?: string;
     summary: {
       green: number;
       amber: number;
@@ -208,6 +209,16 @@ const AdminProjectWorkspace = () => {
       inLookahead: number;
     };
   } | null>(null);
+
+  // Programme history state
+  const [programmeHistory, setProgrammeHistory] = useState<Array<{
+    _id: string;
+    name: string;
+    cycleStatus: string;
+    createdAt: string;
+    totalActivities?: number;
+    overrideReason?: string;
+  }>>([]);
 
   // Lookahead data states
   const [lookaheadData, setLookaheadData] = useState<{
@@ -389,11 +400,15 @@ const AdminProjectWorkspace = () => {
             blocked: 0,
           };
 
+          const programmeStatus = programme.cycleStatus || "Uploaded";
           setUploadedProgramme({
             _id: programme._id,
             name: programme.name,
             totalActivities:
               programme.extractedData?.totalActivities || activities.length,
+            cycleStatus: programmeStatus,
+            isLocked: programme.isLocked || false,
+            overrideReason: programme.overrideReason || "",
             summary: {
               green: summary.green || 0,
               amber: summary.amber || 0,
@@ -401,6 +416,29 @@ const AdminProjectWorkspace = () => {
               inLookahead: summary.inLookahead || activities.length,
             },
           });
+
+          // Initialize cycle stage and step from backend status
+          if (programmeStatus === "Meeting Open") {
+            setCycleStage("meetingOpen");
+            setCurrentStep(2);
+          } else if (programmeStatus === "Execution") {
+            setCycleStage("execution");
+            setCurrentStep(3);
+          } else if (programmeStatus === "Close-Out Eligible") {
+            setCycleStage("execution");
+            setCurrentStep(4);
+          } else if (programmeStatus === "Closed") {
+            setCycleStage("execution");
+            setCurrentStep(5);
+            setIsWeekClosed(true);
+            if (programme.overrideReason) {
+              setSavedOverrideReason(programme.overrideReason);
+            }
+          } else {
+            // Uploaded or Draft
+            setCycleStage("draft");
+            setCurrentStep(1);
+          }
 
           // Set lookahead data directly from programme data
           setLookaheadData({
@@ -509,6 +547,29 @@ const AdminProjectWorkspace = () => {
     fetchProjectActions();
   }, [uploadedProgramme?._id]);
 
+  // Fetch programme history for this project
+  useEffect(() => {
+    const fetchProgrammeHistory = async () => {
+      if (!projectId) return;
+      try {
+        const response = await programmeAPI.getProjectHistory(projectId);
+        if (response.success && response.history) {
+          setProgrammeHistory(response.history.map((p: { _id: string; name: string; cycleStatus: string; createdAt: string; extractedData?: { totalActivities?: number }; overrideReason?: string }) => ({
+            _id: p._id,
+            name: p.name,
+            cycleStatus: p.cycleStatus,
+            createdAt: p.createdAt,
+            totalActivities: p.extractedData?.totalActivities || 0,
+            overrideReason: p.overrideReason,
+          })));
+        }
+      } catch (error) {
+        console.error("Failed to fetch programme history:", error);
+      }
+    };
+    fetchProgrammeHistory();
+  }, [projectId, uploadedProgramme?.cycleStatus]);
+
   // Helper function to get actions count for an activity
   const getActionsForActivity = (activityId: string) => {
     return projectActions.filter(
@@ -516,24 +577,102 @@ const AdminProjectWorkspace = () => {
     );
   };
 
-  const handleCycleAction = () => {
-    if (cycleStage === "draft") {
-      setCycleStage("meetingOpen");
-      setCurrentStep(2);
-    } else if (cycleStage === "meetingOpen") {
-      setCycleStage("execution");
-      setCurrentStep(3);
+  const handleCycleAction = async () => {
+    if (!uploadedProgramme?._id) return;
+
+    try {
+      let nextStatus = "";
+      let nextStep = currentStep;
+
+      if (cycleStage === "draft") {
+        nextStatus = "Meeting Open";
+        nextStep = 2;
+      } else if (cycleStage === "meetingOpen") {
+        nextStatus = "Execution";
+        nextStep = 3;
+      }
+
+      if (nextStatus) {
+        const response = await programmeAPI.updateCycleStatus(uploadedProgramme._id, nextStatus);
+        if (response.success) {
+          // Update local state after successful API call
+          if (cycleStage === "draft") {
+            setCycleStage("meetingOpen");
+          } else if (cycleStage === "meetingOpen") {
+            setCycleStage("execution");
+          }
+          setCurrentStep(nextStep);
+          // Update uploadedProgramme state too
+          setUploadedProgramme({
+            ...uploadedProgramme,
+            cycleStatus: nextStatus,
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Failed to update cycle status:", error);
     }
   };
 
-  const handleOverrideClose = () => {
-    if (overrideReason.length >= 10) {
-      setCurrentStep(5);
-      setCycleStage("execution");
-      setSavedOverrideReason(overrideReason);
-      setIsWeekClosed(true);
-      setShowOverrideForm(false);
-      setOverrideReason("");
+  // Mark as Close-Out Eligible (Stage 4) - allows exports to be generated
+  const handleMarkCloseOutEligible = async () => {
+    if (!uploadedProgramme?._id) return;
+
+    try {
+      const response = await programmeAPI.updateCycleStatus(uploadedProgramme._id, "Close-Out Eligible");
+      if (response.success) {
+        setCurrentStep(4);
+        setUploadedProgramme({
+          ...uploadedProgramme,
+          cycleStatus: "Close-Out Eligible",
+        });
+      }
+    } catch (error) {
+      console.error("Failed to mark as Close-Out Eligible:", error);
+    }
+  };
+
+  // Final close (Stage 5) - locks the week permanently
+  const handleFinalClose = async () => {
+    if (!uploadedProgramme?._id) return;
+
+    try {
+      const response = await programmeAPI.updateCycleStatus(uploadedProgramme._id, "Closed");
+      if (response.success) {
+        setCurrentStep(5);
+        setIsWeekClosed(true);
+        setUploadedProgramme({
+          ...uploadedProgramme,
+          cycleStatus: "Closed",
+          isLocked: true,
+        });
+      }
+    } catch (error) {
+      console.error("Failed to close week:", error);
+    }
+  };
+
+  // PM Override close with mandatory reason
+  const handleOverrideClose = async () => {
+    if (!uploadedProgramme?._id || overrideReason.length < 10) return;
+
+    try {
+      const response = await programmeAPI.pmOverride(uploadedProgramme._id, overrideReason);
+      if (response.success) {
+        setCurrentStep(5);
+        setSavedOverrideReason(overrideReason);
+        setIsWeekClosed(true);
+        setShowOverrideForm(false);
+        setOverrideReason("");
+        // Update uploadedProgramme state
+        setUploadedProgramme({
+          ...uploadedProgramme,
+          cycleStatus: "Closed",
+          isLocked: true,
+        });
+      }
+    } catch (error) {
+      console.error("Failed to close week with override:", error);
     }
   };
 
@@ -544,6 +683,11 @@ const AdminProjectWorkspace = () => {
   };
 
   const getCycleStatusText = () => {
+    // Use backend status if available
+    if (uploadedProgramme?.cycleStatus) {
+      return uploadedProgramme.cycleStatus;
+    }
+    // Fallback to local state
     if (cycleStage === "draft") return "Draft";
     if (cycleStage === "meetingOpen") return "Meeting Open";
     return "Execution";
@@ -862,84 +1006,6 @@ const AdminProjectWorkspace = () => {
     setUploadError("");
   };
 
-  const handleRecalculateRAG = async () => {
-    if (!uploadedProgramme?._id) return;
-
-    setIsRecalculating(true);
-    try {
-      const response = await programmeAPI.recalculateRAG(uploadedProgramme._id);
-      if (response.success) {
-        // Refresh programme data to show updated RAG values
-        const programmeResponse = await programmeAPI.getByProject(projectId!);
-        if (programmeResponse.success && programmeResponse.programme) {
-          const programme = programmeResponse.programme;
-          const activities = programme.extractedData?.activities || [];
-          const summary = programme.extractedData?.summary || {
-            total: 0,
-            inLookahead: 0,
-            green: 0,
-            amber: 0,
-            red: 0,
-            blocked: 0,
-          };
-
-          setUploadedProgramme({
-            _id: programme._id,
-            name: programme.name,
-            totalActivities:
-              programme.extractedData?.totalActivities || activities.length,
-            summary: {
-              green: summary.green || 0,
-              amber: summary.amber || 0,
-              red: summary.red || 0,
-              inLookahead: summary.inLookahead || activities.length,
-            },
-          });
-
-          // Update lookahead data
-          setLookaheadData({
-            activities: activities.map(
-              (a: {
-                activityId?: string;
-                activityName?: string;
-                duration?: string;
-                startDate?: string;
-                finishDate?: string;
-                status?: string;
-                ragStatus?: string;
-                activityStatus?: string;
-                weekZone?: string;
-              }) => ({
-                activityId: a.activityId || "",
-                activityName: a.activityName || "",
-                duration: a.duration || "",
-                startDate: a.startDate || "",
-                finishDate: a.finishDate || "",
-                status: a.status || "Planned",
-                ragStatus: a.ragStatus || "Grey",
-                activityStatus: a.activityStatus || "Ready",
-                weekZone: a.weekZone || null,
-              }),
-            ),
-            summary: {
-              total: summary.total || activities.length,
-              inLookahead: summary.inLookahead || activities.length,
-              green: summary.green || 0,
-              amber: summary.amber || 0,
-              red: summary.red || 0,
-              blocked: summary.blocked || 0,
-            },
-            weekZones: programme.weekZones || [],
-          });
-        }
-      }
-    } catch (error) {
-      console.error("Failed to recalculate RAG:", error);
-    } finally {
-      setIsRecalculating(false);
-    }
-  };
-
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024 * 1024) {
       return `${(bytes / 1024).toFixed(1)} KB`;
@@ -1048,10 +1114,6 @@ const AdminProjectWorkspace = () => {
           currentStep={currentStep}
           steps={steps}
           onStepClick={handleStepClick}
-          onMeetingOpen={() => {
-            setCurrentStep(1);
-            setActiveTab(0);
-          }}
         />
 
         <Box
@@ -1272,7 +1334,7 @@ const AdminProjectWorkspace = () => {
                       ✓
                     </Typography>
                   </Box>
-                  <Box>
+                  <Box sx={{ flex: 1 }}>
                     <Typography
                       sx={{
                         color: COLORS.textPrimary,
@@ -1476,68 +1538,58 @@ const AdminProjectWorkspace = () => {
                   >
                     View Activities & Lookahead
                   </Button>
-                  {/* <Button
-                    onClick={handleRecalculateRAG}
-                    disabled={isRecalculating}
+                  {(uploadedProgramme?.cycleStatus === "Closed" || isWeekClosed) && (
+                    <Button
+                      onClick={() => {
+                        setUploadedProgramme(null);
+                        setUploadedFile(null);
+                        setIsWeekClosed(false);
+                        setCycleStage("draft");
+                        setCurrentStep(1);
+                      }}
+                      sx={{
+                        bgcolor: COLORS.green,
+                        color: "#fff",
+                        textTransform: "none",
+                        px: 3,
+                        py: 1,
+                        borderRadius: "8px",
+                        fontSize: "14px",
+                        fontWeight: 500,
+                        "&:hover": {
+                          bgcolor: "#16A34A",
+                        },
+                      }}
+                    >
+                      Start New Week
+                    </Button>
+                  )}
+                </Box>
+
+                {/* Week Closed Notice */}
+                {(uploadedProgramme?.cycleStatus === "Closed" || isWeekClosed) && (
+                  <Box
                     sx={{
-                      bgcolor: "transparent",
-                      color: COLORS.blue,
-                      border: `1px solid ${COLORS.blue}`,
-                      textTransform: "none",
-                      px: 3,
-                      py: 1,
+                      mt: 3,
+                      p: 2,
+                      bgcolor: "rgba(107, 114, 128, 0.1)",
+                      border: `1px solid ${COLORS.border}`,
                       borderRadius: "8px",
-                      fontSize: "14px",
-                      fontWeight: 500,
                       display: "flex",
                       alignItems: "center",
-                      gap: 1,
-                      "&:hover": {
-                        bgcolor: "rgba(59, 130, 246, 0.1)",
-                      },
-                      "&.Mui-disabled": {
-                        color: COLORS.textMuted,
-                        borderColor: COLORS.border,
-                      },
+                      gap: 1.5,
                     }}
                   >
-                    {isRecalculating ? (
-                      <CircularProgress size={18} sx={{ color: COLORS.blue }} />
-                    ) : (
-                      <RefreshIcon sx={{ fontSize: 18 }} />
-                    )}
-                    Recalculate RAG
-                  </Button> */}
-                  {/* <Button
-                    onClick={handleDeleteProgramme}
-                    disabled={isDeleting}
-                    sx={{
-                      bgcolor: "transparent",
-                      color: COLORS.red,
-                      border: `1px solid ${COLORS.red}`,
-                      textTransform: "none",
-                      px: 3,
-                      py: 1,
-                      borderRadius: "8px",
-                      fontSize: "14px",
-                      fontWeight: 500,
-                      minWidth: 140,
-                      "&:hover": {
-                        bgcolor: "rgba(239, 68, 68, 0.1)",
-                      },
-                      "&.Mui-disabled": {
-                        color: COLORS.textMuted,
-                        borderColor: COLORS.border,
-                      },
-                    }}
-                  >
-                    {isDeleting ? (
-                      <CircularProgress size={20} sx={{ color: COLORS.red }} />
-                    ) : (
-                      "Delete Programme"
-                    )}
-                  </Button> */}
-                </Box>
+                    <Box
+                      component="img"
+                      src={lockIcon}
+                      sx={{ width: 20, height: 20, opacity: 0.6 }}
+                    />
+                    <Typography sx={{ color: COLORS.textMuted, fontSize: "13px" }}>
+                      This week is closed. Click "Start New Week" to upload a new programme for the next cycle.
+                    </Typography>
+                  </Box>
+                )}
               </Box>
             ) : !uploadedFile ? (
               <Box
@@ -1779,6 +1831,103 @@ const AdminProjectWorkspace = () => {
                       )}
                     </Button>
                   </Box>
+                </Box>
+              </Box>
+            )}
+
+            {/* Programme History Section */}
+            {programmeHistory.length > 0 && (
+              <Box
+                sx={{
+                  bgcolor: COLORS.bgSecondary,
+                  border: `1px solid ${COLORS.border}`,
+                  borderRadius: "12px",
+                  p: 3,
+                  mt: 3,
+                }}
+              >
+                <Typography
+                  sx={{
+                    color: COLORS.textPrimary,
+                    fontSize: "16px",
+                    fontWeight: 600,
+                    mb: 2,
+                  }}
+                >
+                  Programme History
+                </Typography>
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+                  {programmeHistory.map((prog) => (
+                    <Box
+                      key={prog._id}
+                      sx={{
+                        bgcolor: COLORS.bgTertiary,
+                        border: `1px solid ${COLORS.border}`,
+                        borderRadius: "8px",
+                        p: 2,
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <Box>
+                        <Typography
+                          sx={{
+                            color: COLORS.textPrimary,
+                            fontSize: "14px",
+                            fontWeight: 500,
+                          }}
+                        >
+                          {prog.name}
+                        </Typography>
+                        <Typography
+                          sx={{
+                            color: COLORS.textMuted,
+                            fontSize: "12px",
+                          }}
+                        >
+                          {prog.totalActivities || 0} activities • Closed on{" "}
+                          {new Date(prog.createdAt).toLocaleDateString("en-GB", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </Typography>
+                        {prog.overrideReason && (
+                          <Typography
+                            sx={{
+                              color: COLORS.amber,
+                              fontSize: "11px",
+                              mt: 0.5,
+                            }}
+                          >
+                            Override: {prog.overrideReason}
+                          </Typography>
+                        )}
+                      </Box>
+                      <Box
+                        sx={{
+                          bgcolor: "rgba(107, 114, 128, 0.2)",
+                          color: COLORS.textMuted,
+                          px: 1.5,
+                          py: 0.5,
+                          borderRadius: "6px",
+                          fontSize: "11px",
+                          fontWeight: 500,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 0.5,
+                        }}
+                      >
+                        <Box
+                          component="img"
+                          src={lockIcon}
+                          sx={{ width: 12, height: 12, opacity: 0.6 }}
+                        />
+                        Closed
+                      </Box>
+                    </Box>
+                  ))}
                 </Box>
               </Box>
             )}
@@ -3908,17 +4057,22 @@ const AdminProjectWorkspace = () => {
                   mb: 2,
                 }}
               >
-                {cycleStage === "draft"
-                  ? "Programme uploaded. Review activities and open the planning meeting."
-                  : cycleStage === "meetingOpen"
-                    ? "Meeting is open. Start execution when ready."
-                    : "Execution in progress. Monitor activities and actions."}
+                {uploadedProgramme?.cycleStatus === "Closed" || isWeekClosed
+                  ? "This week is closed and locked. No changes allowed."
+                  : uploadedProgramme?.cycleStatus === "Close-Out Eligible"
+                    ? "Week is ready for close-out. Generate exports and close the week."
+                    : cycleStage === "draft"
+                      ? "Programme uploaded. Review activities and open the planning meeting."
+                      : cycleStage === "meetingOpen"
+                        ? "Meeting is open. Start execution when ready."
+                        : "Execution in progress. Monitor activities and actions."}
               </Typography>
-              {cycleStage === "execution" ? (
+              {/* Closed Stage - Show locked message */}
+              {(uploadedProgramme?.cycleStatus === "Closed" || isWeekClosed) ? (
                 <Box
                   sx={{
-                    bgcolor: "#2D2A24",
-                    border: `1px solid ${COLORS.amber}`,
+                    bgcolor: "rgba(107, 114, 128, 0.1)",
+                    border: `1px solid ${COLORS.textMuted}`,
                     borderRadius: "8px",
                     px: 2,
                     py: 1.5,
@@ -3927,32 +4081,289 @@ const AdminProjectWorkspace = () => {
                     gap: 1.5,
                   }}
                 >
-                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                    <circle
-                      cx="10"
-                      cy="10"
-                      r="8.5"
-                      stroke="#F59E0B"
-                      strokeWidth="1.5"
-                    />
-                    <path
-                      d="M10 5.5V10L13 12"
-                      stroke="#F59E0B"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
+                  <Box
+                    component="img"
+                    src={lockIcon}
+                    sx={{ width: 20, height: 20, opacity: 0.6 }}
+                  />
                   <Typography
                     sx={{
-                      color: COLORS.amber,
+                      color: COLORS.textMuted,
                       fontSize: "13px",
                       fontWeight: 500,
                     }}
                   >
-                    Waiting for 4 required action(s) on green activities to
-                    close...
+                    Week locked. View history in Closure & Export tab.
                   </Typography>
+                </Box>
+              ) : uploadedProgramme?.cycleStatus === "Close-Out Eligible" ? (
+                <Box>
+                  <Box
+                    sx={{
+                      bgcolor: "rgba(59, 130, 246, 0.1)",
+                      border: `1px solid ${COLORS.blue}`,
+                      borderRadius: "8px",
+                      px: 2,
+                      py: 1.5,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 1.5,
+                      mb: 2,
+                    }}
+                  >
+                    <Typography sx={{ color: COLORS.blue, fontSize: "18px" }}>📋</Typography>
+                    <Box>
+                      <Typography
+                        sx={{
+                          color: COLORS.blue,
+                          fontSize: "13px",
+                          fontWeight: 600,
+                        }}
+                      >
+                        Close-Out Eligible (Stage 4)
+                      </Typography>
+                      <Typography
+                        sx={{
+                          color: COLORS.textSecondary,
+                          fontSize: "12px",
+                        }}
+                      >
+                        Export documents can be generated. Ready to close and lock the week.
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <Box sx={{ display: "flex", gap: 2 }}>
+                    <Button
+                      onClick={() => setActiveTab(5)}
+                      sx={{
+                        bgcolor: "transparent",
+                        color: COLORS.blue,
+                        border: `1px solid ${COLORS.blue}`,
+                        textTransform: "none",
+                        px: 2,
+                        py: 1,
+                        borderRadius: "8px",
+                        fontSize: "13px",
+                        fontWeight: 500,
+                        "&:hover": { bgcolor: "rgba(59, 130, 246, 0.1)" },
+                      }}
+                    >
+                      Go to Exports
+                    </Button>
+                    <Button
+                      onClick={handleFinalClose}
+                      sx={{
+                        bgcolor: COLORS.green,
+                        color: "#fff",
+                        textTransform: "none",
+                        px: 3,
+                        py: 1,
+                        borderRadius: "8px",
+                        fontSize: "13px",
+                        fontWeight: 500,
+                        "&:hover": { bgcolor: "#16a34a" },
+                      }}
+                    >
+                      Close & Lock Week
+                    </Button>
+                  </Box>
+                </Box>
+              ) : cycleStage === "execution" ? (
+                <Box>
+                  {actionStats.open === 0 ? (
+                    /* Ready for close-out - all actions completed */
+                    <>
+                      <Box
+                        sx={{
+                          bgcolor: "rgba(34, 197, 94, 0.1)",
+                          border: `1px solid ${COLORS.green}`,
+                          borderRadius: "8px",
+                          px: 2,
+                          py: 1.5,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 1.5,
+                          mb: 2,
+                        }}
+                      >
+                        <Typography sx={{ color: COLORS.green, fontSize: "18px" }}>✓</Typography>
+                        <Typography
+                          sx={{
+                            color: COLORS.green,
+                            fontSize: "13px",
+                            fontWeight: 500,
+                          }}
+                        >
+                          All actions completed. Ready for close-out.
+                        </Typography>
+                      </Box>
+                      <Button
+                        onClick={handleMarkCloseOutEligible}
+                        sx={{
+                          bgcolor: COLORS.green,
+                          color: "#fff",
+                          textTransform: "none",
+                          px: 3,
+                          py: 1,
+                          borderRadius: "8px",
+                          fontSize: "13px",
+                          fontWeight: 500,
+                          "&:hover": { bgcolor: "#16a34a" },
+                        }}
+                      >
+                        Mark Ready for Close-Out
+                      </Button>
+                    </>
+                  ) : (
+                    /* Open actions remaining */
+                    <>
+                      <Box
+                        sx={{
+                          bgcolor: "#2D2A24",
+                          border: `1px solid ${COLORS.amber}`,
+                          borderRadius: "8px",
+                          px: 2,
+                          py: 1.5,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 1.5,
+                          mb: 2,
+                        }}
+                      >
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                          <circle
+                            cx="10"
+                            cy="10"
+                            r="8.5"
+                            stroke="#F59E0B"
+                            strokeWidth="1.5"
+                          />
+                          <path
+                            d="M10 5.5V10L13 12"
+                            stroke="#F59E0B"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                        <Typography
+                          sx={{
+                            color: COLORS.amber,
+                            fontSize: "13px",
+                            fontWeight: 500,
+                          }}
+                        >
+                          {actionStats.open} open action(s) need to be completed before closing.
+                        </Typography>
+                      </Box>
+                      <Box sx={{ display: "flex", gap: 2, alignItems: "flex-start" }}>
+                        <Button
+                          onClick={() => setActiveTab(3)}
+                          sx={{
+                            bgcolor: COLORS.blue,
+                            color: "#fff",
+                            textTransform: "none",
+                            px: 2,
+                            py: 1,
+                            borderRadius: "8px",
+                            fontSize: "13px",
+                            fontWeight: 500,
+                            "&:hover": { bgcolor: COLORS.blueHover },
+                          }}
+                        >
+                          Go to Actions
+                        </Button>
+                        <Button
+                          onClick={() => setShowOverrideForm(!showOverrideForm)}
+                          sx={{
+                            bgcolor: "transparent",
+                            color: COLORS.amber,
+                            border: `1px solid ${COLORS.amber}`,
+                            textTransform: "none",
+                            px: 2,
+                            py: 1,
+                            borderRadius: "8px",
+                            fontSize: "13px",
+                            fontWeight: 500,
+                            "&:hover": { bgcolor: "rgba(245, 158, 11, 0.1)" },
+                          }}
+                        >
+                          PM Override
+                        </Button>
+                      </Box>
+                      {showOverrideForm && (
+                        <Box
+                          sx={{
+                            mt: 2,
+                            bgcolor: "#2D2A24",
+                            border: `1px solid ${COLORS.amber}`,
+                            borderRadius: "8px",
+                            p: 2,
+                          }}
+                        >
+                          <Typography
+                            sx={{
+                              color: COLORS.amber,
+                              fontSize: "14px",
+                              fontWeight: 600,
+                              mb: 1,
+                            }}
+                          >
+                            PM Override — Force Close Week
+                          </Typography>
+                          <Typography
+                            sx={{
+                              color: COLORS.textSecondary,
+                              fontSize: "13px",
+                              mb: 2,
+                            }}
+                          >
+                            Enter a mandatory reason (min 10 characters) to close this week despite incomplete actions.
+                          </Typography>
+                          <TextField
+                            fullWidth
+                            multiline
+                            rows={2}
+                            placeholder="Enter justification for override..."
+                            value={overrideReason}
+                            onChange={(e) => setOverrideReason(e.target.value)}
+                            sx={{
+                              mb: 2,
+                              "& .MuiOutlinedInput-root": {
+                                bgcolor: COLORS.bgSecondary,
+                                borderRadius: "8px",
+                                "& fieldset": { borderColor: COLORS.border },
+                                "&:hover fieldset": { borderColor: COLORS.amber },
+                                "&.Mui-focused fieldset": { borderColor: COLORS.amber },
+                              },
+                              "& .MuiInputBase-input": {
+                                color: COLORS.textPrimary,
+                                fontSize: "14px",
+                              },
+                            }}
+                          />
+                          <Button
+                            onClick={handleOverrideClose}
+                        disabled={overrideReason.length < 10}
+                        sx={{
+                          bgcolor: COLORS.amber,
+                          color: "#fff",
+                          textTransform: "none",
+                          px: 3,
+                          py: 1,
+                          borderRadius: "8px",
+                          fontSize: "13px",
+                          fontWeight: 500,
+                          "&:hover": { bgcolor: "#d97706" },
+                          "&.Mui-disabled": { bgcolor: COLORS.bgTertiary, color: COLORS.textMuted },
+                        }}
+                      >
+                            Force Close Week
+                          </Button>
+                        </Box>
+                      )}
+                    </>
+                  )}
                 </Box>
               ) : (
                 <Button
@@ -4009,25 +4420,27 @@ const AdminProjectWorkspace = () => {
                     mb: 1,
                   }}
                 >
-                  Closed by PM (Override) via PM Override
+                  Week Closed & Locked
                 </Typography>
                 <Typography
                   sx={{
                     color: COLORS.textSecondary,
                     fontSize: "14px",
-                    mb: 1,
+                    mb: (savedOverrideReason || uploadedProgramme?.overrideReason) ? 1 : 0,
                   }}
                 >
-                  Week 24 — Closed & Locked
+                  This week has been closed. No further changes allowed.
                 </Typography>
-                <Typography
-                  sx={{
-                    color: COLORS.amber,
-                    fontSize: "14px",
-                  }}
-                >
-                  Override reason: {savedOverrideReason}
-                </Typography>
+                {(savedOverrideReason || uploadedProgramme?.overrideReason) && (
+                  <Typography
+                    sx={{
+                      color: COLORS.amber,
+                      fontSize: "14px",
+                    }}
+                  >
+                    Override reason: {savedOverrideReason || uploadedProgramme?.overrideReason}
+                  </Typography>
+                )}
               </Box>
             ) : (
               <>
@@ -4327,8 +4740,55 @@ const AdminProjectWorkspace = () => {
                     Close Week
                   </Typography>
 
+                  {(uploadedProgramme?.cycleStatus === "Closed" || isWeekClosed) ? (
+                    <Box
+                      sx={{
+                        bgcolor: "rgba(107, 114, 128, 0.1)",
+                        border: `1px solid ${COLORS.textMuted}`,
+                        borderRadius: "8px",
+                        p: 2,
+                      }}
+                    >
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                        <Box
+                          component="img"
+                          src={lockIcon}
+                          sx={{ width: 20, height: 20, opacity: 0.6 }}
+                        />
+                        <Typography sx={{ color: COLORS.textMuted, fontSize: "13px" }}>
+                          This week is closed and locked. No further changes allowed.
+                        </Typography>
+                      </Box>
+                      {(savedOverrideReason || uploadedProgramme?.overrideReason) && (
+                        <Typography
+                          sx={{
+                            color: COLORS.amber,
+                            fontSize: "12px",
+                            mt: 1.5,
+                            pl: 4.5,
+                          }}
+                        >
+                          Override reason: {savedOverrideReason || uploadedProgramme?.overrideReason}
+                        </Typography>
+                      )}
+                    </Box>
+                  ) : (
+                  <>
+                  <Typography
+                    sx={{
+                      color: COLORS.textSecondary,
+                      fontSize: "12px",
+                      mb: 2,
+                    }}
+                  >
+                    {uploadedProgramme?.cycleStatus === "Close-Out Eligible"
+                      ? "Week is ready to be closed. Click 'Close Week' to finalize."
+                      : "Complete all actions and mark as Close-Out Eligible first, or use PM Override to force close."}
+                  </Typography>
                   <Box sx={{ display: "flex", gap: 2, mb: 3 }}>
                     <Button
+                      onClick={handleFinalClose}
+                      disabled={uploadedProgramme?.cycleStatus !== "Close-Out Eligible"}
                       sx={{
                         bgcolor: "transparent",
                         border: `1px solid ${COLORS.green}`,
@@ -4340,12 +4800,17 @@ const AdminProjectWorkspace = () => {
                         fontSize: "13px",
                         fontWeight: 500,
                         "&:hover": { bgcolor: `${COLORS.green}10` },
+                        "&.Mui-disabled": {
+                          borderColor: COLORS.border,
+                          color: COLORS.textMuted,
+                        },
                       }}
                     >
                       Close Week
                     </Button>
                     <Button
                       onClick={() => setShowOverrideForm(!showOverrideForm)}
+                      disabled={uploadedProgramme?.cycleStatus === "Closed" || isWeekClosed}
                       sx={{
                         bgcolor: COLORS.red,
                         color: "#fff",
@@ -4356,6 +4821,10 @@ const AdminProjectWorkspace = () => {
                         fontSize: "13px",
                         fontWeight: 500,
                         "&:hover": { bgcolor: "#DC2626" },
+                        "&.Mui-disabled": {
+                          bgcolor: COLORS.bgTertiary,
+                          color: COLORS.textMuted,
+                        },
                       }}
                     >
                       PM Override Close
@@ -4436,6 +4905,8 @@ const AdminProjectWorkspace = () => {
                         the audit trail.
                       </Typography>
                     </Box>
+                  )}
+                  </>
                   )}
                 </Box>
               </>

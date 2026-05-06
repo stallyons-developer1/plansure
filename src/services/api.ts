@@ -150,6 +150,11 @@ export const programmeAPI = {
     return response.data;
   },
 
+  getProjectHistory: async (projectId: string) => {
+    const response = await api.get(`/programmes/project/${projectId}/history`);
+    return response.data;
+  },
+
   getLookahead: async (id: string) => {
     const response = await api.get(`/programmes/${id}/lookahead`);
     return response.data;

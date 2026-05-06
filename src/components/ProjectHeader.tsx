@@ -15,7 +15,6 @@ interface ProjectHeaderProps {
   currentStep: number;
   steps: string[];
   onStepClick?: (stepNumber: number) => void;
-  onMeetingOpen?: () => void;
 }
 
 const ProjectHeader = ({
@@ -28,7 +27,6 @@ const ProjectHeader = ({
   currentStep,
   steps,
   onStepClick,
-  onMeetingOpen,
 }: ProjectHeaderProps) => {
   return (
     <Card
@@ -165,47 +163,29 @@ const ProjectHeader = ({
               </Typography>
             </Box>
           </Box>
-          {currentStep === 5 ? (
-            <Box
-              onClick={onMeetingOpen}
-              sx={{
-                bgcolor: COLORS.blueBgMedium,
-                color: COLORS.blue,
-                px: { xs: 1.5, sm: 2.5 },
-                py: { xs: 0.75, sm: 1 },
-                borderRadius: "10px",
-                fontSize: { xs: "11px", sm: "13px" },
-                fontWeight: 600,
-                letterSpacing: "0.5px",
-                textTransform: "uppercase",
-                whiteSpace: "nowrap",
-                cursor: "pointer",
-                border: `1px solid ${COLORS.blue}`,
-                "&:hover": {
-                  bgcolor: `${COLORS.blue}30`,
-                },
-              }}
-            >
-              Meeting Open
-            </Box>
-          ) : (
-            <Box
-              sx={{
-                bgcolor: COLORS.bgTertiary,
-                color: COLORS.textSecondary,
-                px: { xs: 1.5, sm: 2.5 },
-                py: { xs: 0.75, sm: 1 },
-                borderRadius: "10px",
-                fontSize: { xs: "11px", sm: "13px" },
-                fontWeight: 600,
-                letterSpacing: "0.5px",
-                textTransform: "uppercase",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {steps[currentStep - 1]}
-            </Box>
-          )}
+          <Box
+            sx={{
+              bgcolor: (currentStep === 2 || currentStep === 3)
+                ? COLORS.blueBgMedium
+                : COLORS.bgTertiary,
+              color: (currentStep === 2 || currentStep === 3)
+                ? COLORS.blue
+                : COLORS.textSecondary,
+              px: { xs: 1.5, sm: 2.5 },
+              py: { xs: 0.75, sm: 1 },
+              borderRadius: "10px",
+              fontSize: { xs: "11px", sm: "13px" },
+              fontWeight: 600,
+              letterSpacing: "0.5px",
+              textTransform: "uppercase",
+              whiteSpace: "nowrap",
+              border: (currentStep === 2 || currentStep === 3)
+                ? `1px solid ${COLORS.blue}`
+                : "none",
+            }}
+          >
+            {steps[currentStep - 1]}
+          </Box>
         </Box>
       </Box>
 

@@ -130,6 +130,7 @@ const AdminActions = () => {
   const [detailDrawerOpen, setDetailDrawerOpen] = useState(false);
   const [viewingAction, setViewingAction] = useState<Action | null>(null);
   const [saveLoading, setSaveLoading] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const [completeConfirmOpen, setCompleteConfirmOpen] = useState(false);
   const [actionToComplete, setActionToComplete] = useState<Action | null>(null);
   const [completeLoading, setCompleteLoading] = useState(false);
@@ -403,6 +404,7 @@ const AdminActions = () => {
   const handleCloseModal = () => {
     setModalOpen(false);
     setEditingAction(null);
+    setSaveError("");
     setFormData({
       selectedProject: "",
       linkedActivity: "",
@@ -481,6 +483,9 @@ const AdminActions = () => {
   };
 
   const handleSaveAction = async () => {
+    // Clear previous error
+    setSaveError("");
+
     // Validate required fields
     if (
       !formData.title.trim() ||
@@ -488,7 +493,7 @@ const AdminActions = () => {
       !formData.dueDate ||
       !formData.selectedProject
     ) {
-      alert("Please fill in all required fields");
+      setSaveError("Please fill in all required fields");
       return;
     }
 
@@ -501,15 +506,13 @@ const AdminActions = () => {
         const programmeId = getProgrammeIdForProject(formData.selectedProject);
 
         if (!programmeId) {
-          alert(
-            "No programme found for this project. Please upload a programme first.",
-          );
+          setSaveError("No programme found for this project. Please upload a programme first.");
           setSaveLoading(false);
           return;
         }
 
         if (!formData.linkedActivity) {
-          alert("Please select a linked activity");
+          setSaveError("Please select a linked activity");
           setSaveLoading(false);
           return;
         }
@@ -550,15 +553,13 @@ const AdminActions = () => {
         const programmeId = getProgrammeIdForProject(formData.selectedProject);
 
         if (!programmeId) {
-          alert(
-            "No programme found for this project. Please upload a programme first.",
-          );
+          setSaveError("No programme found for this project. Please upload a programme first.");
           setSaveLoading(false);
           return;
         }
 
         if (!formData.linkedActivity) {
-          alert("Please select a linked activity");
+          setSaveError("Please select a linked activity");
           setSaveLoading(false);
           return;
         }
@@ -591,9 +592,12 @@ const AdminActions = () => {
           handleCloseModal();
         }
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Failed to save action:", error);
-      alert("Failed to save action. Please try again.");
+      // Show specific error message from server (e.g., cycle status restrictions)
+      const axiosError = error as { response?: { data?: { message?: string } } };
+      const errorMessage = axiosError?.response?.data?.message || "Failed to save action. Please try again.";
+      setSaveError(errorMessage);
     } finally {
       setSaveLoading(false);
     }
@@ -1421,6 +1425,22 @@ const AdminActions = () => {
         </DialogTitle>
 
         <DialogContent sx={{ px: 3, py: 3 }}>
+          {/* Error Message */}
+          {saveError && (
+            <Box
+              sx={{
+                bgcolor: "rgba(239, 68, 68, 0.1)",
+                border: `1px solid ${COLORS.red}`,
+                borderRadius: "8px",
+                p: 2,
+                mb: 2,
+              }}
+            >
+              <Typography sx={{ color: COLORS.red, fontSize: "14px" }}>
+                {saveError}
+              </Typography>
+            </Box>
+          )}
           <Box sx={{ display: "flex", flexDirection: "column", gap: 0 }}>
             {/* Project Selection */}
             <Box>
