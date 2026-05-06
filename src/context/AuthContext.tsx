@@ -69,29 +69,64 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         return { success: false, error: response.message || "Login failed" };
       } catch (error: unknown) {
-        const err = error as {
-          response?: { data?: { errors?: { field: string; message: string }[]; message?: string } };
-        };
-
-        // Handle field-specific validation errors
-        if (err.response?.data?.errors) {
-          return {
-            success: false,
-            errors: err.response.data.errors,
+        // Check if it's an axios error with response data
+        if (error && typeof error === "object" && "response" in error) {
+          const axiosError = error as {
+            response?: {
+              data?: {
+                success?: boolean;
+                errors?: { field: string; message: string }[];
+                message?: string;
+              };
+              status?: number;
+            };
           };
+
+          // Handle field-specific validation errors from backend
+          if (axiosError.response?.data?.errors && Array.isArray(axiosError.response.data.errors)) {
+            return {
+              success: false,
+              errors: axiosError.response.data.errors,
+            };
+          }
+
+          // Handle general error message from backend
+          if (axiosError.response?.data?.message) {
+            return {
+              success: false,
+              error: axiosError.response.data.message,
+            };
+          }
+
+          // Handle HTTP status errors without specific message
+          if (axiosError.response?.status) {
+            const status = axiosError.response.status;
+            if (status === 401) {
+              return { success: false, error: "Invalid credentials" };
+            }
+            if (status === 403) {
+              return { success: false, error: "Access denied" };
+            }
+            if (status >= 500) {
+              return { success: false, error: "Server error. Please try again later." };
+            }
+          }
         }
 
-        // Handle general error message
-        if (err.response?.data?.message) {
-          return {
-            success: false,
-            error: err.response.data.message,
-          };
+        // Network error or server not reachable
+        if (error && typeof error === "object" && "code" in error) {
+          const networkError = error as { code?: string };
+          if (networkError.code === "ERR_NETWORK") {
+            return {
+              success: false,
+              error: "Unable to connect to server. Please check your connection.",
+            };
+          }
         }
 
         return {
           success: false,
-          error: "Unable to connect to server. Please try again.",
+          error: "An unexpected error occurred. Please try again.",
         };
       } finally {
         setIsLoading(false);

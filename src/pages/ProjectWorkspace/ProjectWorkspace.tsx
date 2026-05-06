@@ -1,176 +1,65 @@
-import { Box, Card, Typography, Tabs, Tab } from "@mui/material";
-import { useState } from "react";
+import {
+  Box,
+  Card,
+  Typography,
+  Tabs,
+  Tab,
+  CircularProgress,
+  Avatar,
+} from "@mui/material";
+import {
+  KeyboardArrowDown as ArrowDownIcon,
+  KeyboardArrowRight as ArrowRightIcon,
+  ChevronRight,
+} from "@mui/icons-material";
+import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import DashboardLayout from "../../layouts/DashboardLayout";
 import { COLORS } from "../../constants/colors";
-import ActivitiesTable, {
-  activitiesData,
-} from "../../components/ActivitiesTable";
-import ActivitiesSummary from "../../components/ActivitiesSummary";
+import { projectAPI, programmeAPI, actionAPI } from "../../services/api";
+import { useAuth } from "../../context/AuthContext";
 
-const projectsData: Record<
-  string,
-  {
-    id: number;
-    name: string;
-    phase: string;
-    week: string;
-    weekDates: string;
-    planner: string;
-    currentStep: number;
-    activitiesInLookahead: number;
-    greenReady: number;
-    totalGreen: number;
-    openActions: number;
-    overdueActions: number;
-    ragDistribution: { green: number; amber: number; red: number };
-    cycleHistory: Array<{
-      week: string;
-      dates: string;
-      status: string;
-      statusType: "green" | "amber";
-      score: number;
-    }>;
-  }
-> = {
-  "1": {
-    id: 1,
-    name: "Crossrail Phase 2",
-    phase: "Construction",
-    week: "Week 24",
-    weekDates: "17 - 23 Mar 2026",
-    planner: "Kamran R.",
-    currentStep: 1,
-    activitiesInLookahead: 12,
-    greenReady: 1,
-    totalGreen: 5,
-    openActions: 12,
-    overdueActions: 1,
-    ragDistribution: { green: 5, amber: 4, red: 3 },
-    cycleHistory: [
-      {
-        week: "Week 23",
-        dates: "10 - 16 Mar 2026",
-        status: "Normal Close",
-        statusType: "green",
-        score: 82,
-      },
-      {
-        week: "Week 22",
-        dates: "03 - 09 Mar 2026",
-        status: "PM Override",
-        statusType: "amber",
-        score: 68,
-      },
-      {
-        week: "Week 21",
-        dates: "24 Feb - 02 Mar 2026",
-        status: "Normal Close",
-        statusType: "green",
-        score: 75,
-      },
-    ],
-  },
-  "2": {
-    id: 2,
-    name: "HS2 Northern Section",
-    phase: "Design",
-    week: "Week 12",
-    weekDates: "10 - 16 Mar 2026",
-    planner: "Sarah M.",
-    currentStep: 2,
-    activitiesInLookahead: 8,
-    greenReady: 3,
-    totalGreen: 8,
-    openActions: 6,
-    overdueActions: 2,
-    ragDistribution: { green: 3, amber: 5, red: 2 },
-    cycleHistory: [
-      {
-        week: "Week 11",
-        dates: "03 - 09 Mar 2026",
-        status: "Normal Close",
-        statusType: "green",
-        score: 78,
-      },
-      {
-        week: "Week 10",
-        dates: "24 Feb - 02 Mar 2026",
-        status: "Normal Close",
-        statusType: "green",
-        score: 85,
-      },
-      {
-        week: "Week 9",
-        dates: "17 - 23 Feb 2026",
-        status: "PM Override",
-        statusType: "amber",
-        score: 62,
-      },
-    ],
-  },
-  "3": {
-    id: 3,
-    name: "Thames Tideway",
-    phase: "Pre-construction",
-    week: "Week 8",
-    weekDates: "03 - 09 Mar 2026",
-    planner: "James T.",
-    currentStep: 1,
-    activitiesInLookahead: 15,
-    greenReady: 2,
-    totalGreen: 6,
-    openActions: 9,
-    overdueActions: 0,
-    ragDistribution: { green: 6, amber: 3, red: 2 },
-    cycleHistory: [
-      {
-        week: "Week 7",
-        dates: "24 Feb - 02 Mar 2026",
-        status: "Normal Close",
-        statusType: "green",
-        score: 88,
-      },
-      {
-        week: "Week 6",
-        dates: "17 - 23 Feb 2026",
-        status: "Normal Close",
-        statusType: "green",
-        score: 91,
-      },
-      {
-        week: "Week 5",
-        dates: "10 - 16 Feb 2026",
-        status: "Normal Close",
-        statusType: "green",
-        score: 79,
-      },
-    ],
-  },
-};
+interface ProjectData {
+  _id: string;
+  name: string;
+  phase: string;
+  description?: string;
+  startDate: string;
+  endDate?: string;
+  status: string;
+  createdBy?: { name: string; email: string };
+}
+
+interface Activity {
+  activityId: string;
+  activityName: string;
+  duration: string;
+  startDate: string;
+  finishDate: string;
+  status: string;
+  ragStatus: string;
+  activityStatus: string;
+  weekZone: string | null;
+}
 
 const StepIndicator = ({
   number,
   label,
   isActive,
   isCompleted,
-  onClick,
 }: {
   number: number;
   label: string;
   isActive: boolean;
   isCompleted: boolean;
-  onClick?: () => void;
 }) => (
   <Box
     sx={{
       display: "flex",
       flexDirection: "column",
       alignItems: "center",
-      cursor: "pointer",
       minWidth: { xs: 70, sm: 90, md: "auto" },
     }}
-    onClick={onClick}
   >
     <Box
       sx={{
@@ -186,9 +75,6 @@ const StepIndicator = ({
         fontWeight: 500,
         fontSize: { xs: "13px", sm: "14px", md: "15px" },
         transition: "all 0.2s ease",
-        "&:hover": {
-          opacity: 0.8,
-        },
       }}
     >
       {number}
@@ -230,6 +116,16 @@ const RAGDonutChart = ({
     const largeArc = endAngle - startAngle > 180 ? 1 : 0;
     return `M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2}`;
   };
+
+  if (total === 0) {
+    return (
+      <Box sx={{ textAlign: "center", py: 4 }}>
+        <Typography sx={{ color: COLORS.textMuted, fontSize: "14px" }}>
+          No activities data available
+        </Typography>
+      </Box>
+    );
+  }
 
   const segments = [
     { value: data.red, color: "#EF4444" },
@@ -373,30 +269,122 @@ const StatCard = ({
   </Card>
 );
 
+// Format date as YYYY-MM-DD
+const formatDate = (dateStr: string) => {
+  if (!dateStr) return "-";
+
+  const months: { [key: string]: number } = {
+    Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
+    Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11,
+  };
+
+  const cleanDate = dateStr.replace(/\s*[A*]$/, "").trim();
+  const match = cleanDate.match(/(\d{2})-([A-Za-z]{3})-(\d{2})/);
+
+  if (match) {
+    const day = parseInt(match[1]);
+    const month = months[match[2]];
+    let year = parseInt(match[3]);
+    year = year < 50 ? 2000 + year : 1900 + year;
+    return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  }
+
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return "-";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+// Calculate RAG zone from dates
+const calculateRagZone = (startDate: string, endDate: string) => {
+  if (!startDate || !endDate) return { zone: "Week 1-2", color: COLORS.green };
+
+  const months: { [key: string]: number } = {
+    Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
+    Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11,
+  };
+
+  const parseDate = (dateStr: string): Date | null => {
+    const cleanDate = dateStr.replace(/\s*[A*]$/, "").trim();
+    const match = cleanDate.match(/(\d{2})-([A-Za-z]{3})-(\d{2})/);
+    if (match) {
+      const day = parseInt(match[1]);
+      const month = months[match[2]];
+      let year = parseInt(match[3]);
+      year = year < 50 ? 2000 + year : 1900 + year;
+      return new Date(year, month, day);
+    }
+    const date = new Date(dateStr);
+    return isNaN(date.getTime()) ? null : date;
+  };
+
+  const start = parseDate(startDate);
+  const end = parseDate(endDate);
+
+  if (!start || !end) return { zone: "Weeks 1-2", color: COLORS.green };
+
+  const diffTime = end.getTime() - start.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  const diffWeeks = Math.ceil(diffDays / 7);
+
+  if (diffWeeks <= 0) return { zone: "< 1 Week", color: COLORS.green };
+  if (diffWeeks <= 2) return { zone: "Weeks 1-2", color: COLORS.green };
+  if (diffWeeks <= 4) return { zone: "Weeks 3-4", color: COLORS.amber };
+  if (diffWeeks <= 6) return { zone: "Weeks 5-6", color: COLORS.red };
+  return { zone: `${diffWeeks} Weeks`, color: COLORS.red };
+};
+
+const getStatusColor = (status: string) => {
+  switch (status) {
+    case "Ready": return { bg: "rgba(34, 197, 94, 0.15)", text: COLORS.green };
+    case "At Risk": return { bg: "rgba(245, 158, 11, 0.15)", text: COLORS.amber };
+    case "Blocked": return { bg: "rgba(239, 68, 68, 0.15)", text: COLORS.red };
+    case "Complete": return { bg: "rgba(59, 130, 246, 0.15)", text: COLORS.blue };
+    default: return { bg: "rgba(142, 156, 177, 0.15)", text: COLORS.textSecondary };
+  }
+};
+
+const getIndicatorColor = (status: string) => {
+  switch (status) {
+    case "Ready": return COLORS.green;
+    case "At Risk": return COLORS.amber;
+    case "Blocked": return COLORS.red;
+    case "Complete": return COLORS.blue;
+    default: return COLORS.textMuted;
+  }
+};
+
 const ProjectWorkspace = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState(0);
-  const [currentStep, setCurrentStep] = useState(1);
+  const [currentStep] = useState(1);
   const [ragFilter, setRagFilter] = useState("all");
+  const [expandedActivityId, setExpandedActivityId] = useState<string | null>(null);
 
-  const project = projectsData[projectId || "1"];
-
-  const filteredActivities = activitiesData.filter((activity) => {
-    if (ragFilter === "all") return true;
-    return activity.ragColor === ragFilter;
+  // API data states
+  const [project, setProject] = useState<ProjectData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [summary, setSummary] = useState({
+    total: 0,
+    inLookahead: 0,
+    green: 0,
+    amber: 0,
+    red: 0,
+    blocked: 0,
   });
-
-  const greenCount = activitiesData.filter(
-    (a) => a.ragColor === "green",
-  ).length;
-  const amberCount = activitiesData.filter(
-    (a) => a.ragColor === "amber",
-  ).length;
-  const redCount = activitiesData.filter((a) => a.ragColor === "red").length;
-  const blockedCount = activitiesData.filter(
-    (a) => a.status === "Blocked",
-  ).length;
+  const [projectActions, setProjectActions] = useState<
+    Array<{
+      _id: string;
+      title: string;
+      linkedActivity: { activityId: string; activityName: string };
+      status: string;
+    }>
+  >([]);
 
   const steps = [
     "Draft",
@@ -406,11 +394,115 @@ const ProjectWorkspace = () => {
     "Closed",
   ];
 
-  const handleStepClick = (stepNumber: number) => {
-    if (stepNumber === currentStep && currentStep < steps.length) {
-      setCurrentStep(currentStep + 1);
-    }
+  // Fetch project data
+  useEffect(() => {
+    const fetchProject = async () => {
+      if (!projectId) return;
+      setIsLoading(true);
+      try {
+        const response = await projectAPI.getById(projectId);
+        if (response.success) {
+          setProject(response.project);
+        }
+      } catch (error) {
+        console.error("Failed to fetch project:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchProject();
+  }, [projectId]);
+
+  // Fetch programme/activities data and actions
+  useEffect(() => {
+    const fetchProgramme = async () => {
+      if (!projectId) return;
+      try {
+        const response = await programmeAPI.getByProject(projectId);
+        if (response.success && response.programme) {
+          const programme = response.programme;
+          const activitiesData = programme.extractedData?.activities || [];
+          const summaryData = programme.extractedData?.summary || {
+            total: 0,
+            inLookahead: 0,
+            green: 0,
+            amber: 0,
+            red: 0,
+            blocked: 0,
+          };
+
+          setActivities(activitiesData);
+          setSummary(summaryData);
+
+          // Fetch actions for this programme
+          try {
+            const actionsRes = await actionAPI.getByProgramme(programme._id);
+            if (actionsRes.success) {
+              setProjectActions(actionsRes.actions || []);
+            }
+          } catch (err) {
+            console.error("Failed to fetch actions:", err);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch programme:", error);
+      }
+    };
+    fetchProgramme();
+  }, [projectId]);
+
+  // Get actions count for a specific activity
+  const getActionsForActivity = (activityId: string) => {
+    return projectActions.filter(
+      (action) => action.linkedActivity?.activityId === activityId
+    );
   };
+
+  // Filter activities by status
+  const filteredActivities = activities.filter((activity) => {
+    if (ragFilter === "all") return true;
+    return activity.activityStatus === ragFilter;
+  });
+
+  // Count activities by status
+  const greenCount = activities.filter(
+    (a) => a.activityStatus === "Complete" || a.activityStatus === "Ready"
+  ).length;
+  const amberCount = activities.filter(
+    (a) => a.activityStatus === "At Risk"
+  ).length;
+  const redCount = activities.filter(
+    (a) => a.activityStatus === "Blocked"
+  ).length;
+
+  // Owner info
+  const ownerName = user?.name || "User";
+  const ownerInitials = ownerName
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+
+  if (isLoading) {
+    return (
+      <DashboardLayout
+        title="Project Workspace"
+        subtitle="Manage weekly control cycle"
+      >
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            py: 8,
+          }}
+        >
+          <CircularProgress sx={{ color: COLORS.blue }} />
+        </Box>
+      </DashboardLayout>
+    );
+  }
 
   if (!project) {
     return (
@@ -456,7 +548,14 @@ const ProjectWorkspace = () => {
             }}
           >
             <Box>
-              <Box sx={{ display: "flex", alignItems: "center", mb: 0.75, flexWrap: "wrap" }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  mb: 0.75,
+                  flexWrap: "wrap",
+                }}
+              >
                 <Typography
                   component="span"
                   sx={{
@@ -534,36 +633,8 @@ const ProjectWorkspace = () => {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {project.week} ({project.weekDates})
+                  Week 1 (Current Week)
                 </Typography>
-                <Box
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: { xs: "flex-start", md: "flex-end" },
-                  }}
-                >
-                  <Typography
-                    component="span"
-                    sx={{
-                      color: COLORS.border,
-                      fontSize: { xs: "11px", sm: "12px" },
-                      fontWeight: 400,
-                    }}
-                  >
-                    Planner:
-                  </Typography>
-                  <Typography
-                    component="span"
-                    sx={{
-                      color: COLORS.textLight,
-                      fontSize: { xs: "11px", sm: "12px" },
-                      fontWeight: 400,
-                    }}
-                  >
-                    &nbsp;{project.planner}
-                  </Typography>
-                </Box>
               </Box>
               <Box
                 sx={{
@@ -614,7 +685,6 @@ const ProjectWorkspace = () => {
                   label={step}
                   isActive={index + 1 === currentStep}
                   isCompleted={index + 1 < currentStep}
-                  onClick={() => handleStepClick(index + 1)}
                 />
                 {index < steps.length - 1 && (
                   <Box
@@ -686,22 +756,22 @@ const ProjectWorkspace = () => {
             >
               <StatCard
                 label="Activities in Lookahead"
-                value={project.activitiesInLookahead}
+                value={summary.inLookahead || activities.length}
               />
               <StatCard
-                label={`${project.activitiesInLookahead} Green & Ready`}
-                value={project.greenReady}
-                subLabel={`of ${project.totalGreen} green`}
+                label={`${greenCount} Green & Ready`}
+                value={greenCount}
+                subLabel={`of ${activities.length} total`}
                 valueColor={COLORS.green}
               />
               <StatCard
                 label="Open Actions"
-                value={project.openActions}
+                value={0}
                 valueColor={COLORS.amber}
               />
               <StatCard
                 label="Overdue Actions"
-                value={project.overdueActions}
+                value={0}
                 valueColor={COLORS.red}
               />
             </Box>
@@ -731,7 +801,13 @@ const ProjectWorkspace = () => {
                 >
                   RAG Distribution
                 </Typography>
-                <RAGDonutChart data={project.ragDistribution} />
+                <RAGDonutChart
+                  data={{
+                    green: summary.green || greenCount,
+                    amber: summary.amber || amberCount,
+                    red: summary.red || redCount,
+                  }}
+                />
               </Card>
 
               <Card
@@ -752,88 +828,17 @@ const ProjectWorkspace = () => {
                 >
                   Recent Cycle History
                 </Typography>
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                  {project.cycleHistory.map((cycle, index) => (
-                    <Box
-                      key={index}
-                      sx={{
-                        bgcolor: "#161F32",
-                        border: `1px solid ${COLORS.border}`,
-                        borderRadius: "7px",
-                        minHeight: 57,
-                        px: { xs: 1.5, sm: 2.5 },
-                        py: { xs: 1.5, sm: 0 },
-                        display: "grid",
-                        gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr 1fr" },
-                        alignItems: "center",
-                        gap: { xs: 1.5, sm: 0 },
-                      }}
-                    >
-                      <Box>
-                        <Typography
-                          sx={{
-                            color: "#fff",
-                            fontSize: "14px",
-                            fontWeight: 500,
-                            mb: 0,
-                            lineHeight: 1.2,
-                          }}
-                        >
-                          {cycle.week}
-                        </Typography>
-                        <Typography
-                          sx={{
-                            color: "#94A3B8",
-                            fontSize: "12px",
-                            fontWeight: 400,
-                          }}
-                        >
-                          {cycle.dates}
-                        </Typography>
-                      </Box>
-                      <Box
-                        sx={{
-                          display: "flex",
-                          justifyContent: { xs: "flex-start", sm: "center" },
-                        }}
-                      >
-                        <Box
-                          sx={{
-                            bgcolor:
-                              cycle.statusType === "green"
-                                ? `${COLORS.green}15`
-                                : `${COLORS.amber}15`,
-                            border: `1px solid ${
-                              cycle.statusType === "green"
-                                ? COLORS.green
-                                : COLORS.amber
-                            }`,
-                            color:
-                              cycle.statusType === "green"
-                                ? COLORS.green
-                                : COLORS.amber,
-                            px: { xs: 1.5, sm: 2.5 },
-                            py: 0.75,
-                            borderRadius: "20px",
-                            fontSize: "12px",
-                            fontWeight: 600,
-                          }}
-                        >
-                          {cycle.status}
-                        </Box>
-                      </Box>
-                      <Typography
-                        sx={{
-                          color: "#94A3B8",
-                          fontSize: "12px",
-                          fontWeight: 400,
-                          textAlign: { xs: "left", sm: "right" },
-                        }}
-                      >
-                        Score: {cycle.score}/100
-                      </Typography>
-                    </Box>
-                  ))}
+                <Box
+                  sx={{
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    py: 4,
+                  }}
+                >
+                  <Typography sx={{ color: COLORS.textMuted, fontSize: "14px" }}>
+                    No cycle history available
+                  </Typography>
                 </Box>
               </Card>
             </Box>
@@ -842,6 +847,7 @@ const ProjectWorkspace = () => {
 
         {activeTab === 1 && (
           <Box>
+            {/* Week Zones */}
             <Box
               sx={{
                 bgcolor: COLORS.bgSecondary,
@@ -858,42 +864,12 @@ const ProjectWorkspace = () => {
               }}
             >
               {[
-                {
-                  week: "Week 1",
-                  label: "Committed",
-                  color: COLORS.green,
-                  hasBg: false,
-                },
-                {
-                  week: "Week 2",
-                  label: "Committed",
-                  color: COLORS.green,
-                  hasBg: false,
-                },
-                {
-                  week: "Week 3",
-                  label: "Readiness",
-                  color: COLORS.amber,
-                  hasBg: true,
-                },
-                {
-                  week: "Week 4",
-                  label: "Readiness",
-                  color: COLORS.amber,
-                  hasBg: true,
-                },
-                {
-                  week: "Week 5",
-                  label: "Strategic",
-                  color: COLORS.red,
-                  hasBg: true,
-                },
-                {
-                  week: "Week 6",
-                  label: "Strategic",
-                  color: COLORS.red,
-                  hasBg: true,
-                },
+                { week: "Week 1", label: "Committed", color: COLORS.green },
+                { week: "Week 2", label: "Committed", color: COLORS.green },
+                { week: "Week 3", label: "Readiness", color: COLORS.amber },
+                { week: "Week 4", label: "Readiness", color: COLORS.amber },
+                { week: "Week 5", label: "Strategic", color: COLORS.red },
+                { week: "Week 6", label: "Strategic", color: COLORS.red },
               ].map((item, index) => (
                 <Box
                   key={index}
@@ -907,33 +883,36 @@ const ProjectWorkspace = () => {
                     flexDirection: "column",
                     alignItems: "center",
                     justifyContent: "center",
-                    bgcolor: item.hasBg ? `${item.color}10` : "transparent",
+                    bgcolor: item.label !== "Committed" ? `${item.color}10` : "transparent",
                   }}
                 >
-                  <Typography
-                    sx={{
-                      color: item.color,
-                      fontSize: "12px",
-                      fontWeight: 500,
-                    }}
-                  >
+                  <Typography sx={{ color: item.color, fontSize: "12px", fontWeight: 500 }}>
                     {item.week}
                   </Typography>
-                  <Typography
-                    sx={{ color: "#8E9CB1", fontSize: "12px", fontWeight: 400 }}
-                  >
+                  <Typography sx={{ color: "#8E9CB1", fontSize: "12px", fontWeight: 400 }}>
                     {item.label}
                   </Typography>
                 </Box>
               ))}
             </Box>
 
-            <Box sx={{ display: "flex", gap: 1, mb: 2 }}>
+            {/* Status Filters */}
+            <Box
+              sx={{
+                display: "flex",
+                gap: 1,
+                mb: 2,
+                overflowX: "auto",
+                pb: 1,
+                "&::-webkit-scrollbar": { display: "none" },
+              }}
+            >
               {[
                 { label: "All", value: "all" },
-                { label: "Green", value: "green" },
-                { label: "Amber", value: "amber" },
-                { label: "Red", value: "red" },
+                { label: "Blocked", value: "Blocked" },
+                { label: "Ready", value: "Ready" },
+                { label: "Complete", value: "Complete" },
+                { label: "At Risk", value: "At Risk" },
               ].map((filter) => (
                 <Box
                   key={filter.value}
@@ -945,23 +924,14 @@ const ProjectWorkspace = () => {
                     fontSize: "14px",
                     fontWeight: 500,
                     cursor: "pointer",
-                    bgcolor:
-                      ragFilter === filter.value
-                        ? COLORS.blueBgMedium
-                        : "transparent",
-                    color:
-                      ragFilter === filter.value
-                        ? COLORS.blue
-                        : COLORS.textSecondary,
-                    border: `1px solid ${
-                      ragFilter === filter.value ? COLORS.blue : COLORS.border
-                    }`,
+                    flexShrink: 0,
+                    whiteSpace: "nowrap",
+                    bgcolor: ragFilter === filter.value ? COLORS.blueBgMedium : "transparent",
+                    color: ragFilter === filter.value ? COLORS.blue : COLORS.textSecondary,
+                    border: `1px solid ${ragFilter === filter.value ? COLORS.blue : COLORS.border}`,
                     transition: "all 0.2s ease",
                     "&:hover": {
-                      bgcolor:
-                        ragFilter === filter.value
-                          ? COLORS.blueBgMedium
-                          : COLORS.whiteHoverLight,
+                      bgcolor: ragFilter === filter.value ? COLORS.blueBgMedium : COLORS.whiteHoverLight,
                     },
                   }}
                 >
@@ -970,16 +940,343 @@ const ProjectWorkspace = () => {
               ))}
             </Box>
 
-            <ActivitiesTable activities={filteredActivities} />
+            {/* Activities Table - Same as Admin */}
+            <Box
+              sx={{
+                overflowX: "auto",
+                mb: 2,
+                "&::-webkit-scrollbar": { height: 6 },
+                "&::-webkit-scrollbar-track": { bgcolor: "transparent" },
+                "&::-webkit-scrollbar-thumb": { bgcolor: COLORS.border, borderRadius: 3 },
+              }}
+            >
+              <Box
+                sx={{
+                  minWidth: 1100,
+                  bgcolor: COLORS.bgSecondary,
+                  border: `1px solid ${COLORS.border}`,
+                  borderRadius: "12px",
+                  overflow: "hidden",
+                }}
+              >
+                {/* Table Header */}
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: "4px 100px 1fr 95px 95px 70px 95px 60px 75px 120px",
+                    bgcolor: COLORS.bgTertiary,
+                    borderBottom: `1px solid ${COLORS.border}`,
+                    px: 2,
+                    py: 1.5,
+                    gap: 1,
+                  }}
+                >
+                  <Box />
+                  {["Activity ID", "Activity Name", "Start Date", "End Date", "Duration", "RAG Zone", "Actions", "Status", "Owner"].map((header, idx) => (
+                    <Typography
+                      key={header}
+                      sx={{
+                        fontSize: "11px",
+                        fontWeight: 600,
+                        color: COLORS.textSecondary,
+                        textTransform: "uppercase",
+                        textAlign: [2, 3, 4, 5, 6, 7, 8].includes(idx) ? "center" : "left",
+                      }}
+                    >
+                      {header}
+                    </Typography>
+                  ))}
+                </Box>
 
-            <ActivitiesSummary
-              totalActivities={activitiesData.length}
-              greenCount={greenCount}
-              amberCount={amberCount}
-              redCount={redCount}
-              blockedCount={blockedCount}
-              lastUpdated="25 Mar 2026, 09:15"
-            />
+                {/* Table Body */}
+                {filteredActivities.length === 0 ? (
+                  <Box sx={{ py: 4, textAlign: "center" }}>
+                    <Typography sx={{ color: COLORS.textMuted, fontSize: "14px" }}>
+                      {activities.length === 0 ? "No activities data available" : "No activities match the selected filter"}
+                    </Typography>
+                  </Box>
+                ) : (
+                  filteredActivities.map((activity, index) => {
+                    const statusColors = getStatusColor(activity.activityStatus || "Ready");
+                    const indicatorColor = getIndicatorColor(activity.activityStatus || "Ready");
+                    const ragZone = calculateRagZone(activity.startDate, activity.finishDate);
+                    const actionsForThisActivity = getActionsForActivity(activity.activityId);
+                    const isExpanded = expandedActivityId === activity.activityId;
+
+                    return (
+                      <Box key={activity.activityId || index}>
+                        <Box
+                          sx={{
+                            display: "grid",
+                            gridTemplateColumns: "4px 100px 1fr 95px 95px 70px 95px 60px 75px 120px",
+                            px: 2,
+                            py: 1.5,
+                            borderBottom: isExpanded ? "none" : `1px solid ${COLORS.border}`,
+                            alignItems: "center",
+                            gap: 1,
+                            "&:hover": { bgcolor: COLORS.whiteHoverLight },
+                            position: "relative",
+                            cursor: actionsForThisActivity.length > 0 ? "pointer" : "default",
+                          }}
+                          onClick={() => {
+                            if (actionsForThisActivity.length > 0) {
+                              setExpandedActivityId(isExpanded ? null : activity.activityId);
+                            }
+                          }}
+                        >
+                          {/* Status Indicator */}
+                          <Box
+                            sx={{
+                              position: "absolute",
+                              left: 0,
+                              top: 0,
+                              bottom: 0,
+                              width: "2px",
+                              bgcolor: indicatorColor,
+                            }}
+                          />
+                          <Box />
+
+                          {/* Activity ID */}
+                          <Typography sx={{ fontSize: "12px", color: COLORS.blue, fontWeight: 500 }}>
+                            {activity.activityId}
+                          </Typography>
+
+                          {/* Activity Name */}
+                          <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5 }}>
+                            {actionsForThisActivity.length > 0 && (
+                              isExpanded ? (
+                                <ArrowDownIcon sx={{ fontSize: 16, color: COLORS.textSecondary, mt: 0.2, flexShrink: 0 }} />
+                              ) : (
+                                <ArrowRightIcon sx={{ fontSize: 16, color: COLORS.textSecondary, mt: 0.2, flexShrink: 0 }} />
+                              )
+                            )}
+                            <Typography sx={{ fontSize: "12px", color: COLORS.textPrimary, wordBreak: "break-word", lineHeight: 1.5 }}>
+                              {activity.activityName || activity.activityId}
+                            </Typography>
+                          </Box>
+
+                          {/* Start Date */}
+                          <Typography sx={{ fontSize: "12px", color: COLORS.textSecondary, textAlign: "center" }}>
+                            {formatDate(activity.startDate)}
+                          </Typography>
+
+                          {/* End Date */}
+                          <Typography sx={{ fontSize: "12px", color: COLORS.textSecondary, textAlign: "center" }}>
+                            {formatDate(activity.finishDate)}
+                          </Typography>
+
+                          {/* Duration */}
+                          <Typography sx={{ fontSize: "12px", color: COLORS.textSecondary, textAlign: "center" }}>
+                            {activity.duration || "-"}
+                          </Typography>
+
+                          {/* RAG Zone */}
+                          <Box
+                            sx={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              gap: 0.75,
+                              px: 1,
+                              py: 0.4,
+                              borderRadius: "14px",
+                              border: `1px solid ${ragZone.color}40`,
+                              bgcolor: `${ragZone.color}15`,
+                              width: "100%",
+                              maxWidth: "fit-content",
+                              mx: "auto",
+                            }}
+                          >
+                            <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: ragZone.color, flexShrink: 0 }} />
+                            <Typography sx={{ fontSize: "10px", fontWeight: 500, color: ragZone.color, whiteSpace: "nowrap" }}>
+                              {ragZone.zone}
+                            </Typography>
+                          </Box>
+
+                          {/* Actions */}
+                          {actionsForThisActivity.length > 0 ? (
+                            <Typography
+                              sx={{
+                                fontSize: "12px",
+                                color: COLORS.blue,
+                                textAlign: "center",
+                              }}
+                            >
+                              {actionsForThisActivity.length} action{actionsForThisActivity.length !== 1 ? "s" : ""}
+                            </Typography>
+                          ) : (
+                            <Typography sx={{ fontSize: "12px", color: COLORS.textSecondary, textAlign: "center" }}>
+                              -
+                            </Typography>
+                          )}
+
+                          {/* Status */}
+                          <Box sx={{ display: "flex", justifyContent: "center" }}>
+                            <Box
+                              sx={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                px: 1.5,
+                                py: 0.5,
+                                borderRadius: "14px",
+                                bgcolor: statusColors.bg,
+                              }}
+                            >
+                              <Typography sx={{ fontSize: "11px", fontWeight: 500, color: statusColors.text, whiteSpace: "nowrap" }}>
+                                {activity.activityStatus || "Ready"}
+                              </Typography>
+                            </Box>
+                          </Box>
+
+                          {/* Owner */}
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 1, justifyContent: "center" }}>
+                            <Avatar
+                              sx={{
+                                width: 26,
+                                height: 26,
+                                bgcolor: COLORS.blue,
+                                fontSize: "11px",
+                                fontWeight: 600,
+                              }}
+                            >
+                              {ownerInitials}
+                            </Avatar>
+                            <Typography sx={{ fontSize: "12px", color: COLORS.textSecondary }}>
+                              {ownerName.split(" ")[0]}
+                            </Typography>
+                          </Box>
+                        </Box>
+
+                        {/* Expanded section for linked actions */}
+                        {isExpanded && actionsForThisActivity.length > 0 && (
+                          <Box
+                            sx={{
+                              bgcolor: COLORS.bgTertiary,
+                              borderBottom: `1px solid ${COLORS.border}`,
+                              px: 3,
+                              py: 2,
+                            }}
+                          >
+                            <Box
+                              sx={{
+                                display: "grid",
+                                gridTemplateColumns: "1fr 1fr 1fr",
+                                gap: 4,
+                              }}
+                            >
+                              {/* Linked Actions */}
+                              <Box>
+                                <Typography
+                                  sx={{
+                                    fontSize: "10px",
+                                    fontWeight: 600,
+                                    color: COLORS.textMuted,
+                                    textTransform: "uppercase",
+                                    letterSpacing: "0.5px",
+                                    mb: 1.5,
+                                  }}
+                                >
+                                  Linked Actions
+                                </Typography>
+                                <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75 }}>
+                                  {actionsForThisActivity.map((action) => (
+                                    <Box
+                                      key={action._id}
+                                      sx={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: 0.5,
+                                      }}
+                                    >
+                                      <ChevronRight sx={{ fontSize: 16, color: COLORS.blue }} />
+                                      <Typography sx={{ fontSize: "12px", color: COLORS.textPrimary }}>
+                                        {action.title}
+                                      </Typography>
+                                    </Box>
+                                  ))}
+                                </Box>
+                              </Box>
+
+                              {/* Dependencies */}
+                              <Box>
+                                <Typography
+                                  sx={{
+                                    fontSize: "10px",
+                                    fontWeight: 600,
+                                    color: COLORS.textMuted,
+                                    textTransform: "uppercase",
+                                    letterSpacing: "0.5px",
+                                    mb: 1.5,
+                                  }}
+                                >
+                                  Dependencies
+                                </Typography>
+                                <Typography sx={{ fontSize: "12px", color: COLORS.textSecondary }}>
+                                  -
+                                </Typography>
+                              </Box>
+
+                              {/* Notes */}
+                              <Box>
+                                <Typography
+                                  sx={{
+                                    fontSize: "10px",
+                                    fontWeight: 600,
+                                    color: COLORS.textMuted,
+                                    textTransform: "uppercase",
+                                    letterSpacing: "0.5px",
+                                    mb: 1.5,
+                                  }}
+                                >
+                                  Notes
+                                </Typography>
+                                <Typography sx={{ fontSize: "12px", color: COLORS.textSecondary }}>
+                                  -
+                                </Typography>
+                              </Box>
+                            </Box>
+                          </Box>
+                        )}
+                      </Box>
+                    );
+                  })
+                )}
+              </Box>
+            </Box>
+
+            {/* Summary */}
+            {activities.length > 0 && (
+              <Box
+                sx={{
+                  bgcolor: COLORS.bgSecondary,
+                  border: `1px solid ${COLORS.border}`,
+                  borderRadius: "12px",
+                  p: 2,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: 2,
+                }}
+              >
+                <Typography sx={{ color: COLORS.textSecondary, fontSize: "13px" }}>
+                  Total: {activities.length} activities
+                </Typography>
+                <Box sx={{ display: "flex", gap: 3 }}>
+                  <Typography sx={{ color: COLORS.green, fontSize: "13px" }}>
+                    Green: {summary.green || greenCount}
+                  </Typography>
+                  <Typography sx={{ color: COLORS.amber, fontSize: "13px" }}>
+                    Amber: {summary.amber || amberCount}
+                  </Typography>
+                  <Typography sx={{ color: COLORS.red, fontSize: "13px" }}>
+                    Red: {summary.red || redCount}
+                  </Typography>
+                </Box>
+              </Box>
+            )}
           </Box>
         )}
       </Box>

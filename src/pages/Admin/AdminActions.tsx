@@ -26,6 +26,7 @@ import {
   Close as CloseIcon,
   KeyboardArrowDown as ArrowDownIcon,
   AccessTime as TimeIcon,
+  CalendarToday as CalendarIcon,
 } from "@mui/icons-material";
 import AdminLayout from "../../layouts/AdminLayout";
 import { COLORS } from "../../constants/colors";
@@ -33,7 +34,12 @@ import actionIcon from "../../assets/sidebar/action.png";
 import editIcon from "../../assets/tabler_edit.png";
 import frameIcon from "../../assets/Frame.png";
 import uploadIcon from "../../assets/sidebar/upload.png";
-import { projectAPI, programmeAPI, userAPI, actionAPI } from "../../services/api";
+import {
+  projectAPI,
+  programmeAPI,
+  userAPI,
+  actionAPI,
+} from "../../services/api";
 
 interface Action {
   _id: string;
@@ -188,13 +194,14 @@ const AdminActions = () => {
     const fetchData = async () => {
       setActionsLoading(true);
       try {
-        const [projectsRes, usersRes, actionsRes, programmesRes, statsRes] = await Promise.all([
-          projectAPI.getAll(),
-          userAPI.getAll({ status: "active" }),
-          actionAPI.getAll(),
-          programmeAPI.getAll(),
-          actionAPI.getStats(),
-        ]);
+        const [projectsRes, usersRes, actionsRes, programmesRes, statsRes] =
+          await Promise.all([
+            projectAPI.getAll(),
+            userAPI.getAll({ status: "active" }),
+            actionAPI.getAll(),
+            programmeAPI.getAll(),
+            actionAPI.getStats(),
+          ]);
 
         if (projectsRes.success && projectsRes.projects) {
           setProjects(projectsRes.projects);
@@ -285,7 +292,8 @@ const AdminActions = () => {
 
   const filteredActions = actions.filter((action) => {
     // Check for overdue status
-    const isOverdue = action.status !== "Completed" &&
+    const isOverdue =
+      action.status !== "Completed" &&
       action.status !== "Cancelled" &&
       new Date(action.dueDate) < new Date();
     const displayStatus = isOverdue ? "overdue" : action.status.toLowerCase();
@@ -293,7 +301,8 @@ const AdminActions = () => {
     const matchesStatus =
       statusFilter === "all" ||
       displayStatus === statusFilter.toLowerCase() ||
-      (statusFilter.toLowerCase() === "closed" && action.status === "Completed");
+      (statusFilter.toLowerCase() === "closed" &&
+        action.status === "Completed");
     const matchesType =
       typeFilter === "all" ||
       action.type.toLowerCase() === typeFilter.toLowerCase();
@@ -301,7 +310,9 @@ const AdminActions = () => {
       searchQuery === "" ||
       action.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       action._id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      action.linkedActivity?.activityId?.toLowerCase().includes(searchQuery.toLowerCase());
+      action.linkedActivity?.activityId
+        ?.toLowerCase()
+        .includes(searchQuery.toLowerCase());
     return matchesStatus && matchesType && matchesSearch;
   });
 
@@ -332,10 +343,12 @@ const AdminActions = () => {
     setEditingAction(action);
     // Check if assignee is a valid user ID, otherwise reset it
     const assigneeId = action.assignee?._id || "";
-    const validAssignee = users.find((u) => u._id === assigneeId) ? assigneeId : "";
+    const validAssignee = users.find((u) => u._id === assigneeId)
+      ? assigneeId
+      : "";
 
     // Find the project ID from the action's programme
-    const programme = programmes.find(p => p._id === action.programme?._id);
+    const programme = programmes.find((p) => p._id === action.programme?._id);
     const projectId = programme?.project || "";
 
     setFormData({
@@ -354,7 +367,11 @@ const AdminActions = () => {
     if (projectId) {
       setActivitiesLoading(true);
       try {
-        const response = await programmeAPI.getActivitiesByProject(projectId, 1, 10);
+        const response = await programmeAPI.getActivitiesByProject(
+          projectId,
+          1,
+          10,
+        );
         if (response.success) {
           setActivities(response.activities || []);
           setActivitiesPagination({
@@ -465,7 +482,12 @@ const AdminActions = () => {
 
   const handleSaveAction = async () => {
     // Validate required fields
-    if (!formData.title.trim() || !formData.assignee || !formData.dueDate || !formData.selectedProject) {
+    if (
+      !formData.title.trim() ||
+      !formData.assignee ||
+      !formData.dueDate ||
+      !formData.selectedProject
+    ) {
       alert("Please fill in all required fields");
       return;
     }
@@ -479,7 +501,9 @@ const AdminActions = () => {
         const programmeId = getProgrammeIdForProject(formData.selectedProject);
 
         if (!programmeId) {
-          alert("No programme found for this project. Please upload a programme first.");
+          alert(
+            "No programme found for this project. Please upload a programme first.",
+          );
           setSaveLoading(false);
           return;
         }
@@ -494,7 +518,10 @@ const AdminActions = () => {
         const selectedActivity = activities.find(
           (a) => a.activityId === formData.linkedActivity,
         );
-        const activityName = selectedActivity?.activityName || editingAction.linkedActivity?.activityName || "Unknown activity";
+        const activityName =
+          selectedActivity?.activityName ||
+          editingAction.linkedActivity?.activityName ||
+          "Unknown activity";
 
         const response = await actionAPI.update(editingAction._id, {
           programmeId,
@@ -523,7 +550,9 @@ const AdminActions = () => {
         const programmeId = getProgrammeIdForProject(formData.selectedProject);
 
         if (!programmeId) {
-          alert("No programme found for this project. Please upload a programme first.");
+          alert(
+            "No programme found for this project. Please upload a programme first.",
+          );
           setSaveLoading(false);
           return;
         }
@@ -538,7 +567,8 @@ const AdminActions = () => {
         const selectedActivityForCreate = activities.find(
           (a) => a.activityId === formData.linkedActivity,
         );
-        const activityNameForCreate = selectedActivityForCreate?.activityName || "Unknown activity";
+        const activityNameForCreate =
+          selectedActivityForCreate?.activityName || "Unknown activity";
 
         const response = await actionAPI.create({
           programmeId,
@@ -604,12 +634,14 @@ const AdminActions = () => {
             borderRadius: "8px",
             fontSize: "14px",
             fontWeight: 500,
-            minWidth: "auto",
+            minWidth: { xs: "44px", sm: "auto" },
+            justifyContent: "center",
             "&:hover": {
               bgcolor: COLORS.blueHover,
             },
             "& .MuiButton-startIcon": {
               mr: { xs: 0, sm: 1 },
+              ml: { xs: 0, sm: 0 },
             },
           }}
         >
@@ -1119,180 +1151,208 @@ const AdminActions = () => {
                 }}
               >
                 <Typography sx={{ color: COLORS.textMuted, fontSize: "14px" }}>
-                  No actions available rn
+                  No actions available
                 </Typography>
               </Box>
             ) : null}
-            {!actionsLoading && filteredActions.map((action, index) => {
-              const isOverdue = action.status !== "Completed" &&
-                action.status !== "Cancelled" &&
-                new Date(action.dueDate) < new Date();
-              const displayStatus = isOverdue ? "Overdue" : action.status;
-              const statusColor = isOverdue ? COLORS.red :
-                action.status === "Completed" ? COLORS.green : COLORS.blue;
+            {!actionsLoading &&
+              filteredActions.map((action, index) => {
+                const isOverdue =
+                  action.status !== "Completed" &&
+                  action.status !== "Cancelled" &&
+                  new Date(action.dueDate) < new Date();
+                const displayStatus = isOverdue ? "Overdue" : action.status;
+                const statusColor = isOverdue
+                  ? COLORS.red
+                  : action.status === "Completed"
+                    ? COLORS.green
+                    : COLORS.blue;
 
-              return (
-                <Box
-                  key={`${action._id}-${index}`}
-                  sx={{
-                    display: "grid",
-                    gridTemplateColumns:
-                      "minmax(90px, 0.8fr) minmax(180px, 2fr) minmax(120px, 1fr) minmax(80px, 0.7fr) minmax(130px, 1.2fr) minmax(100px, 1fr) minmax(70px, 0.7fr) minmax(80px, 0.8fr) minmax(70px, 0.6fr)",
-                    gap: 2,
-                    px: 3,
-                    py: 2,
-                    width: "100%",
-                    boxSizing: "border-box",
-                    borderBottom: `1px solid ${COLORS.border}`,
-                    alignItems: "center",
-                    "&:hover": { bgcolor: COLORS.bgTertiary },
-                    "&:last-child": { borderBottom: "none" },
-                  }}
-                >
-                  <Typography sx={{ color: COLORS.blue, fontSize: "13px" }}>
-                    {action._id.slice(-6).toUpperCase()}
-                  </Typography>
-
-                  <Typography
-                    sx={{
-                      color: COLORS.textPrimary,
-                      fontSize: "13px",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {action.title}
-                  </Typography>
-
-                  <Typography sx={{ color: COLORS.blue, fontSize: "13px" }}>
-                    {action.linkedActivity?.activityId || "-"}
-                  </Typography>
-
+                return (
                   <Box
+                    key={`${action._id}-${index}`}
                     sx={{
-                      bgcolor: action.type === "Optional"
-                        ? "rgba(34, 197, 94, 0.15)"
-                        : "rgba(239, 68, 68, 0.15)",
-                      color: action.type === "Optional"
-                        ? COLORS.green
-                        : COLORS.red,
-                      px: 1.5,
-                      py: 0.5,
-                      borderRadius: "6px",
-                      fontSize: "12px",
-                      fontWeight: 500,
-                      textAlign: "center",
-                      width: "fit-content",
+                      display: "grid",
+                      gridTemplateColumns:
+                        "minmax(90px, 0.8fr) minmax(180px, 2fr) minmax(120px, 1fr) minmax(80px, 0.7fr) minmax(130px, 1.2fr) minmax(100px, 1fr) minmax(70px, 0.7fr) minmax(80px, 0.8fr) minmax(70px, 0.6fr)",
+                      gap: 2,
+                      px: 3,
+                      py: 2,
+                      width: "100%",
+                      boxSizing: "border-box",
+                      borderBottom: `1px solid ${COLORS.border}`,
+                      alignItems: "center",
+                      "&:hover": { bgcolor: COLORS.bgTertiary },
+                      "&:last-child": { borderBottom: "none" },
                     }}
                   >
-                    {action.type}
-                  </Box>
+                    <Typography sx={{ color: COLORS.blue, fontSize: "13px" }}>
+                      {action._id.slice(-6).toUpperCase()}
+                    </Typography>
 
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    <Box
+                    <Typography
                       sx={{
-                        width: 28,
-                        height: 28,
-                        borderRadius: "50%",
-                        bgcolor: "#1E3A5F",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
+                        color: COLORS.textPrimary,
+                        fontSize: "13px",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
                       }}
                     >
-                      <Typography
+                      {action.title}
+                    </Typography>
+
+                    <Typography sx={{ color: COLORS.blue, fontSize: "13px" }}>
+                      {action.linkedActivity?.activityId || "-"}
+                    </Typography>
+
+                    <Box
+                      sx={{
+                        bgcolor:
+                          action.type === "Optional"
+                            ? "rgba(34, 197, 94, 0.15)"
+                            : "rgba(239, 68, 68, 0.15)",
+                        color:
+                          action.type === "Optional"
+                            ? COLORS.green
+                            : COLORS.red,
+                        px: 1.5,
+                        py: 0.5,
+                        borderRadius: "6px",
+                        fontSize: "12px",
+                        fontWeight: 500,
+                        textAlign: "center",
+                        width: "fit-content",
+                      }}
+                    >
+                      {action.type}
+                    </Box>
+
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <Box
                         sx={{
-                          color: COLORS.blue,
-                          fontSize: "10px",
-                          fontWeight: 600,
+                          width: 28,
+                          height: 28,
+                          borderRadius: "50%",
+                          bgcolor: "#1E3A5F",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
                         }}
                       >
-                        {action.assignee?.name ? getInitials(action.assignee.name) : "??"}
+                        <Typography
+                          sx={{
+                            color: COLORS.blue,
+                            fontSize: "10px",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {action.assignee?.name
+                            ? getInitials(action.assignee.name)
+                            : "??"}
+                        </Typography>
+                      </Box>
+                      <Typography
+                        sx={{ color: COLORS.textSecondary, fontSize: "12px" }}
+                      >
+                        {action.assignee?.name || "Unassigned"}
                       </Typography>
                     </Box>
+
                     <Typography
-                      sx={{ color: COLORS.textSecondary, fontSize: "12px" }}
+                      sx={{ color: COLORS.textSecondary, fontSize: "13px" }}
                     >
-                      {action.assignee?.name || "Unassigned"}
+                      {action.dueDate
+                        ? new Date(action.dueDate).toLocaleDateString()
+                        : "-"}
                     </Typography>
-                  </Box>
 
-                  <Typography
-                    sx={{ color: COLORS.textSecondary, fontSize: "13px" }}
-                  >
-                    {action.dueDate ? new Date(action.dueDate).toLocaleDateString() : "-"}
-                  </Typography>
-
-                  <Box
-                    sx={{
-                      bgcolor: `${statusColor}20`,
-                      color: statusColor,
-                      px: 1.5,
-                      py: 0.5,
-                      borderRadius: "6px",
-                      fontSize: "12px",
-                      fontWeight: 500,
-                      textAlign: "center",
-                      width: "fit-content",
-                    }}
-                  >
-                    {displayStatus}
-                  </Box>
-
-                  <Box
-                    sx={{
-                      bgcolor: `${getPriorityColor(action.priority)}20`,
-                      color: getPriorityColor(action.priority),
-                      px: 1.5,
-                      py: 0.5,
-                      borderRadius: "6px",
-                      fontSize: "12px",
-                      fontWeight: 500,
-                      textAlign: "center",
-                      width: "fit-content",
-                    }}
-                  >
-                    {action.priority}
-                  </Box>
-
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                     <Box
-                      component="img"
-                      src={editIcon}
-                      onClick={() => action.status !== "Completed" && handleOpenEditModal(action)}
                       sx={{
-                        width: 18,
-                        height: 18,
-                        cursor: action.status === "Completed" ? "not-allowed" : "pointer",
-                        opacity: action.status === "Completed" ? 0.3 : 0.6,
-                        "&:hover": { opacity: action.status === "Completed" ? 0.3 : 1 },
+                        bgcolor: `${statusColor}20`,
+                        color: statusColor,
+                        px: 1.5,
+                        py: 0.5,
+                        borderRadius: "6px",
+                        fontSize: "12px",
+                        fontWeight: 500,
+                        textAlign: "center",
+                        width: "fit-content",
                       }}
-                    />
+                    >
+                      {displayStatus}
+                    </Box>
+
                     <Box
-                      component="img"
-                      src={frameIcon}
-                      onClick={() => action.status !== "Completed" ? handleOpenCompleteConfirm(action) : null}
                       sx={{
-                        width: 18,
-                        height: 18,
-                        cursor: action.status === "Completed" ? "default" : "pointer",
-                        opacity: action.status === "Completed" ? 1 : 0.6,
-                        filter: action.status === "Completed"
-                          ? "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(5323%) hue-rotate(107deg) brightness(92%) contrast(88%)"
-                          : "none",
-                        "&:hover": {
-                          opacity: 1,
-                          filter: action.status !== "Completed"
-                            ? "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(5323%) hue-rotate(107deg) brightness(92%) contrast(88%)"
-                            : "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(5323%) hue-rotate(107deg) brightness(92%) contrast(88%)",
-                        },
+                        bgcolor: `${getPriorityColor(action.priority)}20`,
+                        color: getPriorityColor(action.priority),
+                        px: 1.5,
+                        py: 0.5,
+                        borderRadius: "6px",
+                        fontSize: "12px",
+                        fontWeight: 500,
+                        textAlign: "center",
+                        width: "fit-content",
                       }}
-                    />
+                    >
+                      {action.priority}
+                    </Box>
+
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <Box
+                        component="img"
+                        src={editIcon}
+                        onClick={() =>
+                          action.status !== "Completed" &&
+                          handleOpenEditModal(action)
+                        }
+                        sx={{
+                          width: 18,
+                          height: 18,
+                          cursor:
+                            action.status === "Completed"
+                              ? "not-allowed"
+                              : "pointer",
+                          opacity: action.status === "Completed" ? 0.3 : 0.6,
+                          "&:hover": {
+                            opacity: action.status === "Completed" ? 0.3 : 1,
+                          },
+                        }}
+                      />
+                      <Box
+                        component="img"
+                        src={frameIcon}
+                        onClick={() =>
+                          action.status !== "Completed"
+                            ? handleOpenCompleteConfirm(action)
+                            : null
+                        }
+                        sx={{
+                          width: 18,
+                          height: 18,
+                          cursor:
+                            action.status === "Completed"
+                              ? "default"
+                              : "pointer",
+                          opacity: action.status === "Completed" ? 1 : 0.6,
+                          filter:
+                            action.status === "Completed"
+                              ? "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(5323%) hue-rotate(107deg) brightness(92%) contrast(88%)"
+                              : "none",
+                          "&:hover": {
+                            opacity: 1,
+                            filter:
+                              action.status !== "Completed"
+                                ? "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(5323%) hue-rotate(107deg) brightness(92%) contrast(88%)"
+                                : "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(5323%) hue-rotate(107deg) brightness(92%) contrast(88%)",
+                          },
+                        }}
+                      />
+                    </Box>
                   </Box>
-                </Box>
-              );
-            })}
+                );
+              })}
           </Box>
         </Box>
       </Box>
@@ -1831,8 +1891,8 @@ const AdminActions = () => {
             <Box
               sx={{
                 display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: 2,
+                gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+                gap: { xs: 0, sm: 2 },
               }}
             >
               <Box>
@@ -1985,8 +2045,8 @@ const AdminActions = () => {
             <Box
               sx={{
                 display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: 2,
+                gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+                gap: { xs: 0, sm: 2 },
               }}
             >
               <Box>
@@ -2091,6 +2151,25 @@ const AdminActions = () => {
                   onChange={(e) =>
                     setFormData({ ...formData, dueDate: e.target.value })
                   }
+                  slotProps={{
+                    input: {
+                      endAdornment: (
+                        <InputAdornment
+                          position="end"
+                          sx={{ cursor: "pointer" }}
+                          onClick={(e) => {
+                            const input = (e.currentTarget.parentElement?.querySelector('input') as HTMLInputElement);
+                            if (input) {
+                              input.showPicker?.();
+                              input.focus();
+                            }
+                          }}
+                        >
+                          <CalendarIcon sx={{ color: COLORS.textSecondary, fontSize: 20 }} />
+                        </InputAdornment>
+                      ),
+                    },
+                  }}
                   sx={{
                     "& .MuiOutlinedInput-root": {
                       bgcolor: COLORS.bgPrimary,
@@ -2112,10 +2191,19 @@ const AdminActions = () => {
                         : COLORS.textMuted,
                       fontSize: "14px",
                       py: 1.2,
+                      clipPath: "inset(0 40px 0 0)",
+                      "&::-webkit-date-and-time-value": {
+                        textAlign: "left",
+                      },
                       "&::-webkit-calendar-picker-indicator": {
-                        filter: "invert(1)",
-                        cursor: "pointer",
-                        opacity: 0.6,
+                        display: "none",
+                        WebkitAppearance: "none",
+                      },
+                      "&::-webkit-inner-spin-button": {
+                        display: "none",
+                      },
+                      "&::-webkit-clear-button": {
+                        display: "none",
                       },
                     },
                   }}
@@ -2123,12 +2211,12 @@ const AdminActions = () => {
               </Box>
             </Box>
 
-            {/* Status and Priority row - only show Status when editing */}
+            {/* Status row - only show when editing */}
             <Box
               sx={{
                 display: "grid",
-                gridTemplateColumns: editingAction ? "1fr 1fr" : "1fr",
-                gap: 2,
+                gridTemplateColumns: editingAction ? { xs: "1fr", sm: "1fr 1fr" } : "1fr",
+                gap: { xs: 0, sm: 2 },
               }}
             >
               {editingAction && (
@@ -2216,6 +2304,7 @@ const AdminActions = () => {
             py: 2,
             borderTop: `1px solid ${COLORS.white}`,
             gap: 1.5,
+            flexDirection: { xs: "column-reverse", sm: "row" },
           }}
         >
           <Button
@@ -2230,6 +2319,7 @@ const AdminActions = () => {
               py: 1,
               fontSize: "14px",
               fontWeight: 400,
+              width: { xs: "100%", sm: "auto" },
               "&:hover": {
                 bgcolor: COLORS.bgTertiary,
               },
@@ -2249,6 +2339,7 @@ const AdminActions = () => {
               py: 1,
               fontSize: "14px",
               fontWeight: 500,
+              width: { xs: "100%", sm: "auto" },
               "&:hover": {
                 bgcolor: COLORS.blueHover,
               },
@@ -2360,12 +2451,14 @@ const AdminActions = () => {
                   </Typography>
                   <Box
                     sx={{
-                      bgcolor: viewingAction.type === "Optional"
-                        ? "rgba(34, 197, 94, 0.15)"
-                        : "rgba(239, 68, 68, 0.15)",
-                      color: viewingAction.type === "Optional"
-                        ? COLORS.green
-                        : COLORS.red,
+                      bgcolor:
+                        viewingAction.type === "Optional"
+                          ? "rgba(34, 197, 94, 0.15)"
+                          : "rgba(239, 68, 68, 0.15)",
+                      color:
+                        viewingAction.type === "Optional"
+                          ? COLORS.green
+                          : COLORS.red,
                       px: 1.5,
                       py: 0.5,
                       borderRadius: "4px",
@@ -2445,7 +2538,9 @@ const AdminActions = () => {
                           fontWeight: 600,
                         }}
                       >
-                        {viewingAction.assignee?.name ? getInitials(viewingAction.assignee.name) : "??"}
+                        {viewingAction.assignee?.name
+                          ? getInitials(viewingAction.assignee.name)
+                          : "??"}
                       </Typography>
                     </Box>
                     <Typography
@@ -2474,7 +2569,9 @@ const AdminActions = () => {
                       fontWeight: 500,
                     }}
                   >
-                    {viewingAction.dueDate ? new Date(viewingAction.dueDate).toLocaleDateString() : "-"}
+                    {viewingAction.dueDate
+                      ? new Date(viewingAction.dueDate).toLocaleDateString()
+                      : "-"}
                   </Typography>
                 </Box>
               </Box>
@@ -2513,7 +2610,11 @@ const AdminActions = () => {
                     {viewingAction.linkedActivity?.activityId || "-"}
                   </Typography>
                   <Typography
-                    sx={{ color: COLORS.textSecondary, fontSize: "13px", ml: 1 }}
+                    sx={{
+                      color: COLORS.textSecondary,
+                      fontSize: "13px",
+                      ml: 1,
+                    }}
                   >
                     {viewingAction.linkedActivity?.activityName || ""}
                   </Typography>
@@ -2611,7 +2712,12 @@ const AdminActions = () => {
                       <Typography
                         sx={{ color: COLORS.textMuted, fontSize: "14px" }}
                       >
-                        {viewingAction.createdAt ? new Date(viewingAction.createdAt).toLocaleDateString() : "-"} · {viewingAction.createdBy?.name || "System"}
+                        {viewingAction.createdAt
+                          ? new Date(
+                              viewingAction.createdAt,
+                            ).toLocaleDateString()
+                          : "-"}{" "}
+                        · {viewingAction.createdBy?.name || "System"}
                       </Typography>
                     </Box>
                   </Box>
@@ -2841,7 +2947,8 @@ const AdminActions = () => {
                 sx={{
                   width: 28,
                   height: 28,
-                  filter: "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(5323%) hue-rotate(107deg) brightness(92%) contrast(88%)",
+                  filter:
+                    "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(5323%) hue-rotate(107deg) brightness(92%) contrast(88%)",
                 }}
               />
             </Box>

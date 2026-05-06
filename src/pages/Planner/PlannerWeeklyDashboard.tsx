@@ -613,7 +613,7 @@ const PlannerWeeklyDashboard = () => {
               textAlign: "center",
             }}
           >
-            READY FOR COLOSE
+            READY FOR CLOSE
           </Typography>
           <Typography
             sx={{

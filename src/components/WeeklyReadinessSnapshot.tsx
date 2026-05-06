@@ -1,23 +1,19 @@
 import { Box, Card, Typography, Chip } from "@mui/material";
 import { COLORS } from "../constants/colors";
 
-const DonutChart = () => {
-  const data = [
-    {
-      label: "Green — On Track",
-      value: 24,
-      percentage: 48,
-      color: COLORS.green,
-    },
-    {
-      label: "Amber — At Risk",
-      value: 18,
-      percentage: 36,
-      color: COLORS.amber,
-    },
-    { label: "Red — Critical", value: 8, percentage: 16, color: COLORS.red },
-  ];
+interface RagData {
+  label: string;
+  value: number;
+  percentage: number;
+  color: string;
+}
 
+interface DonutChartProps {
+  data: RagData[];
+  onTrackPercentage: number;
+}
+
+const DonutChart = ({ data, onTrackPercentage }: DonutChartProps) => {
   const radius = 40;
   const strokeWidth = 12;
   const gapAngle = 1.5;
@@ -34,13 +30,17 @@ const DonutChart = () => {
   };
 
   let currentAngle = 0;
-  const arcs = data.map((item) => {
-    const startAngle = currentAngle + gapAngle / 2;
-    const sweepAngle = (item.percentage / 100) * 360 - gapAngle;
-    const endAngle = startAngle + sweepAngle;
+  const arcs: Array<typeof data[0] & { path: string }> = [];
+
+  for (const item of data) {
+    if (item.percentage > 0) {
+      const startAngle = currentAngle + gapAngle / 2;
+      const sweepAngle = (item.percentage / 100) * 360 - gapAngle;
+      const endAngle = startAngle + sweepAngle;
+      arcs.push({ ...item, path: createArc(startAngle, endAngle) });
+    }
     currentAngle += (item.percentage / 100) * 360;
-    return { ...item, path: createArc(startAngle, endAngle) };
-  });
+  }
 
   return (
     <Box>
@@ -73,7 +73,7 @@ const DonutChart = () => {
               fontWeight: 700,
             }}
           >
-            48%
+            {onTrackPercentage}%
           </Typography>
           <Typography sx={{ color: COLORS.textSecondary, fontSize: "0.9rem" }}>
             On Track
@@ -138,7 +138,50 @@ const DonutChart = () => {
   );
 };
 
-const WeeklyReadinessSnapshot = () => {
+interface WeeklyReadinessSnapshotProps {
+  weekLabel?: string;
+  totalActivities?: number;
+  distribution?: {
+    green: { count: number; percentage: number };
+    amber: { count: number; percentage: number };
+    red: { count: number; percentage: number };
+  };
+}
+
+const WeeklyReadinessSnapshot = ({
+  weekLabel = "Current Week",
+  totalActivities = 0,
+  distribution,
+}: WeeklyReadinessSnapshotProps) => {
+  const data: RagData[] = distribution
+    ? [
+        {
+          label: "Green — On Track",
+          value: distribution.green.count,
+          percentage: distribution.green.percentage,
+          color: COLORS.green,
+        },
+        {
+          label: "Amber — At Risk",
+          value: distribution.amber.count,
+          percentage: distribution.amber.percentage,
+          color: COLORS.amber,
+        },
+        {
+          label: "Red — Critical",
+          value: distribution.red.count,
+          percentage: distribution.red.percentage,
+          color: COLORS.red,
+        },
+      ]
+    : [
+        { label: "Green — On Track", value: 0, percentage: 0, color: COLORS.green },
+        { label: "Amber — At Risk", value: 0, percentage: 0, color: COLORS.amber },
+        { label: "Red — Critical", value: 0, percentage: 0, color: COLORS.red },
+      ];
+
+  const onTrackPercentage = distribution?.green.percentage || 0;
+
   return (
     <Card
       sx={{
@@ -174,11 +217,11 @@ const WeeklyReadinessSnapshot = () => {
               fontWeight: 400,
             }}
           >
-            Week 47 RAG distribution
+            {weekLabel} RAG distribution
           </Typography>
         </Box>
         <Chip
-          label="50 activities"
+          label={`${totalActivities} activities`}
           size="small"
           sx={{
             bgcolor: COLORS.bgPrimary,
@@ -191,7 +234,7 @@ const WeeklyReadinessSnapshot = () => {
           }}
         />
       </Box>
-      <DonutChart />
+      <DonutChart data={data} onTrackPercentage={onTrackPercentage} />
     </Card>
   );
 };

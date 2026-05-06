@@ -1,6 +1,8 @@
-import { Box, Typography } from "@mui/material";
+import { useState, useEffect } from "react";
+import { Box, Typography, CircularProgress } from "@mui/material";
 import AdminLayout from "../../layouts/AdminLayout";
 import { COLORS } from "../../constants/colors";
+import { dashboardAPI } from "../../services/api";
 import BlockedActivitiesTable from "../../components/BlockedActivitiesTable";
 import ClosureOverridePanel from "../../components/ClosureOverridePanel";
 import {
@@ -23,6 +25,58 @@ const activitiesByWeekData = [
   { week: "Wk 23", green: 25, amber: 14, red: 8 },
   { week: "Wk 24", green: 24, amber: 17, red: 9 },
 ];
+
+interface WeeklyData {
+  project: { name: string } | null;
+  cycle: {
+    weekNumber: string;
+    weekDates: string;
+    status: string;
+    weekOpened: string;
+    closeDeadline: string;
+    planner: string;
+  } | null;
+  stats: {
+    activitiesInLookahead: number;
+    greenActivities: number;
+    greenPercentage: number;
+    blockedByActions: number;
+    openActions: number;
+    overdueActions: number;
+    readyForClose: boolean;
+  };
+  ragDistribution: { green: number; amber: number; red: number };
+  actionsByStatus: { open: number; closed: number; overdue: number };
+  blockedActivities: Array<{
+    id: string;
+    name: string;
+    rag: "Red" | "Amber";
+    owner: string;
+    blocker: string;
+    linkedAction: string;
+    status: "Open" | "Overdue";
+  }>;
+  weeklyPlanPreview: Array<{
+    activityId: string;
+    activityName: string;
+    weekZone: string;
+    startDate: string;
+    finishDate: string;
+    duration: string;
+    ragStatus: string;
+    owner: string;
+    activityStatus: string;
+  }>;
+  plannerToDo: Array<{
+    activityId: string;
+    activityName: string;
+    ragStatus: string;
+    owner: string;
+    todoItem: string;
+    priority: string;
+    dueDate: string;
+  }>;
+}
 
 const CustomLegend = ({
   items,
@@ -70,6 +124,111 @@ const CustomLegend = ({
 
 const AdminWeeklyDashboard = () => {
   const amberColor = "#F59E0B";
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<WeeklyData | null>(null);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const response = await dashboardAPI.getWeeklyDashboard();
+        if (response.success) {
+          setData(response.weekly);
+        }
+      } catch (error) {
+        console.error("Error fetching weekly dashboard:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
+  // Calculate RAG percentages
+  const ragTotal =
+    (data?.ragDistribution?.green || 0) +
+    (data?.ragDistribution?.amber || 0) +
+    (data?.ragDistribution?.red || 0);
+  const greenPct =
+    ragTotal > 0
+      ? Math.round(((data?.ragDistribution?.green || 0) / ragTotal) * 100)
+      : 0;
+  const amberPct =
+    ragTotal > 0
+      ? Math.round(((data?.ragDistribution?.amber || 0) / ragTotal) * 100)
+      : 0;
+  const redPct =
+    ragTotal > 0
+      ? Math.round(((data?.ragDistribution?.red || 0) / ragTotal) * 100)
+      : 0;
+
+  // Determine weekly RAG status
+  const getWeeklyRag = () => {
+    if (ragTotal === 0)
+      return {
+        color: COLORS.textSecondary,
+        label: "N/A",
+        bgcolor: "rgba(150, 150, 150, 0.15)",
+      };
+    if (redPct > 30)
+      return {
+        color: COLORS.red,
+        label: "Red",
+        bgcolor: "rgba(239, 68, 68, 0.15)",
+      };
+    if (greenPct >= 70)
+      return {
+        color: COLORS.green,
+        label: "Green",
+        bgcolor: "rgba(34, 197, 94, 0.15)",
+      };
+    return {
+      color: amberColor,
+      label: "Amber",
+      bgcolor: "rgba(245, 158, 11, 0.15)",
+    };
+  };
+  const weeklyRag = getWeeklyRag();
+
+  // Get cycle status color
+  const getCycleStatusColor = (status: string) => {
+    switch (status) {
+      case "Draft":
+        return COLORS.textSecondary;
+      case "In Review":
+        return COLORS.amber;
+      case "Approved":
+        return COLORS.green;
+      case "Closed":
+        return COLORS.blue;
+      default:
+        return COLORS.blue;
+    }
+  };
+
+  const cycleStatus = data?.cycle?.status || "Draft";
+  const cycleStatusColor = getCycleStatusColor(cycleStatus);
+  const cycleStatusBg = `${cycleStatusColor}15`;
+
+  if (loading) {
+    return (
+      <AdminLayout
+        title="Weekly Dashboard"
+        subtitle="Live operational control for the current cycle"
+      >
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            height: "50vh",
+          }}
+        >
+          <CircularProgress sx={{ color: COLORS.blue }} />
+        </Box>
+      </AdminLayout>
+    );
+  }
 
   return (
     <AdminLayout
@@ -114,7 +273,7 @@ const AdminWeeklyDashboard = () => {
                 fontWeight: 500,
               }}
             >
-              Crossrail Phase 2
+              {data?.project?.name || "No Project"}
             </Typography>
           </Box>
 
@@ -137,12 +296,12 @@ const AdminWeeklyDashboard = () => {
                 fontWeight: 500,
               }}
             >
-              Week 24{" "}
+              {data?.cycle?.weekNumber || "N/A"}{" "}
               <Typography
                 component="span"
                 sx={{ color: COLORS.textSecondary, fontSize: "14px" }}
               >
-                (17-23 Mar 2026)
+                {data?.cycle?.weekDates || ""}
               </Typography>
             </Typography>
           </Box>
@@ -168,7 +327,7 @@ const AdminWeeklyDashboard = () => {
                 px: 2,
                 py: 0.75,
                 width: "fit-content",
-                bgcolor: "rgba(59, 130, 246, 0.15)",
+                bgcolor: cycleStatusBg,
               }}
             >
               <Box
@@ -176,17 +335,17 @@ const AdminWeeklyDashboard = () => {
                   width: 8,
                   height: 8,
                   borderRadius: "50%",
-                  bgcolor: COLORS.blue,
+                  bgcolor: cycleStatusColor,
                 }}
               />
               <Typography
                 sx={{
-                  color: COLORS.blue,
+                  color: cycleStatusColor,
                   fontSize: "13px",
                   fontWeight: 500,
                 }}
               >
-                Execution
+                {cycleStatus}
               </Typography>
             </Box>
           </Box>
@@ -212,7 +371,7 @@ const AdminWeeklyDashboard = () => {
                 px: 2,
                 py: 0.75,
                 width: "fit-content",
-                bgcolor: "rgba(245, 158, 11, 0.15)",
+                bgcolor: weeklyRag.bgcolor,
               }}
             >
               <Box
@@ -220,17 +379,17 @@ const AdminWeeklyDashboard = () => {
                   width: 8,
                   height: 8,
                   borderRadius: "50%",
-                  bgcolor: amberColor,
+                  bgcolor: weeklyRag.color,
                 }}
               />
               <Typography
                 sx={{
-                  color: amberColor,
+                  color: weeklyRag.color,
                   fontSize: "13px",
                   fontWeight: 500,
                 }}
               >
-                Amber
+                {weeklyRag.label}
               </Typography>
             </Box>
           </Box>
@@ -254,7 +413,7 @@ const AdminWeeklyDashboard = () => {
                 fontWeight: 500,
               }}
             >
-              17 Mar 2026
+              {data?.cycle?.weekOpened || "-"}
             </Typography>
           </Box>
 
@@ -277,7 +436,7 @@ const AdminWeeklyDashboard = () => {
                 fontWeight: 500,
               }}
             >
-              23 Mar 2026
+              {data?.cycle?.closeDeadline || "-"}
             </Typography>
           </Box>
 
@@ -300,7 +459,7 @@ const AdminWeeklyDashboard = () => {
                 fontWeight: 500,
               }}
             >
-              Kamran R.
+              {data?.cycle?.planner || "-"}
             </Typography>
           </Box>
         </Box>
@@ -403,7 +562,7 @@ const AdminWeeklyDashboard = () => {
               mb: 0.5,
             }}
           >
-            50
+            {data?.stats?.activitiesInLookahead || 0}
           </Typography>
           <Typography
             sx={{
@@ -447,7 +606,7 @@ const AdminWeeklyDashboard = () => {
               mb: 0.5,
             }}
           >
-            24
+            {data?.stats?.greenActivities || 0}
           </Typography>
           <Typography
             sx={{
@@ -455,7 +614,7 @@ const AdminWeeklyDashboard = () => {
               fontSize: "12px",
             }}
           >
-            48% on track
+            {greenPct}% on track
           </Typography>
         </Box>
 
@@ -491,7 +650,7 @@ const AdminWeeklyDashboard = () => {
               mb: 0.5,
             }}
           >
-            8
+            {data?.stats?.blockedByActions || 0}
           </Typography>
           <Typography
             sx={{
@@ -535,7 +694,7 @@ const AdminWeeklyDashboard = () => {
               mb: 0.5,
             }}
           >
-            14
+            {data?.stats?.openActions || 0}
           </Typography>
           <Typography
             sx={{
@@ -579,7 +738,7 @@ const AdminWeeklyDashboard = () => {
               mb: 0.5,
             }}
           >
-            3
+            {data?.stats?.overdueActions || 0}
           </Typography>
           <Typography
             sx={{
@@ -613,17 +772,17 @@ const AdminWeeklyDashboard = () => {
               textAlign: "center",
             }}
           >
-            READY FOR COLOSE
+            READY FOR CLOSE
           </Typography>
           <Typography
             sx={{
-              color: COLORS.red,
+              color: data?.stats?.readyForClose ? COLORS.green : COLORS.red,
               fontSize: "32px",
               fontWeight: 700,
               mb: 0.5,
             }}
           >
-            No
+            {data?.stats?.readyForClose ? "Yes" : "No"}
           </Typography>
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
             <Box
@@ -631,16 +790,16 @@ const AdminWeeklyDashboard = () => {
                 width: 8,
                 height: 8,
                 borderRadius: "50%",
-                bgcolor: COLORS.red,
+                bgcolor: data?.stats?.readyForClose ? COLORS.green : COLORS.red,
               }}
             />
             <Typography
               sx={{
-                color: COLORS.red,
+                color: data?.stats?.readyForClose ? COLORS.green : COLORS.red,
                 fontSize: "12px",
               }}
             >
-              Blockers remain
+              {data?.stats?.readyForClose ? "All clear" : "Blockers remain"}
             </Typography>
           </Box>
         </Box>
@@ -765,10 +924,18 @@ const AdminWeeklyDashboard = () => {
               <PieChart>
                 <Pie
                   data={[
-                    { name: "Green", value: 48, color: COLORS.green },
-                    { name: "Amber", value: 32, color: COLORS.amber },
-                    { name: "Red", value: 20, color: COLORS.red },
-                  ]}
+                    {
+                      name: "Green",
+                      value: greenPct || 0,
+                      color: COLORS.green,
+                    },
+                    {
+                      name: "Amber",
+                      value: amberPct || 0,
+                      color: COLORS.amber,
+                    },
+                    { name: "Red", value: redPct || 0, color: COLORS.red },
+                  ].filter((item) => item.value > 0)}
                   cx="50%"
                   cy="50%"
                   innerRadius="70%"
@@ -779,9 +946,9 @@ const AdminWeeklyDashboard = () => {
                   endAngle={-270}
                   stroke="none"
                 >
-                  <Cell fill={COLORS.green} />
-                  <Cell fill={COLORS.amber} />
-                  <Cell fill={COLORS.red} />
+                  {greenPct > 0 && <Cell fill={COLORS.green} />}
+                  {amberPct > 0 && <Cell fill={COLORS.amber} />}
+                  {redPct > 0 && <Cell fill={COLORS.red} />}
                 </Pie>
               </PieChart>
             </ResponsiveContainer>
@@ -817,9 +984,12 @@ const AdminWeeklyDashboard = () => {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={[
-                  { name: "Open", value: 14 },
-                  { name: "Closed", value: 28 },
-                  { name: "Overdue", value: 3 },
+                  { name: "Open", value: data?.actionsByStatus?.open || 0 },
+                  { name: "Closed", value: data?.actionsByStatus?.closed || 0 },
+                  {
+                    name: "Overdue",
+                    value: data?.actionsByStatus?.overdue || 0,
+                  },
                 ]}
                 barCategoryGap="40%"
               >

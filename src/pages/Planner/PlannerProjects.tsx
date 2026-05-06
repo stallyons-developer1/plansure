@@ -14,6 +14,7 @@ import {
   DialogContent,
   DialogActions,
   IconButton,
+  CircularProgress,
 } from "@mui/material";
 import {
   Search as SearchIcon,
@@ -22,61 +23,26 @@ import {
   Add as AddIcon,
   Close as CloseIcon,
 } from "@mui/icons-material";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import PlannerLayout from "../../layouts/PlannerLayout";
 import { COLORS } from "../../constants/colors";
+import { projectAPI } from "../../services/api";
 import activitiesIcon from "../../assets/activities.png";
 import openActionsIcon from "../../assets/sidebar/activitiesClipboard.png";
 import governanceScoreIcon from "../../assets/governancescore.png";
 
 interface Project {
-  id: number;
+  _id: string;
   name: string;
   status: string;
   phase: string;
-  governanceScore: number;
-  governanceStatus: string;
-  activities: number;
-  openActions: number;
-  progress: number;
+  description?: string;
+  startDate: string;
+  endDate?: string;
+  governanceScore?: number;
+  createdAt: string;
 }
-
-const initialProjectsData: Project[] = [
-  {
-    id: 1,
-    name: "Crossrail Phase 2",
-    status: "Active",
-    phase: "Construction phase-Week 24",
-    governanceScore: 78,
-    governanceStatus: "green",
-    activities: 50,
-    openActions: 14,
-    progress: 62,
-  },
-  {
-    id: 2,
-    name: "HS2 Northern Section",
-    status: "On Hold",
-    phase: "Design phase-Week 12",
-    governanceScore: 78,
-    governanceStatus: "amber",
-    activities: 50,
-    openActions: 14,
-    progress: 62,
-  },
-  {
-    id: 3,
-    name: "Thames Tideway",
-    status: "Active",
-    phase: "Pre-construction phase-Week 8",
-    governanceScore: 78,
-    governanceStatus: "green",
-    activities: 50,
-    openActions: 14,
-    progress: 62,
-  },
-];
 
 const GovernanceScoreIcon = ({ color }: { color: string }) => {
   const getFilter = () => {
@@ -168,9 +134,10 @@ const ProjectCard = ({
   project: Project;
   onViewDashboard: () => void;
 }) => {
-  const statusColor = project.status === "Active" ? COLORS.green : COLORS.amber;
-  const governanceColor =
-    project.governanceStatus === "green" ? COLORS.green : COLORS.amber;
+  const statusColor = project.status.toLowerCase() === "active" ? COLORS.green : COLORS.amber;
+  const governanceScore = project.governanceScore || 0;
+  const governanceColor = governanceScore >= 70 ? COLORS.green : COLORS.amber;
+  const governanceStatus = governanceScore >= 70 ? "green" : "amber";
 
   return (
     <Card
@@ -273,7 +240,7 @@ const ProjectCard = ({
                 fontWeight: 700,
               }}
             >
-              {project.governanceScore}
+              {governanceScore}
             </Typography>
             <Box
               sx={{
@@ -286,7 +253,7 @@ const ProjectCard = ({
                 fontWeight: 700,
               }}
             >
-              {project.governanceStatus.toUpperCase()}
+              {governanceStatus.toUpperCase()}
             </Box>
           </Box>
         </Box>
@@ -319,7 +286,7 @@ const ProjectCard = ({
                 fontWeight: 700,
               }}
             >
-              {project.activities}
+              0
             </Typography>
             <Typography
               sx={{
@@ -351,7 +318,7 @@ const ProjectCard = ({
                 fontWeight: 700,
               }}
             >
-              {project.openActions}
+              0
             </Typography>
             <Typography
               sx={{
@@ -391,12 +358,12 @@ const ProjectCard = ({
               fontWeight: 400,
             }}
           >
-            {project.progress}%
+            0%
           </Typography>
         </Box>
         <LinearProgress
           variant="determinate"
-          value={project.progress}
+          value={0}
           sx={{
             height: 6,
             borderRadius: 3,
@@ -462,7 +429,8 @@ const ProjectCard = ({
 
 const PlannerProjects = () => {
   const navigate = useNavigate();
-  const [projects, setProjects] = useState<Project[]>(initialProjectsData);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [newProjectModalOpen, setNewProjectModalOpen] = useState(false);
@@ -470,6 +438,25 @@ const PlannerProjects = () => {
   const [phase, setPhase] = useState("");
   const [description, setDescription] = useState("");
   const [startDate, setStartDate] = useState("");
+
+  // Fetch projects on mount
+  useEffect(() => {
+    fetchProjects();
+  }, []);
+
+  const fetchProjects = async () => {
+    setIsLoading(true);
+    try {
+      const response = await projectAPI.getAll();
+      if (response.success) {
+        setProjects(response.projects);
+      }
+    } catch (error) {
+      console.error("Failed to fetch projects:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const filteredProjects = projects.filter((project) => {
     const matchesSearch =
@@ -493,23 +480,24 @@ const PlannerProjects = () => {
     setStartDate("");
   };
 
-  const handleCreateProject = () => {
+  const handleCreateProject = async () => {
     if (!projectName || !phase || !startDate) return;
 
-    const newProject: Project = {
-      id: projects.length + 1,
-      name: projectName,
-      status: "Active",
-      phase: `${phase.charAt(0).toUpperCase() + phase.slice(1)} phase-Week 1`,
-      governanceScore: 0,
-      governanceStatus: "green",
-      activities: 0,
-      openActions: 0,
-      progress: 0,
-    };
+    try {
+      const response = await projectAPI.create({
+        name: projectName,
+        phase,
+        startDate,
+        description: description || undefined,
+      });
 
-    setProjects([...projects, newProject]);
-    handleCloseModal();
+      if (response.success) {
+        setProjects([response.project, ...projects]);
+        handleCloseModal();
+      }
+    } catch (error) {
+      console.error("Failed to create project:", error);
+    }
   };
 
   const newProjectButton = (
@@ -670,25 +658,51 @@ const PlannerProjects = () => {
         </Box>
       </Box>
 
-      <Box
-        sx={{
-          display: "grid",
-          gridTemplateColumns: {
-            xs: "1fr",
-            md: "repeat(2, 1fr)",
-            lg: "repeat(3, 1fr)",
-          },
-          gap: 3,
-        }}
-      >
-        {filteredProjects.map((project) => (
-          <ProjectCard
-            key={project.id}
-            project={project}
-            onViewDashboard={() => navigate(`/planner/projects/${project.id}`)}
-          />
-        ))}
-      </Box>
+      {isLoading ? (
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            py: 8,
+          }}
+        >
+          <CircularProgress sx={{ color: COLORS.blue }} />
+        </Box>
+      ) : filteredProjects.length === 0 ? (
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            py: 8,
+          }}
+        >
+          <Typography sx={{ color: COLORS.textMuted, fontSize: "14px" }}>
+            No projects available
+          </Typography>
+        </Box>
+      ) : (
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: {
+              xs: "1fr",
+              md: "repeat(2, 1fr)",
+              lg: "repeat(3, 1fr)",
+            },
+            gap: 3,
+          }}
+        >
+          {filteredProjects.map((project) => (
+            <ProjectCard
+              key={project._id}
+              project={project}
+              onViewDashboard={() => navigate(`/planner/projects/${project._id}`)}
+            />
+          ))}
+        </Box>
+      )}
 
       <Dialog
         open={newProjectModalOpen}

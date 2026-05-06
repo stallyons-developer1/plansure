@@ -184,10 +184,27 @@ export const programmeAPI = {
     return response.data;
   },
 
+  // Transition cycle status (one step forward at a time)
+  // Valid transitions: Uploaded → Meeting Open → Execution → Close-Out Eligible → Closed
   updateCycleStatus: async (id: string, cycleStatus: string) => {
     const response = await api.patch(`/programmes/${id}/cycle-status`, {
       cycleStatus,
     });
+    return response.data;
+  },
+
+  // PM Override - force close with reason (skips to Closed)
+  pmOverride: async (id: string, overrideReason: string) => {
+    const response = await api.patch(`/programmes/${id}/cycle-status`, {
+      cycleStatus: "Closed",
+      overrideReason,
+    });
+    return response.data;
+  },
+
+  // Check if programme is eligible for close-out
+  getCloseEligibility: async (id: string) => {
+    const response = await api.get(`/programmes/${id}/close-eligibility`);
     return response.data;
   },
 
@@ -206,6 +223,18 @@ export const programmeAPI = {
 
   delete: async (id: string) => {
     const response = await api.delete(`/programmes/${id}`);
+    return response.data;
+  },
+
+  // Recalculate RAG for all programmes
+  recalculateAllRAG: async () => {
+    const response = await api.post("/programmes/recalculate-rag");
+    return response.data;
+  },
+
+  // Recalculate RAG for a specific programme
+  recalculateRAG: async (id: string) => {
+    const response = await api.post(`/programmes/${id}/recalculate-rag`);
     return response.data;
   },
 
@@ -349,9 +378,39 @@ export const actionAPI = {
     return response.data;
   },
 
+  getByProgramme: async (programmeId: string) => {
+    const response = await api.get(`/actions/programme/${programmeId}`);
+    return response.data;
+  },
+
   getStats: async (programmeId?: string) => {
     const params = programmeId ? `?programmeId=${programmeId}` : "";
     const response = await api.get(`/actions/stats/summary${params}`);
+    return response.data;
+  },
+};
+
+// Dashboard API calls
+export const dashboardAPI = {
+  getStats: async () => {
+    const response = await api.get("/dashboard/stats");
+    return response.data;
+  },
+
+  getRagDistribution: async (programmeId?: string) => {
+    const params = programmeId ? `?programmeId=${programmeId}` : "";
+    const response = await api.get(`/dashboard/rag-distribution${params}`);
+    return response.data;
+  },
+
+  getRecentActivity: async (limit: number = 10) => {
+    const response = await api.get(`/dashboard/recent-activity?limit=${limit}`);
+    return response.data;
+  },
+
+  getWeeklyDashboard: async (projectId?: string) => {
+    const params = projectId ? `?projectId=${projectId}` : "";
+    const response = await api.get(`/dashboard/weekly${params}`);
     return response.data;
   },
 };

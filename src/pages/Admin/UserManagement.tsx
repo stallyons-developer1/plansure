@@ -478,7 +478,6 @@ const UserManagement = () => {
           bgcolor: COLORS.bgSecondary,
           border: `1px solid ${COLORS.border}`,
           borderRadius: "12px",
-          overflow: "hidden",
         }}
       >
         <Box
@@ -564,18 +563,37 @@ const UserManagement = () => {
           </Box>
         </Box>
 
-        <Box sx={{ overflowX: "auto" }}>
-          <Box sx={{ minWidth: 900 }}>
+        <Box
+          sx={{
+            overflowX: "auto",
+            "&::-webkit-scrollbar": {
+              height: 6,
+            },
+            "&::-webkit-scrollbar-track": {
+              bgcolor: "transparent",
+            },
+            "&::-webkit-scrollbar-thumb": {
+              bgcolor: COLORS.border,
+              borderRadius: 3,
+            },
+          }}
+        >
+          <Box
+            sx={{
+              minWidth: 1100,
+              bgcolor: COLORS.bgSecondary,
+              borderRadius: "0 0 12px 12px",
+            }}
+          >
             <Box
               sx={{
                 display: "grid",
                 gridTemplateColumns:
-                  "1.5fr 1.5fr 0.8fr 1.2fr 0.8fr 1.2fr 0.8fr",
+                  "140px 1fr 100px 140px 100px 130px 100px",
                 gap: 2,
                 px: 3,
                 py: 2,
                 borderBottom: `1px solid ${COLORS.border}`,
-                bgcolor: COLORS.bgSecondary,
               }}
             >
               <Typography
@@ -650,19 +668,32 @@ const UserManagement = () => {
               </Typography>
             </Box>
 
-            {filteredUsers.map((user) => (
+            {filteredUsers.length === 0 ? (
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  py: 8,
+                }}
+              >
+                <Typography sx={{ color: COLORS.textMuted, fontSize: "14px" }}>
+                  No users available
+                </Typography>
+              </Box>
+            ) : (
+              filteredUsers.map((user) => (
               <Box
                 key={user._id}
                 sx={{
                   display: "grid",
                   gridTemplateColumns:
-                    "1.5fr 1.5fr 0.8fr 1.2fr 0.8fr 1.2fr 0.8fr",
+                    "140px 1fr 100px 140px 100px 130px 100px",
                   gap: 2,
                   px: 3,
                   py: 2,
                   borderBottom: `1px solid ${COLORS.border}`,
                   alignItems: "center",
-                  bgcolor: COLORS.bgSecondary,
                   "&:hover": {
                     bgcolor: "#1E293B",
                   },
@@ -705,7 +736,11 @@ const UserManagement = () => {
                 </Box>
 
                 <Typography
-                  sx={{ color: COLORS.textSecondary, fontSize: "14px" }}
+                  sx={{
+                    color: COLORS.textSecondary,
+                    fontSize: "14px",
+                    textAlign: "center",
+                  }}
                 >
                   {user.email}
                 </Typography>
@@ -807,7 +842,8 @@ const UserManagement = () => {
                   />
                 </Box>
               </Box>
-            ))}
+            ))
+            )}
           </Box>
         </Box>
       </Box>

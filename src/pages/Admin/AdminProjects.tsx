@@ -23,6 +23,7 @@ import {
   BarChart as BarChartIcon,
   Add as AddIcon,
   Close as CloseIcon,
+  CalendarToday as CalendarIcon,
 } from "@mui/icons-material";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
@@ -546,12 +547,14 @@ const AdminProjects = () => {
         borderRadius: "8px",
         fontSize: "14px",
         fontWeight: 500,
-        minWidth: "auto",
+        minWidth: { xs: "44px", sm: "auto" },
+        justifyContent: "center",
         "&:hover": {
           bgcolor: COLORS.blueHover,
         },
         "& .MuiButton-startIcon": {
           mr: { xs: 0, sm: 1 },
+          ml: { xs: 0, sm: 0 },
         },
       }}
     >
@@ -1065,19 +1068,36 @@ const AdminProjects = () => {
                   htmlInput: {
                     min: new Date().toISOString().split("T")[0],
                   },
+                  input: {
+                    endAdornment: (
+                      <InputAdornment
+                        position="end"
+                        sx={{ cursor: "pointer" }}
+                        onClick={(e) => {
+                          const input = (e.currentTarget.parentElement?.querySelector('input') as HTMLInputElement);
+                          if (input) {
+                            input.showPicker?.();
+                            input.focus();
+                          }
+                        }}
+                      >
+                        <CalendarIcon sx={{ color: COLORS.textSecondary, fontSize: 20 }} />
+                      </InputAdornment>
+                    ),
+                  },
                 }}
                 sx={{
                   "& .MuiOutlinedInput-root": {
                     bgcolor: COLORS.bgPrimary,
                     borderRadius: "8px",
                     "& fieldset": {
-                      borderColor: fieldErrors.startDate ? COLORS.red : COLORS.white,
+                      borderColor: fieldErrors.startDate ? COLORS.red : COLORS.border,
                     },
                     "&:hover fieldset": {
-                      borderColor: fieldErrors.startDate ? COLORS.red : COLORS.white,
+                      borderColor: fieldErrors.startDate ? COLORS.red : COLORS.border,
                     },
                     "&.Mui-focused fieldset": {
-                      borderColor: fieldErrors.startDate ? COLORS.red : COLORS.white,
+                      borderColor: fieldErrors.startDate ? COLORS.red : COLORS.border,
                       borderWidth: 1,
                     },
                   },
@@ -1085,10 +1105,19 @@ const AdminProjects = () => {
                     color: startDate ? COLORS.textPrimary : COLORS.textMuted,
                     fontSize: "14px",
                     py: 1.2,
+                    clipPath: "inset(0 40px 0 0)",
+                    "&::-webkit-date-and-time-value": {
+                      textAlign: "left",
+                    },
                     "&::-webkit-calendar-picker-indicator": {
-                      filter: "invert(1)",
-                      cursor: "pointer",
-                      opacity: 0.6,
+                      display: "none",
+                      WebkitAppearance: "none",
+                    },
+                    "&::-webkit-inner-spin-button": {
+                      display: "none",
+                    },
+                    "&::-webkit-clear-button": {
+                      display: "none",
                     },
                   },
                   "& .MuiFormHelperText-root": {

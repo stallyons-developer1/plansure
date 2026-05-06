@@ -14,11 +14,13 @@ import {
   MenuItem,
   IconButton,
   CircularProgress,
+  Skeleton,
 } from "@mui/material";
 import {
   Close as CloseIcon,
   KeyboardArrowDown as ArrowDownIcon,
   KeyboardArrowRight as ArrowRightIcon,
+  Refresh as RefreshIcon,
 } from "@mui/icons-material";
 import editIcon from "../../assets/tabler_edit.png";
 import viewIcon from "../../assets/Frame.png";
@@ -29,7 +31,12 @@ import { useParams, useNavigate } from "react-router-dom";
 import AdminLayout from "../../layouts/AdminLayout";
 import { COLORS } from "../../constants/colors";
 import ProjectHeader from "../../components/ProjectHeader";
-import { projectAPI, programmeAPI, actionAPI, userAPI } from "../../services/api";
+import {
+  projectAPI,
+  programmeAPI,
+  actionAPI,
+  userAPI,
+} from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import StatCard from "../../components/StatCard";
 import RAGDonutChart from "../../components/RAGDonutChart";
@@ -76,6 +83,68 @@ const steps = [
   "Close-Out Eligible",
   "Closed",
 ];
+
+// Parse date string (handles DD-Mon-YY format like "09-Jun-22 A")
+const parseDate = (dateStr: string): Date | null => {
+  if (!dateStr) return null;
+
+  const months: { [key: string]: number } = {
+    Jan: 0,
+    Feb: 1,
+    Mar: 2,
+    Apr: 3,
+    May: 4,
+    Jun: 5,
+    Jul: 6,
+    Aug: 7,
+    Sep: 8,
+    Oct: 9,
+    Nov: 10,
+    Dec: 11,
+  };
+
+  // Remove suffixes like " A" or "*"
+  const cleanDate = dateStr.replace(/\s*[A*]$/, "").trim();
+  const match = cleanDate.match(/(\d{2})-([A-Za-z]{3})-(\d{2})/);
+
+  if (match) {
+    const day = parseInt(match[1]);
+    const month = months[match[2]];
+    let year = parseInt(match[3]);
+    year = year < 50 ? 2000 + year : 1900 + year;
+    return new Date(year, month, day);
+  }
+
+  // Fallback to standard Date parsing
+  const date = new Date(dateStr);
+  return isNaN(date.getTime()) ? null : date;
+};
+
+// Calculate RAG zone color from dates
+const getRAGColor = (startDate: string, endDate: string): string => {
+  if (!startDate || !endDate) return "green";
+
+  const start = parseDate(startDate);
+  const end = parseDate(endDate);
+
+  if (!start || !end) return "green";
+
+  const diffTime = end.getTime() - start.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  const diffWeeks = Math.ceil(diffDays / 7);
+
+  if (diffWeeks <= 0) return "green";
+  if (diffWeeks <= 2) return "green";
+  if (diffWeeks <= 4) return "amber";
+  return "red";
+};
+
+// Sort priority: Green (1) -> Amber (2) -> Red (3)
+const getRAGPriority = (color: string): number => {
+  if (color === "green") return 1;
+  if (color === "amber") return 2;
+  return 3;
+};
 
 interface ActionItem {
   id: string;
@@ -126,6 +195,8 @@ const AdminProjectWorkspace = () => {
   // Programme upload states
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
+  const [isRecalculating, setIsRecalculating] = useState(false);
+  const [isLoadingProgramme, setIsLoadingProgramme] = useState(true);
   const [uploadedProgramme, setUploadedProgramme] = useState<{
     _id: string;
     name: string;
@@ -168,7 +239,6 @@ const AdminProjectWorkspace = () => {
       activitiesCount: number;
     }>;
   } | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
   const [expandedActivityId, setExpandedActivityId] = useState<string | null>(
     null,
   );
@@ -191,7 +261,9 @@ const AdminProjectWorkspace = () => {
     title: string;
   } | null>(null);
   const [completeLoading, setCompleteLoading] = useState(false);
-  const [users, setUsers] = useState<Array<{ _id: string; name: string; email: string; role: string }>>([]);
+  const [users, setUsers] = useState<
+    Array<{ _id: string; name: string; email: string; role: string }>
+  >([]);
 
   // Scroll to selected action when switching to Actions tab
   useEffect(() => {
@@ -287,7 +359,8 @@ const AdminProjectWorkspace = () => {
         if (response.success) {
           // Filter out admins, only keep active planners and users
           const activeUsers = (response.users || []).filter(
-            (user: { role: string; status: string }) => user.role !== "admin" && user.status === "active"
+            (user: { role: string; status: string }) =>
+              user.role !== "admin" && user.status === "active",
           );
           setUsers(activeUsers);
         }
@@ -411,6 +484,8 @@ const AdminProjectWorkspace = () => {
         }
       } catch (error) {
         console.error("Failed to fetch programme:", error);
+      } finally {
+        setIsLoadingProgramme(false);
       }
     };
     fetchProgramme();
@@ -474,7 +549,11 @@ const AdminProjectWorkspace = () => {
     return "Execution";
   };
 
-  const handleEditClick = (action: ActionItem, index: number, actionId: string) => {
+  const handleEditClick = (
+    action: ActionItem,
+    index: number,
+    actionId: string,
+  ) => {
     setEditingAction({ ...action });
     setEditingIndex(index);
     setEditingActionId(actionId);
@@ -495,7 +574,7 @@ const AdminProjectWorkspace = () => {
     try {
       // Get activity name from lookahead data
       const selectedActivity = lookaheadData?.activities?.find(
-        (a) => a.activityId === editingAction.linkedActivity
+        (a) => a.activityId === editingAction.linkedActivity,
       );
       const activityName = selectedActivity?.activityName || "Unknown activity";
 
@@ -516,7 +595,9 @@ const AdminProjectWorkspace = () => {
 
       if (response.success) {
         // Refresh project actions
-        const actionsRes = await actionAPI.getAll({ programmeId: uploadedProgramme?._id });
+        const actionsRes = await actionAPI.getAll({
+          programmeId: uploadedProgramme?._id,
+        });
         if (actionsRes.success) {
           setProjectActions(actionsRes.actions || []);
         }
@@ -536,7 +617,10 @@ const AdminProjectWorkspace = () => {
     }
   };
 
-  const handleOpenCompleteConfirm = (action: { _id: string; title: string }) => {
+  const handleOpenCompleteConfirm = (action: {
+    _id: string;
+    title: string;
+  }) => {
     setActionToComplete(action);
     setCompleteConfirmOpen(true);
   };
@@ -555,7 +639,9 @@ const AdminProjectWorkspace = () => {
       if (response.success) {
         // Refresh project actions
         if (projectId) {
-          const actionsRes = await actionAPI.getAll({ programmeId: uploadedProgramme?._id });
+          const actionsRes = await actionAPI.getAll({
+            programmeId: uploadedProgramme?._id,
+          });
           if (actionsRes.success) {
             setProjectActions(actionsRes.actions || []);
           }
@@ -634,23 +720,6 @@ const AdminProjectWorkspace = () => {
       console.error("Failed to fetch weekly control data:", error);
     } finally {
       setIsLoadingWeeklyControl(false);
-    }
-  };
-
-  const handleDeleteProgramme = async () => {
-    if (!uploadedProgramme) return;
-
-    setIsDeleting(true);
-    try {
-      await programmeAPI.delete(uploadedProgramme._id);
-      setUploadedProgramme(null);
-      setLookaheadData(null);
-      setUploadedFile(null);
-      setProjectActions([]); // Clear actions immediately after programme deletion
-    } catch (error) {
-      console.error("Failed to delete programme:", error);
-    } finally {
-      setIsDeleting(false);
     }
   };
 
@@ -766,8 +835,6 @@ const AdminProjectWorkspace = () => {
 
         // Fetch weekly control data
         await fetchWeeklyControlData(programme._id);
-        // Switch to Activities tab to show results
-        setActiveTab(2);
       }
     } catch (error: unknown) {
       const err = error as {
@@ -793,6 +860,84 @@ const AdminProjectWorkspace = () => {
   const handleRemoveFile = () => {
     setUploadedFile(null);
     setUploadError("");
+  };
+
+  const handleRecalculateRAG = async () => {
+    if (!uploadedProgramme?._id) return;
+
+    setIsRecalculating(true);
+    try {
+      const response = await programmeAPI.recalculateRAG(uploadedProgramme._id);
+      if (response.success) {
+        // Refresh programme data to show updated RAG values
+        const programmeResponse = await programmeAPI.getByProject(projectId!);
+        if (programmeResponse.success && programmeResponse.programme) {
+          const programme = programmeResponse.programme;
+          const activities = programme.extractedData?.activities || [];
+          const summary = programme.extractedData?.summary || {
+            total: 0,
+            inLookahead: 0,
+            green: 0,
+            amber: 0,
+            red: 0,
+            blocked: 0,
+          };
+
+          setUploadedProgramme({
+            _id: programme._id,
+            name: programme.name,
+            totalActivities:
+              programme.extractedData?.totalActivities || activities.length,
+            summary: {
+              green: summary.green || 0,
+              amber: summary.amber || 0,
+              red: summary.red || 0,
+              inLookahead: summary.inLookahead || activities.length,
+            },
+          });
+
+          // Update lookahead data
+          setLookaheadData({
+            activities: activities.map(
+              (a: {
+                activityId?: string;
+                activityName?: string;
+                duration?: string;
+                startDate?: string;
+                finishDate?: string;
+                status?: string;
+                ragStatus?: string;
+                activityStatus?: string;
+                weekZone?: string;
+              }) => ({
+                activityId: a.activityId || "",
+                activityName: a.activityName || "",
+                duration: a.duration || "",
+                startDate: a.startDate || "",
+                finishDate: a.finishDate || "",
+                status: a.status || "Planned",
+                ragStatus: a.ragStatus || "Grey",
+                activityStatus: a.activityStatus || "Ready",
+                weekZone: a.weekZone || null,
+              }),
+            ),
+            summary: {
+              total: summary.total || activities.length,
+              inLookahead: summary.inLookahead || activities.length,
+              green: summary.green || 0,
+              amber: summary.amber || 0,
+              red: summary.red || 0,
+              blocked: summary.blocked || 0,
+            },
+            weekZones: programme.weekZones || [],
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Failed to recalculate RAG:", error);
+    } finally {
+      setIsRecalculating(false);
+    }
   };
 
   const formatFileSize = (bytes: number) => {
@@ -1032,7 +1177,69 @@ const AdminProjectWorkspace = () => {
               style={{ display: "none" }}
             />
 
-            {uploadedProgramme ? (
+            {isLoadingProgramme ? (
+              // Loading skeleton
+              <Box
+                sx={{
+                  bgcolor: COLORS.bgSecondary,
+                  border: `1px solid ${COLORS.border}`,
+                  borderRadius: "12px",
+                  p: 4,
+                }}
+              >
+                <Box
+                  sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}
+                >
+                  <Skeleton
+                    variant="circular"
+                    width={48}
+                    height={48}
+                    sx={{ bgcolor: COLORS.bgTertiary }}
+                  />
+                  <Box sx={{ flex: 1 }}>
+                    <Skeleton
+                      variant="text"
+                      width="60%"
+                      height={28}
+                      sx={{ bgcolor: COLORS.bgTertiary }}
+                    />
+                    <Skeleton
+                      variant="text"
+                      width="40%"
+                      height={20}
+                      sx={{ bgcolor: COLORS.bgTertiary }}
+                    />
+                  </Box>
+                </Box>
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: {
+                      xs: "repeat(2, 1fr)",
+                      sm: "repeat(3, 1fr)",
+                      md: "repeat(5, 1fr)",
+                    },
+                    gap: 2,
+                    mb: 3,
+                  }}
+                >
+                  {Array.from({ length: 5 }).map((_, index) => (
+                    <Skeleton
+                      key={index}
+                      variant="rectangular"
+                      height={80}
+                      sx={{ bgcolor: COLORS.bgTertiary, borderRadius: "8px" }}
+                    />
+                  ))}
+                </Box>
+                <Skeleton
+                  variant="rectangular"
+                  width={200}
+                  height={40}
+                  sx={{ bgcolor: COLORS.bgTertiary, borderRadius: "8px" }}
+                />
+              </Box>
+            ) : uploadedProgramme ? (
               // Success state - programme uploaded
               <Box
                 sx={{
@@ -1089,7 +1296,11 @@ const AdminProjectWorkspace = () => {
                 <Box
                   sx={{
                     display: "grid",
-                    gridTemplateColumns: "repeat(4, 1fr)",
+                    gridTemplateColumns: {
+                      xs: "repeat(2, 1fr)",
+                      sm: "repeat(3, 1fr)",
+                      md: "repeat(5, 1fr)",
+                    },
                     gap: 2,
                     mb: 3,
                   }}
@@ -1246,7 +1457,7 @@ const AdminProjectWorkspace = () => {
                   })()}
                 </Box>
 
-                <Box sx={{ display: "flex", gap: 2 }}>
+                <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
                   <Button
                     onClick={() => setActiveTab(2)}
                     sx={{
@@ -1265,7 +1476,39 @@ const AdminProjectWorkspace = () => {
                   >
                     View Activities & Lookahead
                   </Button>
-                  <Button
+                  {/* <Button
+                    onClick={handleRecalculateRAG}
+                    disabled={isRecalculating}
+                    sx={{
+                      bgcolor: "transparent",
+                      color: COLORS.blue,
+                      border: `1px solid ${COLORS.blue}`,
+                      textTransform: "none",
+                      px: 3,
+                      py: 1,
+                      borderRadius: "8px",
+                      fontSize: "14px",
+                      fontWeight: 500,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 1,
+                      "&:hover": {
+                        bgcolor: "rgba(59, 130, 246, 0.1)",
+                      },
+                      "&.Mui-disabled": {
+                        color: COLORS.textMuted,
+                        borderColor: COLORS.border,
+                      },
+                    }}
+                  >
+                    {isRecalculating ? (
+                      <CircularProgress size={18} sx={{ color: COLORS.blue }} />
+                    ) : (
+                      <RefreshIcon sx={{ fontSize: 18 }} />
+                    )}
+                    Recalculate RAG
+                  </Button> */}
+                  {/* <Button
                     onClick={handleDeleteProgramme}
                     disabled={isDeleting}
                     sx={{
@@ -1293,7 +1536,7 @@ const AdminProjectWorkspace = () => {
                     ) : (
                       "Delete Programme"
                     )}
-                  </Button>
+                  </Button> */}
                 </Box>
               </Box>
             ) : !uploadedFile ? (
@@ -1606,7 +1849,16 @@ const AdminProjectWorkspace = () => {
             </Box>
 
             {/* Status Filters */}
-            <Box sx={{ display: "flex", gap: 1, mb: 2 }}>
+            <Box
+              sx={{
+                display: "flex",
+                gap: 1,
+                mb: 2,
+                overflowX: "auto",
+                pb: 1,
+                "&::-webkit-scrollbar": { display: "none" },
+              }}
+            >
               {[
                 { label: "All", value: "all" },
                 { label: "Blocked", value: "Blocked" },
@@ -1627,6 +1879,8 @@ const AdminProjectWorkspace = () => {
                     fontSize: "14px",
                     fontWeight: 500,
                     cursor: "pointer",
+                    flexShrink: 0,
+                    whiteSpace: "nowrap",
                     bgcolor:
                       ragFilter === filter.value
                         ? COLORS.blueBgMedium
@@ -1656,632 +1910,701 @@ const AdminProjectWorkspace = () => {
             <>
               <Box
                 sx={{
-                  bgcolor: COLORS.bgSecondary,
-                  border: `1px solid ${COLORS.border}`,
-                  borderRadius: "12px",
-                  overflow: "hidden",
+                  overflowX: "auto",
                   mb: 2,
+                  "&::-webkit-scrollbar": {
+                    height: 6,
+                  },
+                  "&::-webkit-scrollbar-track": {
+                    bgcolor: "transparent",
+                  },
+                  "&::-webkit-scrollbar-thumb": {
+                    bgcolor: COLORS.border,
+                    borderRadius: 3,
+                  },
                 }}
               >
-                {/* Table Header */}
                 <Box
                   sx={{
-                    display: "grid",
-                    gridTemplateColumns:
-                      "4px 110px minmax(120px, 1fr) 95px 95px 75px 100px 65px 70px 110px",
-                    bgcolor: COLORS.bgTertiary,
-                    borderBottom: `1px solid ${COLORS.border}`,
-                    px: 2,
-                    py: 1.5,
-                    gap: 1,
+                    minWidth: 1100,
+                    bgcolor: COLORS.bgSecondary,
+                    border: `1px solid ${COLORS.border}`,
+                    borderRadius: "12px",
+                    overflow: "hidden",
                   }}
                 >
-                  <Box /> {/* Space for status indicator */}
-                  {[
-                    "Activity ID",
-                    "Activity Name",
-                    "Start Date",
-                    "End Date",
-                    "Duration",
-                    "RAG Zone",
-                    "Actions",
-                    "Status",
-                    "Owner",
-                  ].map((header, idx) => (
-                    <Typography
-                      key={header}
-                      sx={{
-                        fontSize: "11px",
-                        fontWeight: 600,
-                        color: COLORS.textSecondary,
-                        textTransform: "uppercase",
-                        textAlign: [2, 3, 4, 5, 8].includes(idx)
-                          ? "center"
-                          : "left",
-                      }}
-                    >
-                      {header}
-                    </Typography>
-                  ))}
-                </Box>
-                {!lookaheadData?.activities ||
-                lookaheadData.activities.length === 0 ? (
-                  <Box sx={{ py: 4, textAlign: "center" }}>
-                    <Typography
-                      sx={{ color: COLORS.textMuted, fontSize: "14px" }}
-                    >
-                      No activities data available
-                    </Typography>
+                  {/* Table Header */}
+                  <Box
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns:
+                        "4px 100px 1fr 95px 95px 70px 95px 60px 75px 120px",
+                      bgcolor: COLORS.bgTertiary,
+                      borderBottom: `1px solid ${COLORS.border}`,
+                      px: 2,
+                      py: 1.5,
+                      gap: 1,
+                    }}
+                  >
+                    <Box /> {/* Space for status indicator */}
+                    {[
+                      "Activity ID",
+                      "Activity Name",
+                      "Start Date",
+                      "End Date",
+                      "Duration",
+                      "RAG Zone",
+                      "Actions",
+                      "Status",
+                      "Owner",
+                    ].map((header, idx) => (
+                      <Typography
+                        key={header}
+                        sx={{
+                          fontSize: "11px",
+                          fontWeight: 600,
+                          color: COLORS.textSecondary,
+                          textTransform: "uppercase",
+                          textAlign: [2, 3, 4, 5, 8].includes(idx)
+                            ? "center"
+                            : "left",
+                        }}
+                      >
+                        {header}
+                      </Typography>
+                    ))}
                   </Box>
-                ) : (
-                  (() => {
-                    const filteredActivities = lookaheadData.activities.filter(
-                      (activity) =>
-                        ragFilter === "all" ||
-                        activity.activityStatus === ragFilter,
-                    );
-                    const startIndex = (activitiesPage - 1) * activitiesPerPage;
-                    const paginatedActivities = filteredActivities.slice(
-                      startIndex,
-                      startIndex + activitiesPerPage,
-                    );
-
-                    return paginatedActivities.length === 0 ? (
-                      <Box sx={{ py: 4, textAlign: "center" }}>
-                        <Typography
-                          sx={{ color: COLORS.textMuted, fontSize: "14px" }}
-                        >
-                          No activities match the selected filter
-                        </Typography>
-                      </Box>
-                    ) : (
-                      paginatedActivities.map((activity, index) => {
-                        const getStatusColor = (status: string) => {
-                          switch (status) {
-                            case "Ready":
-                              return {
-                                bg: "rgba(34, 197, 94, 0.15)",
-                                text: COLORS.green,
-                              };
-                            case "At Risk":
-                              return {
-                                bg: "rgba(245, 158, 11, 0.15)",
-                                text: COLORS.amber,
-                              };
-                            case "Blocked":
-                              return {
-                                bg: "rgba(239, 68, 68, 0.15)",
-                                text: COLORS.red,
-                              };
-                            case "Complete":
-                              return {
-                                bg: "rgba(59, 130, 246, 0.15)",
-                                text: COLORS.blue,
-                              };
-                            default:
-                              return {
-                                bg: "rgba(142, 156, 177, 0.15)",
-                                text: COLORS.textSecondary,
-                              };
-                          }
-                        };
-                        // Left indicator based on activityStatus
-                        const getIndicatorColor = (status: string) => {
-                          switch (status) {
-                            case "Ready":
-                              return COLORS.green;
-                            case "At Risk":
-                              return COLORS.amber;
-                            case "Blocked":
-                              return COLORS.red;
-                            case "Complete":
-                              return COLORS.blue;
-                            default:
-                              return COLORS.textMuted;
-                          }
-                        };
-                        // Calculate RAG zone from start and end date
-                        const calculateRagZone = (
-                          startDate: string,
-                          endDate: string,
-                        ) => {
-                          if (!startDate || !endDate)
-                            return { zone: "Week 1", color: COLORS.green };
-                          const start = new Date(startDate);
-                          const end = new Date(endDate);
-                          const diffTime = end.getTime() - start.getTime();
-                          const diffDays = Math.ceil(
-                            diffTime / (1000 * 60 * 60 * 24),
+                  {!lookaheadData?.activities ||
+                  lookaheadData.activities.length === 0 ? (
+                    <Box sx={{ py: 4, textAlign: "center" }}>
+                      <Typography
+                        sx={{ color: COLORS.textMuted, fontSize: "14px" }}
+                      >
+                        No activities data available
+                      </Typography>
+                    </Box>
+                  ) : (
+                    (() => {
+                      const filteredActivities = lookaheadData.activities
+                        .filter(
+                          (activity) =>
+                            ragFilter === "all" ||
+                            activity.activityStatus === ragFilter,
+                        )
+                        .sort((a, b) => {
+                          const colorA = getRAGColor(a.startDate, a.finishDate);
+                          const colorB = getRAGColor(b.startDate, b.finishDate);
+                          return (
+                            getRAGPriority(colorA) - getRAGPriority(colorB)
                           );
-                          const diffWeeks = Math.ceil(diffDays / 7);
+                        });
+                      const startIndex =
+                        (activitiesPage - 1) * activitiesPerPage;
+                      const paginatedActivities = filteredActivities.slice(
+                        startIndex,
+                        startIndex + activitiesPerPage,
+                      );
 
-                          if (diffWeeks <= 0) {
-                            return { zone: "< 1 Week", color: COLORS.green };
-                          } else if (diffWeeks <= 2) {
-                            return { zone: "Weeks 1-2", color: COLORS.green };
-                          } else if (diffWeeks <= 4) {
-                            return { zone: "Weeks 3-4", color: COLORS.amber };
-                          } else if (diffWeeks <= 6) {
-                            return { zone: "Weeks 5-6", color: COLORS.red };
-                          } else {
-                            return {
-                              zone: `${diffWeeks} Weeks`,
-                              color: COLORS.red,
+                      return paginatedActivities.length === 0 ? (
+                        <Box sx={{ py: 4, textAlign: "center" }}>
+                          <Typography
+                            sx={{ color: COLORS.textMuted, fontSize: "14px" }}
+                          >
+                            No activities match the selected filter
+                          </Typography>
+                        </Box>
+                      ) : (
+                        paginatedActivities.map((activity, index) => {
+                          const getStatusColor = (status: string) => {
+                            switch (status) {
+                              case "Ready":
+                                return {
+                                  bg: "rgba(34, 197, 94, 0.15)",
+                                  text: COLORS.green,
+                                };
+                              case "At Risk":
+                                return {
+                                  bg: "rgba(245, 158, 11, 0.15)",
+                                  text: COLORS.amber,
+                                };
+                              case "Blocked":
+                                return {
+                                  bg: "rgba(239, 68, 68, 0.15)",
+                                  text: COLORS.red,
+                                };
+                              case "Complete":
+                                return {
+                                  bg: "rgba(59, 130, 246, 0.15)",
+                                  text: COLORS.blue,
+                                };
+                              default:
+                                return {
+                                  bg: "rgba(142, 156, 177, 0.15)",
+                                  text: COLORS.textSecondary,
+                                };
+                            }
+                          };
+                          // Left indicator based on activityStatus
+                          const getIndicatorColor = (status: string) => {
+                            switch (status) {
+                              case "Ready":
+                                return COLORS.green;
+                              case "At Risk":
+                                return COLORS.amber;
+                              case "Blocked":
+                                return COLORS.red;
+                              case "Complete":
+                                return COLORS.blue;
+                              default:
+                                return COLORS.textMuted;
+                            }
+                          };
+                          // Calculate RAG zone from start and end date
+                          const calculateRagZone = (
+                            startDate: string,
+                            endDate: string,
+                          ) => {
+                            if (!startDate || !endDate)
+                              return { zone: "Week 1", color: COLORS.green };
+
+                            const start = parseDate(startDate);
+                            const end = parseDate(endDate);
+
+                            if (!start || !end)
+                              return { zone: "Week 1", color: COLORS.green };
+
+                            const diffTime = end.getTime() - start.getTime();
+                            const diffDays = Math.ceil(
+                              diffTime / (1000 * 60 * 60 * 24),
+                            );
+                            const diffWeeks = Math.ceil(diffDays / 7);
+
+                            if (diffWeeks <= 0) {
+                              return { zone: "< 1 Week", color: COLORS.green };
+                            } else if (diffWeeks <= 2) {
+                              return { zone: "Weeks 1-2", color: COLORS.green };
+                            } else if (diffWeeks <= 4) {
+                              return { zone: "Weeks 3-4", color: COLORS.amber };
+                            } else if (diffWeeks <= 6) {
+                              return { zone: "Weeks 5-6", color: COLORS.red };
+                            } else {
+                              return {
+                                zone: `${diffWeeks} Weeks`,
+                                color: COLORS.red,
+                              };
+                            }
+                          };
+                          const statusColors = getStatusColor(
+                            activity.activityStatus || "Ready",
+                          );
+                          const indicatorColor = getIndicatorColor(
+                            activity.activityStatus || "Ready",
+                          );
+                          const ragZone = calculateRagZone(
+                            activity.startDate,
+                            activity.finishDate,
+                          );
+                          const ownerName = user?.name || "Unknown";
+                          const ownerInitials = ownerName
+                            .split(" ")
+                            .map((n) => n[0])
+                            .join("")
+                            .toUpperCase()
+                            .slice(0, 2);
+
+                          // Format date as YYYY-MM-DD
+                          const formatDate = (dateStr: string) => {
+                            if (!dateStr) return "-";
+
+                            // Handle DD-Mon-YY format (e.g., "24-Nov-21 A")
+                            const months: { [key: string]: number } = {
+                              Jan: 0,
+                              Feb: 1,
+                              Mar: 2,
+                              Apr: 3,
+                              May: 4,
+                              Jun: 5,
+                              Jul: 6,
+                              Aug: 7,
+                              Sep: 8,
+                              Oct: 9,
+                              Nov: 10,
+                              Dec: 11,
                             };
-                          }
-                        };
-                        const statusColors = getStatusColor(
-                          activity.activityStatus || "Ready",
-                        );
-                        const indicatorColor = getIndicatorColor(
-                          activity.activityStatus || "Ready",
-                        );
-                        const ragZone = calculateRagZone(
-                          activity.startDate,
-                          activity.finishDate,
-                        );
-                        const ownerName = user?.name || "Unknown";
-                        const ownerInitials = ownerName
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")
-                          .toUpperCase()
-                          .slice(0, 2);
 
-                        // Format date as YYYY-MM-DD
-                        const formatDate = (dateStr: string) => {
-                          if (!dateStr) return "-";
+                            // Remove suffixes like " A" or "*"
+                            const cleanDate = dateStr
+                              .replace(/\s*[A*]$/, "")
+                              .trim();
+                            const match = cleanDate.match(
+                              /(\d{2})-([A-Za-z]{3})-(\d{2})/,
+                            );
 
-                          // Handle DD-Mon-YY format (e.g., "24-Nov-21 A")
-                          const months: { [key: string]: number } = {
-                            Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
-                            Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11,
+                            if (match) {
+                              const day = parseInt(match[1]);
+                              const month = months[match[2]];
+                              let year = parseInt(match[3]);
+                              year = year < 50 ? 2000 + year : 1900 + year;
+                              return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+                            }
+
+                            // Fallback to standard Date parsing
+                            const date = new Date(dateStr);
+                            if (isNaN(date.getTime())) return "-";
+                            const year = date.getFullYear();
+                            const month = String(date.getMonth() + 1).padStart(
+                              2,
+                              "0",
+                            );
+                            const day = String(date.getDate()).padStart(2, "0");
+                            return `${year}-${month}-${day}`;
                           };
 
-                          // Remove suffixes like " A" or "*"
-                          const cleanDate = dateStr.replace(/\s*[A*]$/, "").trim();
-                          const match = cleanDate.match(/(\d{2})-([A-Za-z]{3})-(\d{2})/);
+                          const actionsForThisActivity = getActionsForActivity(
+                            activity.activityId,
+                          );
+                          const isExpanded =
+                            expandedActivityId === activity.activityId;
 
-                          if (match) {
-                            const day = parseInt(match[1]);
-                            const month = months[match[2]];
-                            let year = parseInt(match[3]);
-                            year = year < 50 ? 2000 + year : 1900 + year;
-                            return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-                          }
-
-                          // Fallback to standard Date parsing
-                          const date = new Date(dateStr);
-                          if (isNaN(date.getTime())) return "-";
-                          const year = date.getFullYear();
-                          const month = String(date.getMonth() + 1).padStart(2, "0");
-                          const day = String(date.getDate()).padStart(2, "0");
-                          return `${year}-${month}-${day}`;
-                        };
-
-                        const actionsForThisActivity = getActionsForActivity(
-                          activity.activityId,
-                        );
-                        const isExpanded =
-                          expandedActivityId === activity.activityId;
-
-                        return (
-                          <Box key={activity.activityId || index}>
-                            <Box
-                              sx={{
-                                display: "grid",
-                                gridTemplateColumns:
-                                  "4px 110px minmax(120px, 1fr) 95px 95px 75px 100px 65px 70px 110px",
-                                px: 2,
-                                py: 1.5,
-                                borderBottom: isExpanded
-                                  ? "none"
-                                  : `1px solid ${COLORS.border}`,
-                                alignItems: "center",
-                                gap: 1,
-                                "&:last-child": {
-                                  borderBottom: isExpanded ? "none" : "none",
-                                },
-                                "&:hover": { bgcolor: COLORS.whiteHoverLight },
-                                position: "relative",
-                                cursor:
-                                  actionsForThisActivity.length > 0
-                                    ? "pointer"
-                                    : "default",
-                              }}
-                              onClick={() => {
-                                if (actionsForThisActivity.length > 0) {
-                                  setExpandedActivityId(
-                                    isExpanded ? null : activity.activityId,
-                                  );
-                                }
-                              }}
-                            >
-                              {/* Status Indicator (based on activityStatus) */}
+                          return (
+                            <Box key={activity.activityId || index}>
                               <Box
                                 sx={{
-                                  position: "absolute",
-                                  left: 0,
-                                  top: 0,
-                                  bottom: 0,
-                                  width: "2px",
-                                  bgcolor: indicatorColor,
-                                  borderRadius: 0,
+                                  display: "grid",
+                                  gridTemplateColumns:
+                                    "4px 100px 1fr 95px 95px 70px 95px 60px 75px 120px",
+                                  px: 2,
+                                  py: 1.5,
+                                  borderBottom: isExpanded
+                                    ? "none"
+                                    : `1px solid ${COLORS.border}`,
+                                  alignItems: "center",
+                                  gap: 1,
+                                  "&:last-child": {
+                                    borderBottom: isExpanded ? "none" : "none",
+                                  },
+                                  "&:hover": {
+                                    bgcolor: COLORS.whiteHoverLight,
+                                  },
+                                  position: "relative",
+                                  cursor:
+                                    actionsForThisActivity.length > 0
+                                      ? "pointer"
+                                      : "default",
                                 }}
-                              />
-                              <Box /> {/* Spacer for indicator column */}
-                              {/* Activity ID */}
-                              <Typography
-                                sx={{
-                                  fontSize: "12px",
-                                  color: COLORS.blue,
-                                  fontWeight: 500,
+                                onClick={() => {
+                                  if (actionsForThisActivity.length > 0) {
+                                    setExpandedActivityId(
+                                      isExpanded ? null : activity.activityId,
+                                    );
+                                  }
                                 }}
                               >
-                                {activity.activityId}
-                              </Typography>
-                              {/* Activity Name */}
-                              <Box
-                                sx={{
-                                  display: "flex",
-                                  alignItems: "flex-start",
-                                  gap: 0.5,
-                                }}
-                              >
-                                {actionsForThisActivity.length > 0 &&
-                                  (isExpanded ? (
-                                    <ArrowDownIcon
-                                      sx={{
-                                        fontSize: 16,
-                                        color: COLORS.textSecondary,
-                                        mt: 0.2,
-                                        flexShrink: 0,
-                                      }}
-                                    />
-                                  ) : (
-                                    <ArrowRightIcon
-                                      sx={{
-                                        fontSize: 16,
-                                        color: COLORS.textSecondary,
-                                        mt: 0.2,
-                                        flexShrink: 0,
-                                      }}
-                                    />
-                                  ))}
+                                {/* Status Indicator (based on activityStatus) */}
+                                <Box
+                                  sx={{
+                                    position: "absolute",
+                                    left: 0,
+                                    top: 0,
+                                    bottom: 0,
+                                    width: "2px",
+                                    bgcolor: indicatorColor,
+                                    borderRadius: 0,
+                                  }}
+                                />
+                                <Box /> {/* Spacer for indicator column */}
+                                {/* Activity ID */}
                                 <Typography
                                   sx={{
                                     fontSize: "12px",
-                                    color: COLORS.textPrimary,
-                                    wordBreak: "break-word",
-                                    lineHeight: 1.5,
+                                    color: COLORS.blue,
+                                    fontWeight: 500,
                                   }}
                                 >
-                                  {activity.activityName}
+                                  {activity.activityId}
                                 </Typography>
-                              </Box>
-                              {/* Start Date */}
-                              <Typography
-                                sx={{
-                                  fontSize: "12px",
-                                  color: COLORS.textSecondary,
-                                  textAlign: "center",
-                                }}
-                              >
-                                {formatDate(activity.startDate)}
-                              </Typography>
-                              {/* End Date */}
-                              <Typography
-                                sx={{
-                                  fontSize: "12px",
-                                  color: COLORS.textSecondary,
-                                  textAlign: "center",
-                                }}
-                              >
-                                {formatDate(activity.finishDate)}
-                              </Typography>
-                              {/* Duration */}
-                              <Typography
-                                sx={{
-                                  fontSize: "12px",
-                                  color: COLORS.textSecondary,
-                                  textAlign: "center",
-                                }}
-                              >
-                                {activity.duration || "-"}
-                              </Typography>
-                              {/* RAG Zone badge */}
-                              <Box
-                                sx={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  gap: 0.75,
-                                  px: 1,
-                                  py: 0.4,
-                                  borderRadius: "14px",
-                                  border: `1px solid ${ragZone.color}40`,
-                                  bgcolor: `${ragZone.color}15`,
-                                  width: "100%",
-                                  maxWidth: "fit-content",
-                                  mx: "auto",
-                                }}
-                              >
+                                {/* Activity Name */}
                                 <Box
                                   sx={{
-                                    width: 6,
-                                    height: 6,
-                                    borderRadius: "50%",
-                                    bgcolor: ragZone.color,
-                                    flexShrink: 0,
-                                  }}
-                                />
-                                <Typography
-                                  sx={{
-                                    fontSize: "10px",
-                                    fontWeight: 500,
-                                    color: ragZone.color,
+                                    display: "flex",
+                                    alignItems: "flex-start",
+                                    gap: 0.5,
                                   }}
                                 >
-                                  {ragZone.zone}
-                                </Typography>
-                              </Box>
-                              {/* Actions */}
-                              {(() => {
-                                const actionsForActivity =
-                                  getActionsForActivity(activity.activityId);
-                                const actionsCount = actionsForActivity.length;
-                                return actionsCount > 0 ? (
-                                  <Typography
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setExpandedActivityId(
-                                        expandedActivityId ===
-                                          activity.activityId
-                                          ? null
-                                          : activity.activityId,
-                                      );
-                                    }}
-                                    sx={{
-                                      fontSize: "12px",
-                                      color: COLORS.blue,
-                                      cursor: "pointer",
-                                      "&:hover": {
-                                        textDecoration: "underline",
-                                      },
-                                    }}
-                                  >
-                                    {actionsCount} action
-                                    {actionsCount !== 1 ? "s" : ""}
-                                  </Typography>
-                                ) : (
+                                  {actionsForThisActivity.length > 0 &&
+                                    (isExpanded ? (
+                                      <ArrowDownIcon
+                                        sx={{
+                                          fontSize: 16,
+                                          color: COLORS.textSecondary,
+                                          mt: 0.2,
+                                          flexShrink: 0,
+                                        }}
+                                      />
+                                    ) : (
+                                      <ArrowRightIcon
+                                        sx={{
+                                          fontSize: 16,
+                                          color: COLORS.textSecondary,
+                                          mt: 0.2,
+                                          flexShrink: 0,
+                                        }}
+                                      />
+                                    ))}
                                   <Typography
                                     sx={{
                                       fontSize: "12px",
-                                      color: COLORS.textSecondary,
+                                      color: COLORS.textPrimary,
+                                      wordBreak: "break-word",
+                                      lineHeight: 1.5,
                                     }}
                                   >
-                                    -
+                                    {activity.activityName}
                                   </Typography>
-                                );
-                              })()}
-                              {/* Status */}
-                              <Box
-                                sx={{
-                                  display: "inline-flex",
-                                  px: 1,
-                                  py: 0.4,
-                                  borderRadius: "6px",
-                                  bgcolor: statusColors.bg,
-                                  width: "fit-content",
-                                }}
-                              >
+                                </Box>
+                                {/* Start Date */}
                                 <Typography
                                   sx={{
-                                    fontSize: "10px",
-                                    fontWeight: 500,
-                                    color: statusColors.text,
+                                    fontSize: "12px",
+                                    color: COLORS.textSecondary,
+                                    textAlign: "center",
                                   }}
                                 >
-                                  {activity.activityStatus || "Ready"}
+                                  {formatDate(activity.startDate)}
                                 </Typography>
-                              </Box>
-                              {/* Owner */}
-                              <Box
-                                sx={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  gap: 0.75,
-                                }}
-                              >
-                                <Avatar
-                                  sx={{
-                                    width: 24,
-                                    height: 24,
-                                    fontSize: "10px",
-                                    fontWeight: 600,
-                                    bgcolor: COLORS.blue,
-                                  }}
-                                >
-                                  {ownerInitials}
-                                </Avatar>
+                                {/* End Date */}
                                 <Typography
                                   sx={{
-                                    fontSize: "11px",
-                                    color: COLORS.textPrimary,
-                                    overflow: "hidden",
-                                    textOverflow: "ellipsis",
-                                    whiteSpace: "nowrap",
+                                    fontSize: "12px",
+                                    color: COLORS.textSecondary,
+                                    textAlign: "center",
                                   }}
                                 >
-                                  {ownerName}
+                                  {formatDate(activity.finishDate)}
                                 </Typography>
-                              </Box>
-                            </Box>
-
-                            {/* Expanded section for linked actions */}
-                            {isExpanded &&
-                              actionsForThisActivity.length > 0 && (
+                                {/* Duration */}
+                                <Typography
+                                  sx={{
+                                    fontSize: "12px",
+                                    color: COLORS.textSecondary,
+                                    textAlign: "center",
+                                  }}
+                                >
+                                  {activity.duration || "-"}
+                                </Typography>
+                                {/* RAG Zone badge */}
                                 <Box
                                   sx={{
-                                    bgcolor: COLORS.bgTertiary,
-                                    borderBottom: `1px solid ${COLORS.border}`,
-                                    px: 3,
-                                    py: 2,
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    gap: 0.75,
+                                    px: 1,
+                                    py: 0.4,
+                                    borderRadius: "14px",
+                                    border: `1px solid ${ragZone.color}40`,
+                                    bgcolor: `${ragZone.color}15`,
+                                    width: "100%",
+                                    maxWidth: "fit-content",
+                                    mx: "auto",
                                   }}
                                 >
                                   <Box
                                     sx={{
-                                      display: "grid",
-                                      gridTemplateColumns: "1fr 1fr 1fr",
-                                      gap: 4,
+                                      width: 6,
+                                      height: 6,
+                                      borderRadius: "50%",
+                                      bgcolor: ragZone.color,
+                                      flexShrink: 0,
+                                    }}
+                                  />
+                                  <Typography
+                                    sx={{
+                                      fontSize: "10px",
+                                      fontWeight: 500,
+                                      color: ragZone.color,
                                     }}
                                   >
-                                    {/* Linked Actions */}
-                                    <Box>
-                                      <Typography
-                                        sx={{
-                                          fontSize: "10px",
-                                          fontWeight: 600,
-                                          color: COLORS.textMuted,
-                                          textTransform: "uppercase",
-                                          letterSpacing: "0.5px",
-                                          mb: 1.5,
-                                        }}
-                                      >
-                                        Linked Actions
-                                      </Typography>
-                                      <Box
-                                        sx={{
-                                          display: "flex",
-                                          flexDirection: "column",
-                                          gap: 0.75,
-                                        }}
-                                      >
-                                        {actionsForThisActivity.map(
-                                          (action) => (
-                                            <Box
-                                              key={action._id}
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                setSelectedActionId(action._id);
-                                                setActiveTab(3); // Switch to Actions tab
-                                                setExpandedActivityId(null); // Close expanded section
-                                              }}
-                                              sx={{
-                                                display: "flex",
-                                                alignItems: "center",
-                                                gap: 1,
-                                                cursor: "pointer",
-                                                "&:hover": {
-                                                  "& .action-title": {
-                                                    textDecoration: "underline",
-                                                  },
-                                                },
-                                              }}
-                                            >
-                                              <Box
-                                                sx={{
-                                                  color: COLORS.blue,
-                                                  fontSize: "11px",
-                                                }}
-                                              >
-                                                ›
-                                              </Box>
-                                              <Typography
-                                                className="action-title"
-                                                sx={{
-                                                  fontSize: "12px",
-                                                  color: COLORS.textPrimary,
-                                                }}
-                                              >
-                                                {action.title}
-                                              </Typography>
-                                              {action.status ===
-                                                "Completed" && (
-                                                <Typography
-                                                  sx={{
-                                                    fontSize: "10px",
-                                                    color: COLORS.green,
-                                                    ml: 0.5,
-                                                  }}
-                                                >
-                                                  (Complete)
-                                                </Typography>
-                                              )}
-                                            </Box>
-                                          ),
-                                        )}
-                                      </Box>
-                                    </Box>
-
-                                    {/* Dependencies */}
-                                    <Box>
-                                      <Typography
-                                        sx={{
-                                          fontSize: "10px",
-                                          fontWeight: 600,
-                                          color: COLORS.textMuted,
-                                          textTransform: "uppercase",
-                                          letterSpacing: "0.5px",
-                                          mb: 1.5,
-                                        }}
-                                      >
-                                        Dependencies
-                                      </Typography>
-                                      <Typography
-                                        sx={{
-                                          fontSize: "12px",
-                                          color: COLORS.textSecondary,
-                                        }}
-                                      >
-                                        -
-                                      </Typography>
-                                    </Box>
-
-                                    {/* Notes */}
-                                    <Box>
-                                      <Typography
-                                        sx={{
-                                          fontSize: "10px",
-                                          fontWeight: 600,
-                                          color: COLORS.textMuted,
-                                          textTransform: "uppercase",
-                                          letterSpacing: "0.5px",
-                                          mb: 1.5,
-                                        }}
-                                      >
-                                        Notes
-                                      </Typography>
-                                      <Typography
-                                        sx={{
-                                          fontSize: "12px",
-                                          color: COLORS.textSecondary,
-                                        }}
-                                      >
-                                        -
-                                      </Typography>
-                                    </Box>
+                                    {ragZone.zone}
+                                  </Typography>
+                                </Box>
+                                {/* Actions */}
+                                {(() => {
+                                  const actionsForActivity =
+                                    getActionsForActivity(activity.activityId);
+                                  const actionsCount =
+                                    actionsForActivity.length;
+                                  return actionsCount > 0 ? (
+                                    <Typography
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setExpandedActivityId(
+                                          expandedActivityId ===
+                                            activity.activityId
+                                            ? null
+                                            : activity.activityId,
+                                        );
+                                      }}
+                                      sx={{
+                                        fontSize: "12px",
+                                        color: COLORS.blue,
+                                        cursor: "pointer",
+                                        "&:hover": {
+                                          textDecoration: "underline",
+                                        },
+                                      }}
+                                    >
+                                      {actionsCount} action
+                                      {actionsCount !== 1 ? "s" : ""}
+                                    </Typography>
+                                  ) : (
+                                    <Typography
+                                      sx={{
+                                        fontSize: "12px",
+                                        color: COLORS.textSecondary,
+                                      }}
+                                    >
+                                      -
+                                    </Typography>
+                                  );
+                                })()}
+                                {/* Status */}
+                                <Box
+                                  sx={{
+                                    display: "flex",
+                                    justifyContent: "center",
+                                  }}
+                                >
+                                  <Box
+                                    sx={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      px: 1.5,
+                                      py: 0.5,
+                                      borderRadius: "14px",
+                                      bgcolor: statusColors.bg,
+                                    }}
+                                  >
+                                    <Typography
+                                      sx={{
+                                        fontSize: "11px",
+                                        fontWeight: 500,
+                                        color: statusColors.text,
+                                        whiteSpace: "nowrap",
+                                      }}
+                                    >
+                                      {activity.activityStatus || "Ready"}
+                                    </Typography>
                                   </Box>
                                 </Box>
-                              )}
-                          </Box>
-                        );
-                      })
-                    );
-                  })()
-                )}
+                                {/* Owner */}
+                                <Box
+                                  sx={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    gap: 0.75,
+                                  }}
+                                >
+                                  <Avatar
+                                    sx={{
+                                      width: 24,
+                                      height: 24,
+                                      fontSize: "10px",
+                                      fontWeight: 600,
+                                      bgcolor: COLORS.blue,
+                                    }}
+                                  >
+                                    {ownerInitials}
+                                  </Avatar>
+                                  <Typography
+                                    sx={{
+                                      fontSize: "11px",
+                                      color: COLORS.textPrimary,
+                                      overflow: "hidden",
+                                      textOverflow: "ellipsis",
+                                      whiteSpace: "nowrap",
+                                    }}
+                                  >
+                                    {ownerName}
+                                  </Typography>
+                                </Box>
+                              </Box>
+
+                              {/* Expanded section for linked actions */}
+                              {isExpanded &&
+                                actionsForThisActivity.length > 0 && (
+                                  <Box
+                                    sx={{
+                                      bgcolor: COLORS.bgTertiary,
+                                      borderBottom: `1px solid ${COLORS.border}`,
+                                      px: 3,
+                                      py: 2,
+                                    }}
+                                  >
+                                    <Box
+                                      sx={{
+                                        display: "grid",
+                                        gridTemplateColumns: "1fr 1fr 1fr",
+                                        gap: 4,
+                                      }}
+                                    >
+                                      {/* Linked Actions */}
+                                      <Box>
+                                        <Typography
+                                          sx={{
+                                            fontSize: "10px",
+                                            fontWeight: 600,
+                                            color: COLORS.textMuted,
+                                            textTransform: "uppercase",
+                                            letterSpacing: "0.5px",
+                                            mb: 1.5,
+                                          }}
+                                        >
+                                          Linked Actions
+                                        </Typography>
+                                        <Box
+                                          sx={{
+                                            display: "flex",
+                                            flexDirection: "column",
+                                            gap: 0.75,
+                                          }}
+                                        >
+                                          {actionsForThisActivity.map(
+                                            (action) => (
+                                              <Box
+                                                key={action._id}
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setSelectedActionId(
+                                                    action._id,
+                                                  );
+                                                  setActiveTab(3); // Switch to Actions tab
+                                                  setExpandedActivityId(null); // Close expanded section
+                                                }}
+                                                sx={{
+                                                  display: "flex",
+                                                  alignItems: "center",
+                                                  gap: 1,
+                                                  cursor: "pointer",
+                                                  "&:hover": {
+                                                    "& .action-title": {
+                                                      textDecoration:
+                                                        "underline",
+                                                    },
+                                                  },
+                                                }}
+                                              >
+                                                <Box
+                                                  sx={{
+                                                    color: COLORS.blue,
+                                                    fontSize: "11px",
+                                                  }}
+                                                >
+                                                  ›
+                                                </Box>
+                                                <Typography
+                                                  className="action-title"
+                                                  sx={{
+                                                    fontSize: "12px",
+                                                    color: COLORS.textPrimary,
+                                                  }}
+                                                >
+                                                  {action.title}
+                                                </Typography>
+                                                {action.status ===
+                                                  "Completed" && (
+                                                  <Typography
+                                                    sx={{
+                                                      fontSize: "10px",
+                                                      color: COLORS.green,
+                                                      ml: 0.5,
+                                                    }}
+                                                  >
+                                                    (Complete)
+                                                  </Typography>
+                                                )}
+                                              </Box>
+                                            ),
+                                          )}
+                                        </Box>
+                                      </Box>
+
+                                      {/* Dependencies */}
+                                      <Box>
+                                        <Typography
+                                          sx={{
+                                            fontSize: "10px",
+                                            fontWeight: 600,
+                                            color: COLORS.textMuted,
+                                            textTransform: "uppercase",
+                                            letterSpacing: "0.5px",
+                                            mb: 1.5,
+                                          }}
+                                        >
+                                          Dependencies
+                                        </Typography>
+                                        <Typography
+                                          sx={{
+                                            fontSize: "12px",
+                                            color: COLORS.textSecondary,
+                                          }}
+                                        >
+                                          -
+                                        </Typography>
+                                      </Box>
+
+                                      {/* Notes */}
+                                      <Box>
+                                        <Typography
+                                          sx={{
+                                            fontSize: "10px",
+                                            fontWeight: 600,
+                                            color: COLORS.textMuted,
+                                            textTransform: "uppercase",
+                                            letterSpacing: "0.5px",
+                                            mb: 1.5,
+                                          }}
+                                        >
+                                          Notes
+                                        </Typography>
+                                        <Typography
+                                          sx={{
+                                            fontSize: "12px",
+                                            color: COLORS.textSecondary,
+                                          }}
+                                        >
+                                          -
+                                        </Typography>
+                                      </Box>
+                                    </Box>
+                                  </Box>
+                                )}
+                            </Box>
+                          );
+                        })
+                      );
+                    })()
+                  )}
+                </Box>
               </Box>
 
               {/* Pagination */}
               {lookaheadData?.activities &&
                 lookaheadData.activities.length > 0 &&
                 (() => {
-                  const filteredActivities = lookaheadData.activities.filter(
-                    (activity) =>
-                      ragFilter === "all" ||
-                      activity.activityStatus === ragFilter,
-                  );
+                  const filteredActivities = lookaheadData.activities
+                    .filter(
+                      (activity) =>
+                        ragFilter === "all" ||
+                        activity.activityStatus === ragFilter,
+                    )
+                    .sort((a, b) => {
+                      const colorA = getRAGColor(a.startDate, a.finishDate);
+                      const colorB = getRAGColor(b.startDate, b.finishDate);
+                      return getRAGPriority(colorA) - getRAGPriority(colorB);
+                    });
                   const totalPages = Math.ceil(
                     filteredActivities.length / activitiesPerPage,
                   );
@@ -2295,8 +2618,10 @@ const AdminProjectWorkspace = () => {
                     <Box
                       sx={{
                         display: "flex",
+                        flexDirection: { xs: "column", sm: "row" },
                         justifyContent: "space-between",
-                        alignItems: "center",
+                        alignItems: { xs: "flex-start", sm: "center" },
+                        gap: { xs: 2, sm: 0 },
                         mb: 3,
                       }}
                     >
@@ -2306,7 +2631,16 @@ const AdminProjectWorkspace = () => {
                         Showing {startIndex + 1}-{endIndex} of{" "}
                         {filteredActivities.length} activities
                       </Typography>
-                      <Box sx={{ display: "flex", gap: 1 }}>
+                      <Box
+                        sx={{
+                          display: "flex",
+                          gap: 1,
+                          overflowX: "auto",
+                          maxWidth: "100%",
+                          pb: { xs: 1, sm: 0 },
+                          "&::-webkit-scrollbar": { display: "none" },
+                        }}
+                      >
                         <Button
                           onClick={() =>
                             setActivitiesPage((p) => Math.max(1, p - 1))
@@ -2317,6 +2651,7 @@ const AdminProjectWorkspace = () => {
                             px: 2,
                             py: 0.75,
                             fontSize: "13px",
+                            flexShrink: 0,
                             color:
                               activitiesPage === 1
                                 ? COLORS.textMuted
@@ -2356,6 +2691,7 @@ const AdminProjectWorkspace = () => {
                                   px: 1,
                                   py: 0.75,
                                   fontSize: "13px",
+                                  flexShrink: 0,
                                   color:
                                     activitiesPage === pageNum
                                       ? COLORS.blue
@@ -2392,6 +2728,7 @@ const AdminProjectWorkspace = () => {
                             px: 2,
                             py: 0.75,
                             fontSize: "13px",
+                            flexShrink: 0,
                             color:
                               activitiesPage === totalPages
                                 ? COLORS.textMuted
@@ -2912,7 +3249,12 @@ const AdminProjectWorkspace = () => {
                                 {
                                   id: action._id.slice(-6).toUpperCase(),
                                   title: action.title,
-                                  description: (action as unknown as { description?: string }).description || "",
+                                  description:
+                                    (
+                                      action as unknown as {
+                                        description?: string;
+                                      }
+                                    ).description || "",
                                   linkedActivity:
                                     action.linkedActivity?.activityId || "",
                                   type: action.type,
@@ -2922,7 +3264,12 @@ const AdminProjectWorkspace = () => {
                                       : "NA",
                                     name: action.assignee?.name || "Unassigned",
                                   },
-                                  assigneeId: (action.assignee as unknown as { _id?: string })?._id || "",
+                                  assigneeId:
+                                    (
+                                      action.assignee as unknown as {
+                                        _id?: string;
+                                      }
+                                    )?._id || "",
                                   dueDate: action.dueDate
                                     ? new Date(action.dueDate)
                                         .toISOString()
@@ -2938,28 +3285,47 @@ const AdminProjectWorkspace = () => {
                             sx={{
                               width: 16,
                               height: 16,
-                              cursor: action.status === "Completed" ? "not-allowed" : "pointer",
-                              opacity: action.status === "Completed" ? 0.3 : 0.7,
-                              "&:hover": { opacity: action.status === "Completed" ? 0.3 : 1 },
+                              cursor:
+                                action.status === "Completed"
+                                  ? "not-allowed"
+                                  : "pointer",
+                              opacity:
+                                action.status === "Completed" ? 0.3 : 0.7,
+                              "&:hover": {
+                                opacity:
+                                  action.status === "Completed" ? 0.3 : 1,
+                              },
                             }}
                           />
                           <Box
                             component="img"
                             src={viewIcon}
-                            onClick={() => action.status !== "Completed" ? handleOpenCompleteConfirm({ _id: action._id, title: action.title }) : null}
+                            onClick={() =>
+                              action.status !== "Completed"
+                                ? handleOpenCompleteConfirm({
+                                    _id: action._id,
+                                    title: action.title,
+                                  })
+                                : null
+                            }
                             sx={{
                               width: 16,
                               height: 16,
-                              cursor: action.status === "Completed" ? "default" : "pointer",
+                              cursor:
+                                action.status === "Completed"
+                                  ? "default"
+                                  : "pointer",
                               opacity: action.status === "Completed" ? 1 : 0.7,
-                              filter: action.status === "Completed"
-                                ? "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(5323%) hue-rotate(107deg) brightness(92%) contrast(88%)"
-                                : "none",
+                              filter:
+                                action.status === "Completed"
+                                  ? "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(5323%) hue-rotate(107deg) brightness(92%) contrast(88%)"
+                                  : "none",
                               "&:hover": {
                                 opacity: 1,
-                                filter: action.status !== "Completed"
-                                  ? "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(5323%) hue-rotate(107deg) brightness(92%) contrast(88%)"
-                                  : "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(5323%) hue-rotate(107deg) brightness(92%) contrast(88%)",
+                                filter:
+                                  action.status !== "Completed"
+                                    ? "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(5323%) hue-rotate(107deg) brightness(92%) contrast(88%)"
+                                    : "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(5323%) hue-rotate(107deg) brightness(92%) contrast(88%)",
                               },
                             }}
                           />
@@ -4177,7 +4543,9 @@ const AdminProjectWorkspace = () => {
                     },
                   }}
                 >
-                  <MenuItem value={project?._id || ""}>{project?.name || "Unknown Project"}</MenuItem>
+                  <MenuItem value={project?._id || ""}>
+                    {project?.name || "Unknown Project"}
+                  </MenuItem>
                 </Select>
               </Box>
 
@@ -4197,7 +4565,9 @@ const AdminProjectWorkspace = () => {
                 <Select
                   fullWidth
                   value={editingAction?.linkedActivity || ""}
-                  onChange={(e) => handleEditChange("linkedActivity", e.target.value)}
+                  onChange={(e) =>
+                    handleEditChange("linkedActivity", e.target.value)
+                  }
                   displayEmpty
                   IconComponent={ArrowDownIcon}
                   sx={{
@@ -4214,7 +4584,9 @@ const AdminProjectWorkspace = () => {
                       borderWidth: 1,
                     },
                     "& .MuiSelect-select": {
-                      color: editingAction?.linkedActivity ? COLORS.textPrimary : COLORS.textMuted,
+                      color: editingAction?.linkedActivity
+                        ? COLORS.textPrimary
+                        : COLORS.textMuted,
                       fontSize: "14px",
                       py: 1.2,
                       overflow: "hidden",
@@ -4250,10 +4622,15 @@ const AdminProjectWorkspace = () => {
                   }}
                 >
                   <MenuItem value="" disabled>
-                    {lookaheadData?.activities?.length ? "Select activity..." : "No activities available"}
+                    {lookaheadData?.activities?.length
+                      ? "Select activity..."
+                      : "No activities available"}
                   </MenuItem>
                   {lookaheadData?.activities?.map((activity) => (
-                    <MenuItem key={activity.activityId} value={activity.activityId}>
+                    <MenuItem
+                      key={activity.activityId}
+                      value={activity.activityId}
+                    >
                       {activity.activityId} - {activity.activityName}
                     </MenuItem>
                   ))}
@@ -4315,7 +4692,9 @@ const AdminProjectWorkspace = () => {
                   multiline
                   rows={3}
                   value={editingAction?.description || ""}
-                  onChange={(e) => handleEditChange("description", e.target.value)}
+                  onChange={(e) =>
+                    handleEditChange("description", e.target.value)
+                  }
                   sx={{
                     "& .MuiOutlinedInput-root": {
                       bgcolor: COLORS.bgPrimary,
@@ -4336,7 +4715,9 @@ const AdminProjectWorkspace = () => {
               </Box>
 
               {/* Type | Priority row */}
-              <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+              <Box
+                sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}
+              >
                 <Box>
                   <Typography
                     sx={{
@@ -4357,8 +4738,12 @@ const AdminProjectWorkspace = () => {
                     sx={{
                       bgcolor: COLORS.bgPrimary,
                       borderRadius: "8px",
-                      "& .MuiOutlinedInput-notchedOutline": { borderColor: COLORS.border },
-                      "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: COLORS.border },
+                      "& .MuiOutlinedInput-notchedOutline": {
+                        borderColor: COLORS.border,
+                      },
+                      "&:hover .MuiOutlinedInput-notchedOutline": {
+                        borderColor: COLORS.border,
+                      },
                       "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
                         borderColor: COLORS.blue,
                         borderWidth: 1,
@@ -4381,7 +4766,9 @@ const AdminProjectWorkspace = () => {
                               color: COLORS.textPrimary,
                               fontSize: "14px",
                               "&:hover": { bgcolor: COLORS.bgTertiary },
-                              "&.Mui-selected": { bgcolor: COLORS.blueBgMedium },
+                              "&.Mui-selected": {
+                                bgcolor: COLORS.blueBgMedium,
+                              },
                             },
                           },
                         },
@@ -4407,13 +4794,19 @@ const AdminProjectWorkspace = () => {
                   <Select
                     fullWidth
                     value={editingAction?.priority || ""}
-                    onChange={(e) => handleEditChange("priority", e.target.value)}
+                    onChange={(e) =>
+                      handleEditChange("priority", e.target.value)
+                    }
                     IconComponent={ArrowDownIcon}
                     sx={{
                       bgcolor: COLORS.bgPrimary,
                       borderRadius: "8px",
-                      "& .MuiOutlinedInput-notchedOutline": { borderColor: COLORS.border },
-                      "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: COLORS.border },
+                      "& .MuiOutlinedInput-notchedOutline": {
+                        borderColor: COLORS.border,
+                      },
+                      "&:hover .MuiOutlinedInput-notchedOutline": {
+                        borderColor: COLORS.border,
+                      },
                       "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
                         borderColor: COLORS.blue,
                         borderWidth: 1,
@@ -4436,7 +4829,9 @@ const AdminProjectWorkspace = () => {
                               color: COLORS.textPrimary,
                               fontSize: "14px",
                               "&:hover": { bgcolor: COLORS.bgTertiary },
-                              "&.Mui-selected": { bgcolor: COLORS.blueBgMedium },
+                              "&.Mui-selected": {
+                                bgcolor: COLORS.blueBgMedium,
+                              },
                             },
                           },
                         },
@@ -4452,7 +4847,9 @@ const AdminProjectWorkspace = () => {
               </Box>
 
               {/* Assignee | Due Date row */}
-              <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+              <Box
+                sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}
+              >
                 <Box>
                   <Typography
                     sx={{
@@ -4469,10 +4866,16 @@ const AdminProjectWorkspace = () => {
                     fullWidth
                     value={editingAction?.assigneeId || ""}
                     onChange={(e) => {
-                      const selectedUser = users.find(u => u._id === e.target.value);
+                      const selectedUser = users.find(
+                        (u) => u._id === e.target.value,
+                      );
                       if (editingAction && selectedUser) {
                         const names = selectedUser.name.split(" ");
-                        const initials = names.map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+                        const initials = names
+                          .map((n) => n[0])
+                          .join("")
+                          .toUpperCase()
+                          .slice(0, 2);
                         setEditingAction({
                           ...editingAction,
                           assigneeId: e.target.value,
@@ -4485,14 +4888,20 @@ const AdminProjectWorkspace = () => {
                     sx={{
                       bgcolor: COLORS.bgPrimary,
                       borderRadius: "8px",
-                      "& .MuiOutlinedInput-notchedOutline": { borderColor: COLORS.border },
-                      "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: COLORS.border },
+                      "& .MuiOutlinedInput-notchedOutline": {
+                        borderColor: COLORS.border,
+                      },
+                      "&:hover .MuiOutlinedInput-notchedOutline": {
+                        borderColor: COLORS.border,
+                      },
                       "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
                         borderColor: COLORS.blue,
                         borderWidth: 1,
                       },
                       "& .MuiSelect-select": {
-                        color: editingAction?.assigneeId ? COLORS.textPrimary : COLORS.textMuted,
+                        color: editingAction?.assigneeId
+                          ? COLORS.textPrimary
+                          : COLORS.textMuted,
                         fontSize: "14px",
                         py: 1.2,
                       },
@@ -4510,7 +4919,9 @@ const AdminProjectWorkspace = () => {
                               color: COLORS.textPrimary,
                               fontSize: "14px",
                               "&:hover": { bgcolor: COLORS.bgTertiary },
-                              "&.Mui-selected": { bgcolor: COLORS.blueBgMedium },
+                              "&.Mui-selected": {
+                                bgcolor: COLORS.blueBgMedium,
+                              },
                             },
                           },
                         },
@@ -4518,7 +4929,9 @@ const AdminProjectWorkspace = () => {
                     }}
                   >
                     <MenuItem value="" disabled>
-                      {users.length === 0 ? "No users available" : "Select assignee..."}
+                      {users.length === 0
+                        ? "No users available"
+                        : "Select assignee..."}
                     </MenuItem>
                     {users.map((user) => (
                       <MenuItem key={user._id} value={user._id}>
@@ -4543,7 +4956,9 @@ const AdminProjectWorkspace = () => {
                     fullWidth
                     type="date"
                     value={editingAction?.dueDate || ""}
-                    onChange={(e) => handleEditChange("dueDate", e.target.value)}
+                    onChange={(e) =>
+                      handleEditChange("dueDate", e.target.value)
+                    }
                     sx={{
                       "& .MuiOutlinedInput-root": {
                         bgcolor: COLORS.bgPrimary,
@@ -4556,7 +4971,9 @@ const AdminProjectWorkspace = () => {
                         },
                       },
                       "& .MuiOutlinedInput-input": {
-                        color: editingAction?.dueDate ? COLORS.textPrimary : COLORS.textMuted,
+                        color: editingAction?.dueDate
+                          ? COLORS.textPrimary
+                          : COLORS.textMuted,
                         fontSize: "14px",
                         py: 1.2,
                         "&::-webkit-calendar-picker-indicator": {
@@ -4571,7 +4988,9 @@ const AdminProjectWorkspace = () => {
               </Box>
 
               {/* Status row (half width) */}
-              <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+              <Box
+                sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}
+              >
                 <Box>
                   <Typography
                     sx={{
@@ -4592,8 +5011,12 @@ const AdminProjectWorkspace = () => {
                     sx={{
                       bgcolor: COLORS.bgPrimary,
                       borderRadius: "8px",
-                      "& .MuiOutlinedInput-notchedOutline": { borderColor: COLORS.border },
-                      "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: COLORS.border },
+                      "& .MuiOutlinedInput-notchedOutline": {
+                        borderColor: COLORS.border,
+                      },
+                      "&:hover .MuiOutlinedInput-notchedOutline": {
+                        borderColor: COLORS.border,
+                      },
                       "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
                         borderColor: COLORS.blue,
                         borderWidth: 1,
@@ -4616,7 +5039,9 @@ const AdminProjectWorkspace = () => {
                               color: COLORS.textPrimary,
                               fontSize: "14px",
                               "&:hover": { bgcolor: COLORS.bgTertiary },
-                              "&.Mui-selected": { bgcolor: COLORS.blueBgMedium },
+                              "&.Mui-selected": {
+                                bgcolor: COLORS.blueBgMedium,
+                              },
                             },
                           },
                         },
@@ -4758,7 +5183,8 @@ const AdminProjectWorkspace = () => {
                   sx={{
                     width: 28,
                     height: 28,
-                    filter: "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(5323%) hue-rotate(107deg) brightness(92%) contrast(88%)",
+                    filter:
+                      "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(5323%) hue-rotate(107deg) brightness(92%) contrast(88%)",
                   }}
                 />
               </Box>
