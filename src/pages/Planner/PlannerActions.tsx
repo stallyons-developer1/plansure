@@ -223,9 +223,7 @@ const PlannerActions = () => {
               u._id !== user?.id,
           );
           setUsers(activeUsers);
-        } catch (userError) {
-          console.log("Could not fetch users list (admin only):", userError);
-        }
+        } catch (userError) {}
       } catch (error) {
         console.error("Failed to fetch data:", error);
       } finally {

@@ -56,14 +56,12 @@ export const requestNotificationPermission = async (): Promise<
     if (permission !== "granted") return null;
 
     const registration = await navigator.serviceWorker.ready;
-    console.log("[Firebase] Service worker ready:", registration.scope);
 
     const messagingInstance = getFirebaseMessaging();
     if (!messagingInstance) return null;
 
     const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
     if (!vapidKey) {
-      console.log("[Firebase] No VAPID key configured");
       return null;
     }
 
@@ -71,7 +69,6 @@ export const requestNotificationPermission = async (): Promise<
       vapidKey,
       serviceWorkerRegistration: registration,
     });
-    console.log("[Firebase] Token generated successfully");
     return token;
   } catch (error) {
     console.error("[Firebase] Token generation error:", error);

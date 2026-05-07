@@ -3821,14 +3821,6 @@ const AdminProjectWorkspace = () => {
                               const canComplete =
                                 user?.role === "admin" || isAssignee;
 
-                              console.log("Complete check:", {
-                                assigneeId,
-                                userId,
-                                isAssignee,
-                                canComplete,
-                                role: user?.role,
-                              });
-
                               if (
                                 action.status !== "Completed" &&
                                 canComplete

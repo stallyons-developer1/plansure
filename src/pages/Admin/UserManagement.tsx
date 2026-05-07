@@ -156,13 +156,6 @@ const UserManagement = () => {
         handleCloseInviteModal();
       }
     } catch (error: unknown) {
-      console.log("=== INVITE USER ERROR DEBUG ===");
-      console.log("Full error:", error);
-      console.log("Error response:", (error as any).response);
-      console.log("Error response data:", (error as any).response?.data);
-      console.log("Error status:", (error as any).response?.status);
-      console.log("================================");
-
       const err = error as {
         response?: {
           data?: { errors?: { message: string }[]; message?: string };
