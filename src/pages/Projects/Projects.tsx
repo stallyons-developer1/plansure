@@ -12,7 +12,6 @@ import {
 } from "@mui/material";
 import {
   Search as SearchIcon,
-  Settings as SettingsIcon,
   BarChart as BarChartIcon,
 } from "@mui/icons-material";
 import { useState, useEffect } from "react";
@@ -398,22 +397,6 @@ const ProjectCard = ({
         >
           <BarChartIcon sx={{ fontSize: 16 }} />
           View Dashboard
-        </Link>
-        <Link
-          href="#"
-          underline="none"
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            gap: 0.5,
-            color: COLORS.textSecondary,
-            fontSize: "12px",
-            fontWeight: 400,
-            "&:hover": { color: COLORS.textPrimary },
-          }}
-        >
-          <SettingsIcon sx={{ fontSize: 14 }} />
-          Settings
         </Link>
       </Box>
     </Card>

@@ -58,6 +58,20 @@ export const authAPI = {
     const response = await api.get("/auth/profile");
     return response.data;
   },
+
+  updateProfile: async (data: { name: string }) => {
+    const response = await api.put("/auth/profile", data);
+    return response.data;
+  },
+
+  changePassword: async (data: {
+    currentPassword: string;
+    newPassword: string;
+    confirmPassword: string;
+  }) => {
+    const response = await api.put("/auth/password", data);
+    return response.data;
+  },
 };
 
 export const projectAPI = {

@@ -27,6 +27,8 @@ import UserManagement from "./pages/Admin/UserManagement";
 import AuditLogs from "./pages/Admin/AuditLogs";
 import AdminNotifications from "./pages/Admin/AdminNotifications";
 import PlannerNotifications from "./pages/Planner/PlannerNotifications";
+import PlannerSettings from "./pages/Planner/PlannerSettings";
+import UserSettings from "./pages/Dashboard/UserSettings";
 
 const ProtectedRoute = ({
   children,
@@ -273,6 +275,15 @@ function App() {
       />
 
       <Route
+        path="/planner/settings"
+        element={
+          <ProtectedRoute allowedRoles={["planner"]}>
+            <PlannerSettings />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
         path="/dashboard"
         element={
           <ProtectedRoute allowedRoles={["user"]}>
@@ -304,6 +315,15 @@ function App() {
         element={
           <ProtectedRoute allowedRoles={["user"]}>
             <Activities />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/dashboard/settings"
+        element={
+          <ProtectedRoute allowedRoles={["user"]}>
+            <UserSettings />
           </ProtectedRoute>
         }
       />

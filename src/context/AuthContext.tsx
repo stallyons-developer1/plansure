@@ -27,6 +27,7 @@ interface AuthContextType {
   token: string | null;
   login: (email: string, password: string) => Promise<LoginResponse>;
   logout: () => Promise<void>;
+  updateUser: (userData: Partial<User>) => void;
   isAuthenticated: boolean;
   isLoading: boolean;
 }
@@ -154,6 +155,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [token]);
 
+  const updateUser = useCallback((userData: Partial<User>) => {
+    setUser((prev) => {
+      if (!prev) return null;
+      const updated = { ...prev, ...userData };
+      localStorage.setItem("plansure_user", JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
+
   return (
     <AuthContext.Provider
       value={{
@@ -161,6 +171,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         token,
         login,
         logout,
+        updateUser,
         isAuthenticated: !!user && !!token,
         isLoading,
       }}

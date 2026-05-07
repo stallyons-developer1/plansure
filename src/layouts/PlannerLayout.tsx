@@ -26,6 +26,7 @@ import {
   NotificationsOutlined as NotificationsIcon,
   Logout as LogoutIcon,
   Menu as MenuIcon,
+  SettingsOutlined as SettingsIcon,
 } from "@mui/icons-material";
 import { useAuth } from "../context/AuthContext";
 import { COLORS } from "../constants/colors";
@@ -422,6 +423,15 @@ const PlannerLayout = ({
                 </Typography>
               </Box>
             </Box>
+            <IconButton
+              onClick={() => navigate("/planner/settings")}
+              sx={{
+                color: COLORS.textMuted,
+                "&:hover": { color: COLORS.blue },
+              }}
+            >
+              <SettingsIcon fontSize="small" />
+            </IconButton>
             <IconButton
               onClick={handleLogoutClick}
               sx={{

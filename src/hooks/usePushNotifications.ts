@@ -80,9 +80,6 @@ export const usePushNotifications = (): UsePushNotificationsReturn => {
         return false;
       }
 
-      const deviceInfo = `${navigator.userAgent.split(" ").slice(-2).join(" ")} on ${navigator.platform}`;
-      const response = await fcmAPI.registerToken(token, deviceInfo);
-
       setIsEnabled(true);
       setPermissionStatus("granted");
       localStorage.setItem("plansure_push_enabled", "true");
