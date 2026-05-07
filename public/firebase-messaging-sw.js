@@ -6,12 +6,12 @@ importScripts(
 );
 
 const firebaseConfig = {
-  apiKey: "AIzaSyCLBpGrfH8V-G3M-k3s2MHGY2cIXlHCH3A",
+  apiKey: "AIzaSyA1ehcG5F-AgRWVIbeXk5xIcX2rARTs8pg",
   authDomain: "plansure-25934.firebaseapp.com",
   projectId: "plansure-25934",
   storageBucket: "plansure-25934.firebasestorage.app",
-  messagingSenderId: "979825581498",
-  appId: "1:979825581498:web:93cf1eb1ebc32adb3b9e4c",
+  messagingSenderId: "202707167252",
+  appId: "1:202707167252:web:5d147053f0c6078c03df01",
 };
 
 firebase.initializeApp(firebaseConfig);
@@ -23,30 +23,56 @@ self.addEventListener("push", (event) => {
   console.log("[SW] Push event received:", event);
 
   if (event.data) {
+    let notificationTitle = "New Notification";
+    let notificationBody = "You have a new notification";
+    let notificationData = {};
+
+    // Try to parse as JSON first
     try {
       const payload = event.data.json();
-      console.log("[SW] Push payload:", payload);
+      console.log("[SW] Push payload (JSON):", payload);
 
-      const notificationTitle =
-        payload.notification?.title || "New Notification";
-      const notificationOptions = {
-        body: payload.notification?.body || "You have a new notification",
-        icon: "/favicon.png",
-        badge: "/favicon.png",
-        tag: payload.data?.notificationId || Date.now().toString(),
-        data: payload.data,
-        requireInteraction: true,
-      };
-
-      event.waitUntil(
-        self.registration.showNotification(
-          notificationTitle,
-          notificationOptions,
-        ),
-      );
+      // Handle data-only messages (data is at root level)
+      if (payload.data) {
+        notificationTitle = payload.data.title || "New Notification";
+        notificationBody = payload.data.body || "You have a new notification";
+        notificationData = payload.data;
+      }
+      // Handle notification messages
+      else if (payload.notification) {
+        notificationTitle = payload.notification.title || "New Notification";
+        notificationBody = payload.notification.body || "You have a new notification";
+        notificationData = payload.data || {};
+      }
+      // Handle flat structure
+      else {
+        notificationTitle = payload.title || "New Notification";
+        notificationBody = payload.body || "You have a new notification";
+        notificationData = payload;
+      }
     } catch (e) {
-      console.log("[SW] Push data parse error:", e);
+      // If JSON parsing fails, treat as plain text
+      const text = event.data.text();
+      console.log("[SW] Push payload (text):", text);
+      notificationBody = text || "You have a new notification";
     }
+
+    const notificationOptions = {
+      body: notificationBody,
+      icon: "/favicon.png",
+      badge: "/favicon.png",
+      tag: notificationData?.notificationId || Date.now().toString(),
+      data: notificationData,
+      requireInteraction: true,
+    };
+
+    console.log("[SW] Showing notification:", notificationTitle, notificationOptions);
+
+    event.waitUntil(
+      self.registration.showNotification(notificationTitle, notificationOptions)
+        .then(() => console.log("[SW] Notification shown successfully"))
+        .catch(err => console.error("[SW] Failed to show notification:", err))
+    );
   }
 });
 
