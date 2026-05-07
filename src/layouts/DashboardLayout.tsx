@@ -80,7 +80,8 @@ const DashboardLayout = ({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [logoutModalOpen, setLogoutModalOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const [notificationAnchor, setNotificationAnchor] = useState<HTMLElement | null>(null);
+  const [notificationAnchor, setNotificationAnchor] =
+    useState<HTMLElement | null>(null);
   const [notifications, setNotifications] = useState(sampleNotifications);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -111,7 +112,6 @@ const DashboardLayout = ({
 
   const handleLogoutConfirm = async () => {
     setIsLoggingOut(true);
-    // Show loader for 2 seconds
     await new Promise((resolve) => setTimeout(resolve, 2000));
     try {
       await logout();
@@ -351,7 +351,9 @@ const DashboardLayout = ({
                   fontSize: "0.875rem",
                 }}
               >
-                {user?.name?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || "U"}
+                {user?.name?.charAt(0).toUpperCase() ||
+                  user?.email?.charAt(0).toUpperCase() ||
+                  "U"}
               </Avatar>
               <Box>
                 <Typography
@@ -569,7 +571,9 @@ const DashboardLayout = ({
                     p: 2,
                     borderBottom: `1px solid ${COLORS.border}`,
                     cursor: "pointer",
-                    bgcolor: notification.read ? "transparent" : "rgba(59, 130, 246, 0.05)",
+                    bgcolor: notification.read
+                      ? "transparent"
+                      : "rgba(59, 130, 246, 0.05)",
                     "&:hover": {
                       bgcolor: COLORS.bgTertiary,
                     },

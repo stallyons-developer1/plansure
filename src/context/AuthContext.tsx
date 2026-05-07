@@ -69,7 +69,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         return { success: false, error: response.message || "Login failed" };
       } catch (error: unknown) {
-        // Check if it's an axios error with response data
         if (error && typeof error === "object" && "response" in error) {
           const axiosError = error as {
             response?: {
@@ -82,15 +81,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             };
           };
 
-          // Handle field-specific validation errors from backend
-          if (axiosError.response?.data?.errors && Array.isArray(axiosError.response.data.errors)) {
+          if (
+            axiosError.response?.data?.errors &&
+            Array.isArray(axiosError.response.data.errors)
+          ) {
             return {
               success: false,
               errors: axiosError.response.data.errors,
             };
           }
 
-          // Handle general error message from backend
           if (axiosError.response?.data?.message) {
             return {
               success: false,
@@ -98,7 +98,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             };
           }
 
-          // Handle HTTP status errors without specific message
           if (axiosError.response?.status) {
             const status = axiosError.response.status;
             if (status === 401) {
@@ -108,18 +107,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               return { success: false, error: "Access denied" };
             }
             if (status >= 500) {
-              return { success: false, error: "Server error. Please try again later." };
+              return {
+                success: false,
+                error: "Server error. Please try again later.",
+              };
             }
           }
         }
 
-        // Network error or server not reachable
         if (error && typeof error === "object" && "code" in error) {
           const networkError = error as { code?: string };
           if (networkError.code === "ERR_NETWORK") {
             return {
               success: false,
-              error: "Unable to connect to server. Please check your connection.",
+              error:
+                "Unable to connect to server. Please check your connection.",
             };
           }
         }
@@ -132,18 +134,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setIsLoading(false);
       }
     },
-    []
+    [],
   );
 
   const logout = useCallback(async () => {
     setIsLoading(true);
     try {
-      // Call logout API if we have a token
       if (token) {
         await authAPI.logout();
       }
     } catch (error) {
-      // Even if API call fails, still clear local state
       console.error("Logout API error:", error);
     } finally {
       setUser(null);

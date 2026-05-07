@@ -450,7 +450,6 @@ const AdminProjects = () => {
   const [isCreating, setIsCreating] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
-  // Fetch projects on mount
   useEffect(() => {
     fetchProjects();
   }, []);
@@ -706,7 +705,6 @@ const AdminProjects = () => {
         }}
       >
         {isLoading ? (
-          // Loading skeletons
           Array.from({ length: 3 }).map((_, index) => (
             <Card
               key={index}
@@ -1074,14 +1072,19 @@ const AdminProjects = () => {
                         position="end"
                         sx={{ cursor: "pointer" }}
                         onClick={(e) => {
-                          const input = (e.currentTarget.parentElement?.querySelector('input') as HTMLInputElement);
+                          const input =
+                            e.currentTarget.parentElement?.querySelector(
+                              "input",
+                            ) as HTMLInputElement;
                           if (input) {
                             input.showPicker?.();
                             input.focus();
                           }
                         }}
                       >
-                        <CalendarIcon sx={{ color: COLORS.textSecondary, fontSize: 20 }} />
+                        <CalendarIcon
+                          sx={{ color: COLORS.textSecondary, fontSize: 20 }}
+                        />
                       </InputAdornment>
                     ),
                   },
@@ -1091,13 +1094,19 @@ const AdminProjects = () => {
                     bgcolor: COLORS.bgPrimary,
                     borderRadius: "8px",
                     "& fieldset": {
-                      borderColor: fieldErrors.startDate ? COLORS.red : COLORS.border,
+                      borderColor: fieldErrors.startDate
+                        ? COLORS.red
+                        : COLORS.border,
                     },
                     "&:hover fieldset": {
-                      borderColor: fieldErrors.startDate ? COLORS.red : COLORS.border,
+                      borderColor: fieldErrors.startDate
+                        ? COLORS.red
+                        : COLORS.border,
                     },
                     "&.Mui-focused fieldset": {
-                      borderColor: fieldErrors.startDate ? COLORS.red : COLORS.border,
+                      borderColor: fieldErrors.startDate
+                        ? COLORS.red
+                        : COLORS.border,
                       borderWidth: 1,
                     },
                   },

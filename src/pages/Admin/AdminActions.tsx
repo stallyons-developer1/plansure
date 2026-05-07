@@ -40,6 +40,7 @@ import {
   userAPI,
   actionAPI,
 } from "../../services/api";
+import { useAuth } from "../../context/AuthContext";
 
 interface Action {
   _id: string;
@@ -102,7 +103,6 @@ interface ActionStats {
   overdue: number;
 }
 
-// Helper function to get initials from name
 const getInitials = (name: string): string => {
   const parts = name.trim().split(" ");
   if (parts.length >= 2) {
@@ -112,6 +112,7 @@ const getInitials = (name: string): string => {
 };
 
 const AdminActions = () => {
+  const { user } = useAuth();
   const [actions, setActions] = useState<Action[]>([]);
   const [actionsLoading, setActionsLoading] = useState(true);
   const [actionStats, setActionStats] = useState<ActionStats>({
@@ -147,7 +148,6 @@ const AdminActions = () => {
     dueDate: "",
   });
 
-  // Projects and Activities state
   const [projects, setProjects] = useState<Project[]>([]);
   const [programmes, setProgrammes] = useState<Programme[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -160,7 +160,6 @@ const AdminActions = () => {
   });
   const [users, setUsers] = useState<User[]>([]);
 
-  // Fetch actions
   const fetchActions = async () => {
     try {
       const response = await actionAPI.getAll();
@@ -172,7 +171,6 @@ const AdminActions = () => {
     }
   };
 
-  // Fetch action stats
   const fetchStats = async () => {
     try {
       const response = await actionAPI.getStats();
@@ -184,13 +182,11 @@ const AdminActions = () => {
     }
   };
 
-  // Get programme ID for a project
   const getProgrammeIdForProject = (projectId: string): string | null => {
     const programme = programmes.find((p) => p.project === projectId);
     return programme?._id || null;
   };
 
-  // Fetch all data on mount
   useEffect(() => {
     const fetchData = async () => {
       setActionsLoading(true);
@@ -208,9 +204,8 @@ const AdminActions = () => {
           setProjects(projectsRes.projects);
         }
 
-        // Filter out admins, only keep active planners and users
         const activeUsers = (usersRes.users || []).filter(
-          (user: User) => user.role !== "admin" && user.status === "active",
+          (user: User) => user.role === "planner" && user.status === "active",
         );
         setUsers(activeUsers);
 
@@ -234,7 +229,6 @@ const AdminActions = () => {
     fetchData();
   }, []);
 
-  // Fetch activities when project is selected
   const fetchActivities = async (projectId: string, page: number = 1) => {
     if (!projectId) {
       setActivities([]);
@@ -292,7 +286,6 @@ const AdminActions = () => {
   };
 
   const filteredActions = actions.filter((action) => {
-    // Check for overdue status
     const isOverdue =
       action.status !== "Completed" &&
       action.status !== "Cancelled" &&
@@ -342,13 +335,11 @@ const AdminActions = () => {
 
   const handleOpenEditModal = async (action: Action) => {
     setEditingAction(action);
-    // Check if assignee is a valid user ID, otherwise reset it
     const assigneeId = action.assignee?._id || "";
     const validAssignee = users.find((u) => u._id === assigneeId)
       ? assigneeId
       : "";
 
-    // Find the project ID from the action's programme
     const programme = programmes.find((p) => p._id === action.programme?._id);
     const projectId = programme?.project || "";
 
@@ -364,7 +355,6 @@ const AdminActions = () => {
       dueDate: action.dueDate ? action.dueDate.split("T")[0] : "",
     });
 
-    // Fetch activities for the project
     if (projectId) {
       setActivitiesLoading(true);
       try {
@@ -483,10 +473,8 @@ const AdminActions = () => {
   };
 
   const handleSaveAction = async () => {
-    // Clear previous error
     setSaveError("");
 
-    // Validate required fields
     if (
       !formData.title.trim() ||
       !formData.assignee ||
@@ -501,12 +489,12 @@ const AdminActions = () => {
 
     try {
       if (editingAction) {
-        // Update existing action
-        // Get programmeId for selected project
         const programmeId = getProgrammeIdForProject(formData.selectedProject);
 
         if (!programmeId) {
-          setSaveError("No programme found for this project. Please upload a programme first.");
+          setSaveError(
+            "No programme found for this project. Please upload a programme first.",
+          );
           setSaveLoading(false);
           return;
         }
@@ -517,7 +505,6 @@ const AdminActions = () => {
           return;
         }
 
-        // Get the activity name from the activities array
         const selectedActivity = activities.find(
           (a) => a.activityId === formData.linkedActivity,
         );
@@ -542,18 +529,17 @@ const AdminActions = () => {
         });
 
         if (response.success) {
-          // Refresh actions list
           await fetchActions();
           await fetchStats();
           handleCloseModal();
         }
       } else {
-        // Create new action
-        // Get programmeId for selected project
         const programmeId = getProgrammeIdForProject(formData.selectedProject);
 
         if (!programmeId) {
-          setSaveError("No programme found for this project. Please upload a programme first.");
+          setSaveError(
+            "No programme found for this project. Please upload a programme first.",
+          );
           setSaveLoading(false);
           return;
         }
@@ -564,7 +550,6 @@ const AdminActions = () => {
           return;
         }
 
-        // Get the activity name from the activities array
         const selectedActivityForCreate = activities.find(
           (a) => a.activityId === formData.linkedActivity,
         );
@@ -586,7 +571,6 @@ const AdminActions = () => {
         });
 
         if (response.success) {
-          // Refresh actions list
           await fetchActions();
           await fetchStats();
           handleCloseModal();
@@ -594,9 +578,12 @@ const AdminActions = () => {
       }
     } catch (error: unknown) {
       console.error("Failed to save action:", error);
-      // Show specific error message from server (e.g., cycle status restrictions)
-      const axiosError = error as { response?: { data?: { message?: string } } };
-      const errorMessage = axiosError?.response?.data?.message || "Failed to save action. Please try again.";
+      const axiosError = error as {
+        response?: { data?: { message?: string } };
+      };
+      const errorMessage =
+        axiosError?.response?.data?.message ||
+        "Failed to save action. Please try again.";
       setSaveError(errorMessage);
     } finally {
       setSaveLoading(false);
@@ -1327,29 +1314,68 @@ const AdminActions = () => {
                       <Box
                         component="img"
                         src={frameIcon}
-                        onClick={() =>
-                          action.status !== "Completed"
-                            ? handleOpenCompleteConfirm(action)
-                            : null
+                        onClick={() => {
+                          const assigneeId = String(action.assignee?._id || "");
+                          const userId = String(user?.id || "");
+                          const isAssignee =
+                            assigneeId === userId && assigneeId !== "";
+                          const canComplete =
+                            user?.role === "admin" || isAssignee;
+
+                          if (action.status !== "Completed" && canComplete) {
+                            handleOpenCompleteConfirm(action);
+                          }
+                        }}
+                        title={
+                          action.status === "Completed"
+                            ? "Already completed"
+                            : String(action.assignee?._id || "") !==
+                                  String(user?.id || "") &&
+                                user?.role !== "admin"
+                              ? "Only the assignee can complete this action"
+                              : "Mark as complete"
                         }
                         sx={{
                           width: 18,
                           height: 18,
                           cursor:
-                            action.status === "Completed"
-                              ? "default"
+                            action.status === "Completed" ||
+                            (String(action.assignee?._id || "") !==
+                              String(user?.id || "") &&
+                              user?.role !== "admin")
+                              ? "not-allowed"
                               : "pointer",
-                          opacity: action.status === "Completed" ? 1 : 0.6,
+                          opacity:
+                            action.status === "Completed"
+                              ? 1
+                              : String(action.assignee?._id || "") !==
+                                    String(user?.id || "") &&
+                                  user?.role !== "admin"
+                                ? 0.3
+                                : 0.6,
                           filter:
                             action.status === "Completed"
                               ? "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(5323%) hue-rotate(107deg) brightness(92%) contrast(88%)"
                               : "none",
                           "&:hover": {
-                            opacity: 1,
+                            opacity:
+                              action.status === "Completed" ||
+                              (String(action.assignee?._id || "") !==
+                                String(user?.id || "") &&
+                                user?.role !== "admin")
+                                ? action.status === "Completed"
+                                  ? 1
+                                  : 0.3
+                                : 1,
                             filter:
-                              action.status !== "Completed"
+                              action.status !== "Completed" &&
+                              (String(action.assignee?._id || "") ===
+                                String(user?.id || "") ||
+                                user?.role === "admin")
                                 ? "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(5323%) hue-rotate(107deg) brightness(92%) contrast(88%)"
-                                : "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(5323%) hue-rotate(107deg) brightness(92%) contrast(88%)",
+                                : action.status === "Completed"
+                                  ? "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(5323%) hue-rotate(107deg) brightness(92%) contrast(88%)"
+                                  : "none",
                           },
                         }}
                       />
@@ -2178,14 +2204,19 @@ const AdminActions = () => {
                           position="end"
                           sx={{ cursor: "pointer" }}
                           onClick={(e) => {
-                            const input = (e.currentTarget.parentElement?.querySelector('input') as HTMLInputElement);
+                            const input =
+                              e.currentTarget.parentElement?.querySelector(
+                                "input",
+                              ) as HTMLInputElement;
                             if (input) {
                               input.showPicker?.();
                               input.focus();
                             }
                           }}
                         >
-                          <CalendarIcon sx={{ color: COLORS.textSecondary, fontSize: 20 }} />
+                          <CalendarIcon
+                            sx={{ color: COLORS.textSecondary, fontSize: 20 }}
+                          />
                         </InputAdornment>
                       ),
                     },
@@ -2235,7 +2266,9 @@ const AdminActions = () => {
             <Box
               sx={{
                 display: "grid",
-                gridTemplateColumns: editingAction ? { xs: "1fr", sm: "1fr 1fr" } : "1fr",
+                gridTemplateColumns: editingAction
+                  ? { xs: "1fr", sm: "1fr 1fr" }
+                  : "1fr",
                 gap: { xs: 0, sm: 2 },
               }}
             >

@@ -126,7 +126,8 @@ const ProjectCard = ({
   project: Project;
   onViewDashboard: () => void;
 }) => {
-  const statusColor = project.status.toLowerCase() === "active" ? COLORS.green : COLORS.amber;
+  const statusColor =
+    project.status.toLowerCase() === "active" ? COLORS.green : COLORS.amber;
   const governanceScore = project.governanceScore || 0;
   const governanceColor = governanceScore >= 70 ? COLORS.green : COLORS.amber;
   const governanceStatus = governanceScore >= 70 ? "green" : "amber";
@@ -426,7 +427,6 @@ const Projects = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
-  // Fetch projects on mount
   useEffect(() => {
     fetchProjects();
   }, []);

@@ -26,7 +26,7 @@ import viewIcon from "../../assets/Frame.png";
 import lockIcon from "../../assets/lock.png";
 import uploadIcon from "../../assets/sidebar/upload.png";
 import { useState, useRef, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import AdminLayout from "../../layouts/AdminLayout";
 import { COLORS } from "../../constants/colors";
 import ProjectHeader from "../../components/ProjectHeader";
@@ -55,7 +55,6 @@ interface ProjectData {
   team?: { user: { name: string; email: string }; role: string }[];
 }
 
-// Default values for dashboard display (will be dynamic later)
 const defaultDashboardData = {
   week: "Week 1",
   weekDates: "Current Week",
@@ -83,7 +82,6 @@ const steps = [
   "Closed",
 ];
 
-// Parse date string (handles DD-Mon-YY format like "09-Jun-22 A")
 const parseDate = (dateStr: string): Date | null => {
   if (!dateStr) return null;
 
@@ -102,7 +100,6 @@ const parseDate = (dateStr: string): Date | null => {
     Dec: 11,
   };
 
-  // Remove suffixes like " A" or "*"
   const cleanDate = dateStr.replace(/\s*[A*]$/, "").trim();
   const match = cleanDate.match(/(\d{2})-([A-Za-z]{3})-(\d{2})/);
 
@@ -114,12 +111,10 @@ const parseDate = (dateStr: string): Date | null => {
     return new Date(year, month, day);
   }
 
-  // Fallback to standard Date parsing
   const date = new Date(dateStr);
   return isNaN(date.getTime()) ? null : date;
 };
 
-// Calculate RAG zone color from dates
 const getRAGColor = (startDate: string, endDate: string): string => {
   if (!startDate || !endDate) return "green";
 
@@ -138,7 +133,6 @@ const getRAGColor = (startDate: string, endDate: string): string => {
   return "red";
 };
 
-// Sort priority: Green (1) -> Amber (2) -> Red (3)
 const getRAGPriority = (color: string): number => {
   if (color === "green") return 1;
   if (color === "amber") return 2;
@@ -161,10 +155,21 @@ interface ActionItem {
 const AdminProjectWorkspace = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const [project, setProject] = useState<ProjectData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState(1); // Default to Programme Upload tab
+  const [activeTab, setActiveTab] = useState(() => {
+    const params = new URLSearchParams(location.search);
+    const tabParam = params.get("tab");
+    if (tabParam === "actions") return 3;
+    if (tabParam === "dashboard") return 0;
+    if (tabParam === "upload") return 1;
+    if (tabParam === "activities") return 2;
+    if (tabParam === "weekly") return 4;
+    if (tabParam === "governance") return 5;
+    return 1;
+  });
   const [currentStep, setCurrentStep] = useState(1);
   const [ragFilter, setRagFilter] = useState("all");
   const [activitiesPage, setActivitiesPage] = useState(1);
@@ -191,7 +196,33 @@ const AdminProjectWorkspace = () => {
   const [isWeekClosed, setIsWeekClosed] = useState(false);
   const [savedOverrideReason, setSavedOverrideReason] = useState("");
 
-  // Programme upload states
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [assigningActivity, setAssigningActivity] = useState<{
+    activityId: string;
+    activityName: string;
+  } | null>(null);
+  const [assignFormData, setAssignFormData] = useState({
+    title: "",
+    description: "",
+    type: "Required",
+    priority: "Medium",
+    assignee: "",
+    dueDate: "",
+  });
+  const [assignSaveLoading, setAssignSaveLoading] = useState(false);
+  const [assignError, setAssignError] = useState("");
+
+  const [reassignModalOpen, setReassignModalOpen] = useState(false);
+  const [reassigningAction, setReassigningAction] = useState<{
+    _id: string;
+    title: string;
+    currentAssignee?: string;
+    currentAssigneeName?: string;
+  } | null>(null);
+  const [reassignAssignee, setReassignAssignee] = useState("");
+  const [reassignLoading, setReassignLoading] = useState(false);
+  const [reassignError, setReassignError] = useState("");
+
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [isLoadingProgramme, setIsLoadingProgramme] = useState(true);
@@ -210,17 +241,17 @@ const AdminProjectWorkspace = () => {
     };
   } | null>(null);
 
-  // Programme history state
-  const [programmeHistory, setProgrammeHistory] = useState<Array<{
-    _id: string;
-    name: string;
-    cycleStatus: string;
-    createdAt: string;
-    totalActivities?: number;
-    overrideReason?: string;
-  }>>([]);
+  const [programmeHistory, setProgrammeHistory] = useState<
+    Array<{
+      _id: string;
+      name: string;
+      cycleStatus: string;
+      createdAt: string;
+      totalActivities?: number;
+      overrideReason?: string;
+    }>
+  >([]);
 
-  // Lookahead data states
   const [lookaheadData, setLookaheadData] = useState<{
     activities: Array<{
       activityId: string;
@@ -276,7 +307,6 @@ const AdminProjectWorkspace = () => {
     Array<{ _id: string; name: string; email: string; role: string }>
   >([]);
 
-  // Scroll to selected action when switching to Actions tab
   useEffect(() => {
     if (activeTab === 3 && selectedActionId) {
       setTimeout(() => {
@@ -290,7 +320,17 @@ const AdminProjectWorkspace = () => {
     }
   }, [activeTab, selectedActionId]);
 
-  // Weekly control data state
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tabParam = params.get("tab");
+    if (tabParam === "actions") setActiveTab(3);
+    else if (tabParam === "dashboard") setActiveTab(0);
+    else if (tabParam === "upload") setActiveTab(1);
+    else if (tabParam === "activities") setActiveTab(2);
+    else if (tabParam === "weekly") setActiveTab(4);
+    else if (tabParam === "governance") setActiveTab(5);
+  }, [location.search]);
+
   const [weeklyControlData, setWeeklyControlData] = useState<{
     stats: {
       cycleStatus: string;
@@ -343,7 +383,6 @@ const AdminProjectWorkspace = () => {
   } | null>(null);
   const [, setIsLoadingWeeklyControl] = useState(false);
 
-  // Fetch project on mount
   useEffect(() => {
     const fetchProject = async () => {
       if (!projectId) return;
@@ -362,16 +401,14 @@ const AdminProjectWorkspace = () => {
     fetchProject();
   }, [projectId]);
 
-  // Fetch users for assignee dropdown
   useEffect(() => {
     const fetchUsers = async () => {
       try {
         const response = await userAPI.getAll({ status: "active" });
         if (response.success) {
-          // Filter out admins, only keep active planners and users
           const activeUsers = (response.users || []).filter(
             (user: { role: string; status: string }) =>
-              user.role !== "admin" && user.status === "active",
+              user.role === "planner" && user.status === "active",
           );
           setUsers(activeUsers);
         }
@@ -382,7 +419,6 @@ const AdminProjectWorkspace = () => {
     fetchUsers();
   }, []);
 
-  // Fetch existing programme for this project
   useEffect(() => {
     const fetchProgramme = async () => {
       if (!projectId) return;
@@ -417,7 +453,6 @@ const AdminProjectWorkspace = () => {
             },
           });
 
-          // Initialize cycle stage and step from backend status
           if (programmeStatus === "Meeting Open") {
             setCycleStage("meetingOpen");
             setCurrentStep(2);
@@ -435,12 +470,10 @@ const AdminProjectWorkspace = () => {
               setSavedOverrideReason(programme.overrideReason);
             }
           } else {
-            // Uploaded or Draft
             setCycleStage("draft");
             setCurrentStep(1);
           }
 
-          // Set lookahead data directly from programme data
           setLookaheadData({
             activities: activities.map(
               (a: {
@@ -517,7 +550,6 @@ const AdminProjectWorkspace = () => {
             ],
           });
 
-          // Fetch weekly control data
           await fetchWeeklyControlData(programme._id);
         }
       } catch (error) {
@@ -529,7 +561,6 @@ const AdminProjectWorkspace = () => {
     fetchProgramme();
   }, [projectId]);
 
-  // Fetch actions for this project's programme
   useEffect(() => {
     const fetchProjectActions = async () => {
       if (!uploadedProgramme?._id) return;
@@ -547,21 +578,31 @@ const AdminProjectWorkspace = () => {
     fetchProjectActions();
   }, [uploadedProgramme?._id]);
 
-  // Fetch programme history for this project
   useEffect(() => {
     const fetchProgrammeHistory = async () => {
       if (!projectId) return;
       try {
         const response = await programmeAPI.getProjectHistory(projectId);
         if (response.success && response.history) {
-          setProgrammeHistory(response.history.map((p: { _id: string; name: string; cycleStatus: string; createdAt: string; extractedData?: { totalActivities?: number }; overrideReason?: string }) => ({
-            _id: p._id,
-            name: p.name,
-            cycleStatus: p.cycleStatus,
-            createdAt: p.createdAt,
-            totalActivities: p.extractedData?.totalActivities || 0,
-            overrideReason: p.overrideReason,
-          })));
+          setProgrammeHistory(
+            response.history.map(
+              (p: {
+                _id: string;
+                name: string;
+                cycleStatus: string;
+                createdAt: string;
+                extractedData?: { totalActivities?: number };
+                overrideReason?: string;
+              }) => ({
+                _id: p._id,
+                name: p.name,
+                cycleStatus: p.cycleStatus,
+                createdAt: p.createdAt,
+                totalActivities: p.extractedData?.totalActivities || 0,
+                overrideReason: p.overrideReason,
+              }),
+            ),
+          );
         }
       } catch (error) {
         console.error("Failed to fetch programme history:", error);
@@ -570,7 +611,6 @@ const AdminProjectWorkspace = () => {
     fetchProgrammeHistory();
   }, [projectId, uploadedProgramme?.cycleStatus]);
 
-  // Helper function to get actions count for an activity
   const getActionsForActivity = (activityId: string) => {
     return projectActions.filter(
       (action) => action.linkedActivity?.activityId === activityId,
@@ -593,16 +633,17 @@ const AdminProjectWorkspace = () => {
       }
 
       if (nextStatus) {
-        const response = await programmeAPI.updateCycleStatus(uploadedProgramme._id, nextStatus);
+        const response = await programmeAPI.updateCycleStatus(
+          uploadedProgramme._id,
+          nextStatus,
+        );
         if (response.success) {
-          // Update local state after successful API call
           if (cycleStage === "draft") {
             setCycleStage("meetingOpen");
           } else if (cycleStage === "meetingOpen") {
             setCycleStage("execution");
           }
           setCurrentStep(nextStep);
-          // Update uploadedProgramme state too
           setUploadedProgramme({
             ...uploadedProgramme,
             cycleStatus: nextStatus,
@@ -614,12 +655,14 @@ const AdminProjectWorkspace = () => {
     }
   };
 
-  // Mark as Close-Out Eligible (Stage 4) - allows exports to be generated
   const handleMarkCloseOutEligible = async () => {
     if (!uploadedProgramme?._id) return;
 
     try {
-      const response = await programmeAPI.updateCycleStatus(uploadedProgramme._id, "Close-Out Eligible");
+      const response = await programmeAPI.updateCycleStatus(
+        uploadedProgramme._id,
+        "Close-Out Eligible",
+      );
       if (response.success) {
         setCurrentStep(4);
         setUploadedProgramme({
@@ -632,12 +675,14 @@ const AdminProjectWorkspace = () => {
     }
   };
 
-  // Final close (Stage 5) - locks the week permanently
   const handleFinalClose = async () => {
     if (!uploadedProgramme?._id) return;
 
     try {
-      const response = await programmeAPI.updateCycleStatus(uploadedProgramme._id, "Closed");
+      const response = await programmeAPI.updateCycleStatus(
+        uploadedProgramme._id,
+        "Closed",
+      );
       if (response.success) {
         setCurrentStep(5);
         setIsWeekClosed(true);
@@ -652,19 +697,20 @@ const AdminProjectWorkspace = () => {
     }
   };
 
-  // PM Override close with mandatory reason
   const handleOverrideClose = async () => {
     if (!uploadedProgramme?._id || overrideReason.length < 10) return;
 
     try {
-      const response = await programmeAPI.pmOverride(uploadedProgramme._id, overrideReason);
+      const response = await programmeAPI.pmOverride(
+        uploadedProgramme._id,
+        overrideReason,
+      );
       if (response.success) {
         setCurrentStep(5);
         setSavedOverrideReason(overrideReason);
         setIsWeekClosed(true);
         setShowOverrideForm(false);
         setOverrideReason("");
-        // Update uploadedProgramme state
         setUploadedProgramme({
           ...uploadedProgramme,
           cycleStatus: "Closed",
@@ -683,11 +729,9 @@ const AdminProjectWorkspace = () => {
   };
 
   const getCycleStatusText = () => {
-    // Use backend status if available
     if (uploadedProgramme?.cycleStatus) {
       return uploadedProgramme.cycleStatus;
     }
-    // Fallback to local state
     if (cycleStage === "draft") return "Draft";
     if (cycleStage === "meetingOpen") return "Meeting Open";
     return "Execution";
@@ -716,7 +760,6 @@ const AdminProjectWorkspace = () => {
 
     setEditSaveLoading(true);
     try {
-      // Get activity name from lookahead data
       const selectedActivity = lookaheadData?.activities?.find(
         (a) => a.activityId === editingAction.linkedActivity,
       );
@@ -738,7 +781,6 @@ const AdminProjectWorkspace = () => {
       });
 
       if (response.success) {
-        // Refresh project actions
         const actionsRes = await actionAPI.getAll({
           programmeId: uploadedProgramme?._id,
         });
@@ -758,6 +800,143 @@ const AdminProjectWorkspace = () => {
   const handleEditChange = (field: keyof ActionItem, value: string) => {
     if (editingAction) {
       setEditingAction({ ...editingAction, [field]: value });
+    }
+  };
+
+  const handleAssignClose = () => {
+    setAssignModalOpen(false);
+    setAssigningActivity(null);
+    setAssignFormData({
+      title: "",
+      description: "",
+      type: "Required",
+      priority: "Medium",
+      assignee: "",
+      dueDate: "",
+    });
+    setAssignError("");
+  };
+
+  const handleAssignSave = async () => {
+    if (!assigningActivity || !uploadedProgramme?._id) return;
+
+    setAssignError("");
+
+    if (
+      !assignFormData.title ||
+      !assignFormData.assignee ||
+      !assignFormData.dueDate
+    ) {
+      setAssignError(
+        "Please fill in all required fields (Title, Assignee, Due Date)",
+      );
+      return;
+    }
+
+    setAssignSaveLoading(true);
+    try {
+      const response = await actionAPI.create({
+        programmeId: uploadedProgramme._id,
+        linkedActivity: {
+          activityId: assigningActivity.activityId,
+          activityName: assigningActivity.activityName,
+        },
+        title: assignFormData.title,
+        description: assignFormData.description,
+        type: assignFormData.type,
+        priority: assignFormData.priority,
+        assignee: assignFormData.assignee,
+        dueDate: assignFormData.dueDate,
+      });
+
+      if (response.success) {
+        const actionsRes = await actionAPI.getAll({
+          programmeId: uploadedProgramme._id,
+        });
+        if (actionsRes.success) {
+          setProjectActions(actionsRes.actions || []);
+        }
+        handleAssignClose();
+      }
+    } catch (error: unknown) {
+      console.error("Failed to create action:", error);
+      const err = error as any;
+      const errorMessage =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        err?.message ||
+        "Failed to create action. Please try again.";
+      setAssignError(errorMessage);
+    } finally {
+      setAssignSaveLoading(false);
+    }
+  };
+
+  const handleAssignChange = (field: string, value: string) => {
+    setAssignFormData({ ...assignFormData, [field]: value });
+  };
+
+  const handleOpenReassign = (action: {
+    _id: string;
+    title: string;
+    assignee?: { _id?: string; name?: string };
+  }) => {
+    setReassigningAction({
+      _id: action._id,
+      title: action.title,
+      currentAssignee: action.assignee?._id,
+      currentAssigneeName: action.assignee?.name,
+    });
+    setReassignAssignee(action.assignee?._id || "");
+    setReassignError("");
+    setReassignModalOpen(true);
+  };
+
+  const handleCloseReassign = () => {
+    setReassignModalOpen(false);
+    setReassigningAction(null);
+    setReassignAssignee("");
+    setReassignError("");
+  };
+
+  const handleReassignSave = async () => {
+    if (!reassigningAction || !reassignAssignee) {
+      setReassignError("Please select a new assignee");
+      return;
+    }
+
+    if (reassignAssignee === reassigningAction.currentAssignee) {
+      setReassignError("Please select a different assignee");
+      return;
+    }
+
+    setReassignLoading(true);
+    setReassignError("");
+
+    try {
+      const response = await actionAPI.update(reassigningAction._id, {
+        assignee: reassignAssignee,
+      });
+
+      if (response.success) {
+        const actionsRes = await actionAPI.getAll({
+          programmeId: uploadedProgramme?._id,
+        });
+        if (actionsRes.success) {
+          setProjectActions(actionsRes.actions || []);
+        }
+        handleCloseReassign();
+      }
+    } catch (error: unknown) {
+      console.error("Failed to reassign action:", error);
+      const err = error as any;
+      const errorMessage =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Failed to reassign action. Please try again.";
+      setReassignError(errorMessage);
+    } finally {
+      setReassignLoading(false);
     }
   };
 
@@ -781,7 +960,6 @@ const AdminProjectWorkspace = () => {
     try {
       const response = await actionAPI.complete(actionToComplete._id);
       if (response.success) {
-        // Refresh project actions
         if (projectId) {
           const actionsRes = await actionAPI.getAll({
             programmeId: uploadedProgramme?._id,
@@ -874,7 +1052,6 @@ const AdminProjectWorkspace = () => {
     setUploadError("");
 
     try {
-      // Use file name without extension as programme name
       const programmeName = uploadedFile.name.replace(/\.pdf$/i, "");
       const response = await programmeAPI.upload(
         uploadedFile,
@@ -884,7 +1061,6 @@ const AdminProjectWorkspace = () => {
 
       if (response.success) {
         const programme = response.programme;
-        // Upload response returns activities directly, not in extractedData
         const activities =
           programme.activities || programme.extractedData?.activities || [];
         const summary = programme.summary ||
@@ -898,9 +1074,8 @@ const AdminProjectWorkspace = () => {
           };
 
         setUploadedProgramme(programme);
-        setUploadedFile(null); // Clear the file after successful upload
+        setUploadedFile(null);
 
-        // Set lookahead data directly from programme response
         setLookaheadData({
           activities: activities.map(
             (a: {
@@ -977,7 +1152,6 @@ const AdminProjectWorkspace = () => {
           ],
         });
 
-        // Fetch weekly control data
         await fetchWeeklyControlData(programme._id);
       }
     } catch (error: unknown) {
@@ -1029,7 +1203,6 @@ const AdminProjectWorkspace = () => {
     }
   };
 
-  // Loading state
   if (isLoading) {
     return (
       <AdminLayout
@@ -1050,7 +1223,6 @@ const AdminProjectWorkspace = () => {
     );
   }
 
-  // Project not found
   if (!project) {
     return (
       <AdminLayout
@@ -1089,7 +1261,6 @@ const AdminProjectWorkspace = () => {
     );
   }
 
-  // Get planner from team if available
   const planner =
     project.team?.find((t) => t.role === "Planner")?.user?.name ||
     project.createdBy?.name ||
@@ -1127,7 +1298,7 @@ const AdminProjectWorkspace = () => {
             onChange={(_, newValue) => {
               setActiveTab(newValue);
               if (newValue !== 3) {
-                setSelectedActionId(null); // Clear selection when leaving Actions tab
+                setSelectedActionId(null);
               }
             }}
             variant="scrollable"
@@ -1240,7 +1411,6 @@ const AdminProjectWorkspace = () => {
             />
 
             {isLoadingProgramme ? (
-              // Loading skeleton
               <Box
                 sx={{
                   bgcolor: COLORS.bgSecondary,
@@ -1302,7 +1472,6 @@ const AdminProjectWorkspace = () => {
                 />
               </Box>
             ) : uploadedProgramme ? (
-              // Success state - programme uploaded
               <Box
                 sx={{
                   bgcolor: COLORS.bgSecondary,
@@ -1538,7 +1707,8 @@ const AdminProjectWorkspace = () => {
                   >
                     View Activities & Lookahead
                   </Button>
-                  {(uploadedProgramme?.cycleStatus === "Closed" || isWeekClosed) && (
+                  {(uploadedProgramme?.cycleStatus === "Closed" ||
+                    isWeekClosed) && (
                     <Button
                       onClick={() => {
                         setUploadedProgramme(null);
@@ -1567,7 +1737,8 @@ const AdminProjectWorkspace = () => {
                 </Box>
 
                 {/* Week Closed Notice */}
-                {(uploadedProgramme?.cycleStatus === "Closed" || isWeekClosed) && (
+                {(uploadedProgramme?.cycleStatus === "Closed" ||
+                  isWeekClosed) && (
                   <Box
                     sx={{
                       mt: 3,
@@ -1585,8 +1756,11 @@ const AdminProjectWorkspace = () => {
                       src={lockIcon}
                       sx={{ width: 20, height: 20, opacity: 0.6 }}
                     />
-                    <Typography sx={{ color: COLORS.textMuted, fontSize: "13px" }}>
-                      This week is closed. Click "Start New Week" to upload a new programme for the next cycle.
+                    <Typography
+                      sx={{ color: COLORS.textMuted, fontSize: "13px" }}
+                    >
+                      This week is closed. Click "Start New Week" to upload a
+                      new programme for the next cycle.
                     </Typography>
                   </Box>
                 )}
@@ -1856,7 +2030,9 @@ const AdminProjectWorkspace = () => {
                 >
                   Programme History
                 </Typography>
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+                <Box
+                  sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}
+                >
                   {programmeHistory.map((prog) => (
                     <Box
                       key={prog._id}
@@ -1887,11 +2063,14 @@ const AdminProjectWorkspace = () => {
                           }}
                         >
                           {prog.totalActivities || 0} activities • Closed on{" "}
-                          {new Date(prog.createdAt).toLocaleDateString("en-GB", {
-                            day: "2-digit",
-                            month: "short",
-                            year: "numeric",
-                          })}
+                          {new Date(prog.createdAt).toLocaleDateString(
+                            "en-GB",
+                            {
+                              day: "2-digit",
+                              month: "short",
+                              year: "numeric",
+                            },
+                          )}
                         </Typography>
                         {prog.overrideReason && (
                           <Typography
@@ -2075,7 +2254,7 @@ const AdminProjectWorkspace = () => {
               >
                 <Box
                   sx={{
-                    minWidth: 1100,
+                    minWidth: 1200,
                     bgcolor: COLORS.bgSecondary,
                     border: `1px solid ${COLORS.border}`,
                     borderRadius: "12px",
@@ -2087,7 +2266,7 @@ const AdminProjectWorkspace = () => {
                     sx={{
                       display: "grid",
                       gridTemplateColumns:
-                        "4px 100px 1fr 95px 95px 70px 95px 60px 75px 120px",
+                        "4px 100px 1fr 95px 95px 70px 95px 60px 75px 100px 100px",
                       bgcolor: COLORS.bgTertiary,
                       borderBottom: `1px solid ${COLORS.border}`,
                       px: 2,
@@ -2105,6 +2284,7 @@ const AdminProjectWorkspace = () => {
                       "RAG Zone",
                       "Actions",
                       "Status",
+                      "Assignee",
                       "Owner",
                     ].map((header, idx) => (
                       <Typography
@@ -2114,7 +2294,7 @@ const AdminProjectWorkspace = () => {
                           fontWeight: 600,
                           color: COLORS.textSecondary,
                           textTransform: "uppercase",
-                          textAlign: [2, 3, 4, 5, 8].includes(idx)
+                          textAlign: [2, 3, 4, 5, 6, 7, 8, 9].includes(idx)
                             ? "center"
                             : "left",
                         }}
@@ -2193,7 +2373,6 @@ const AdminProjectWorkspace = () => {
                                 };
                             }
                           };
-                          // Left indicator based on activityStatus
                           const getIndicatorColor = (status: string) => {
                             switch (status) {
                               case "Ready":
@@ -2208,7 +2387,6 @@ const AdminProjectWorkspace = () => {
                                 return COLORS.textMuted;
                             }
                           };
-                          // Calculate RAG zone from start and end date
                           const calculateRagZone = (
                             startDate: string,
                             endDate: string,
@@ -2261,11 +2439,9 @@ const AdminProjectWorkspace = () => {
                             .toUpperCase()
                             .slice(0, 2);
 
-                          // Format date as YYYY-MM-DD
                           const formatDate = (dateStr: string) => {
                             if (!dateStr) return "-";
 
-                            // Handle DD-Mon-YY format (e.g., "24-Nov-21 A")
                             const months: { [key: string]: number } = {
                               Jan: 0,
                               Feb: 1,
@@ -2281,7 +2457,6 @@ const AdminProjectWorkspace = () => {
                               Dec: 11,
                             };
 
-                            // Remove suffixes like " A" or "*"
                             const cleanDate = dateStr
                               .replace(/\s*[A*]$/, "")
                               .trim();
@@ -2297,7 +2472,6 @@ const AdminProjectWorkspace = () => {
                               return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
                             }
 
-                            // Fallback to standard Date parsing
                             const date = new Date(dateStr);
                             if (isNaN(date.getTime())) return "-";
                             const year = date.getFullYear();
@@ -2321,7 +2495,7 @@ const AdminProjectWorkspace = () => {
                                 sx={{
                                   display: "grid",
                                   gridTemplateColumns:
-                                    "4px 100px 1fr 95px 95px 70px 95px 60px 75px 120px",
+                                    "4px 100px 1fr 95px 95px 70px 95px 60px 75px 100px 100px",
                                   px: 2,
                                   py: 1.5,
                                   borderBottom: isExpanded
@@ -2547,6 +2721,124 @@ const AdminProjectWorkspace = () => {
                                     </Typography>
                                   </Box>
                                 </Box>
+                                {/* Assignee */}
+                                <Box
+                                  sx={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                  }}
+                                >
+                                  {(() => {
+                                    const activityActions =
+                                      getActionsForActivity(
+                                        activity.activityId,
+                                      );
+                                    if (activityActions.length > 0) {
+                                      const latestAction = activityActions[0];
+                                      const assigneeName =
+                                        latestAction.assignee?.name ||
+                                        "Assigned";
+                                      const assigneeInitials = assigneeName
+                                        .split(" ")
+                                        .map((n) => n[0])
+                                        .join("")
+                                        .toUpperCase()
+                                        .slice(0, 2);
+                                      return (
+                                        <Box
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setExpandedActivityId(
+                                              isExpanded
+                                                ? null
+                                                : activity.activityId,
+                                            );
+                                          }}
+                                          sx={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: 0.5,
+                                            cursor: "pointer",
+                                            px: 1,
+                                            py: 0.5,
+                                            borderRadius: "6px",
+                                            "&:hover": {
+                                              bgcolor: COLORS.bgTertiary,
+                                            },
+                                          }}
+                                        >
+                                          <Avatar
+                                            sx={{
+                                              width: 20,
+                                              height: 20,
+                                              fontSize: "9px",
+                                              fontWeight: 600,
+                                              bgcolor: COLORS.green,
+                                            }}
+                                          >
+                                            {assigneeInitials}
+                                          </Avatar>
+                                          <Typography
+                                            sx={{
+                                              fontSize: "10px",
+                                              color: COLORS.textPrimary,
+                                              overflow: "hidden",
+                                              textOverflow: "ellipsis",
+                                              whiteSpace: "nowrap",
+                                              maxWidth: "60px",
+                                            }}
+                                          >
+                                            {assigneeName.split(" ")[0]}
+                                          </Typography>
+                                        </Box>
+                                      );
+                                    }
+                                    return (
+                                      <Button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setAssigningActivity({
+                                            activityId: activity.activityId,
+                                            activityName: activity.activityName,
+                                          });
+                                          setAssignFormData({
+                                            title: "",
+                                            description: "",
+                                            type: "Required",
+                                            priority: "Medium",
+                                            assignee: "",
+                                            dueDate: "",
+                                          });
+                                          setAssignModalOpen(true);
+                                        }}
+                                        disabled={uploadedProgramme?.isLocked}
+                                        sx={{
+                                          fontSize: "10px",
+                                          fontWeight: 500,
+                                          color: COLORS.blue,
+                                          textTransform: "none",
+                                          bgcolor: COLORS.blueBgLight,
+                                          border: `1px solid ${COLORS.blue}30`,
+                                          borderRadius: "6px",
+                                          px: 1.5,
+                                          py: 0.3,
+                                          minWidth: "auto",
+                                          "&:hover": {
+                                            bgcolor: COLORS.blueBgMedium,
+                                          },
+                                          "&.Mui-disabled": {
+                                            color: COLORS.textMuted,
+                                            bgcolor: COLORS.bgTertiary,
+                                            borderColor: COLORS.border,
+                                          },
+                                        }}
+                                      >
+                                        Assign
+                                      </Button>
+                                    );
+                                  })()}
+                                </Box>
                                 {/* Owner */}
                                 <Box
                                   sx={{
@@ -2629,8 +2921,8 @@ const AdminProjectWorkspace = () => {
                                                   setSelectedActionId(
                                                     action._id,
                                                   );
-                                                  setActiveTab(3); // Switch to Actions tab
-                                                  setExpandedActivityId(null); // Close expanded section
+                                                  setActiveTab(3);
+                                                  setExpandedActivityId(null);
                                                 }}
                                                 sx={{
                                                   display: "flex",
@@ -2680,7 +2972,7 @@ const AdminProjectWorkspace = () => {
                                         </Box>
                                       </Box>
 
-                                      {/* Dependencies */}
+                                      {/* Reassign */}
                                       <Box>
                                         <Typography
                                           sx={{
@@ -2692,16 +2984,87 @@ const AdminProjectWorkspace = () => {
                                             mb: 1.5,
                                           }}
                                         >
-                                          Dependencies
+                                          Reassign
                                         </Typography>
-                                        <Typography
-                                          sx={{
-                                            fontSize: "12px",
-                                            color: COLORS.textSecondary,
-                                          }}
-                                        >
-                                          -
-                                        </Typography>
+                                        {actionsForThisActivity.length > 0 ? (
+                                          <Box
+                                            sx={{
+                                              display: "flex",
+                                              flexDirection: "column",
+                                              gap: 1,
+                                            }}
+                                          >
+                                            {actionsForThisActivity.map(
+                                              (action) => (
+                                                <Box
+                                                  key={action._id}
+                                                  sx={{
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    gap: 1,
+                                                  }}
+                                                >
+                                                  {/* <Typography
+                                                  sx={{
+                                                    fontSize: "11px",
+                                                    color: COLORS.textSecondary,
+                                                  }}
+                                                >
+                                                  {action.assignee?.name || "Unassigned"}:
+                                                </Typography> */}
+                                                  <Button
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      handleOpenReassign(
+                                                        action,
+                                                      );
+                                                    }}
+                                                    disabled={
+                                                      uploadedProgramme?.isLocked ||
+                                                      action.status ===
+                                                        "Completed"
+                                                    }
+                                                    sx={{
+                                                      fontSize: "10px",
+                                                      fontWeight: 500,
+                                                      color: COLORS.amber,
+                                                      textTransform: "none",
+                                                      bgcolor:
+                                                        "rgba(245, 158, 11, 0.15)",
+                                                      border: `1px solid ${COLORS.amber}30`,
+                                                      borderRadius: "6px",
+                                                      px: 1.5,
+                                                      py: 0.3,
+                                                      minWidth: "auto",
+                                                      "&:hover": {
+                                                        bgcolor:
+                                                          "rgba(245, 158, 11, 0.25)",
+                                                      },
+                                                      "&.Mui-disabled": {
+                                                        color: COLORS.textMuted,
+                                                        bgcolor:
+                                                          COLORS.bgTertiary,
+                                                        borderColor:
+                                                          COLORS.border,
+                                                      },
+                                                    }}
+                                                  >
+                                                    Reassign
+                                                  </Button>
+                                                </Box>
+                                              ),
+                                            )}
+                                          </Box>
+                                        ) : (
+                                          <Typography
+                                            sx={{
+                                              fontSize: "12px",
+                                              color: COLORS.textSecondary,
+                                            }}
+                                          >
+                                            -
+                                          </Typography>
+                                        )}
                                       </Box>
 
                                       {/* Notes */}
@@ -2909,9 +3272,7 @@ const AdminProjectWorkspace = () => {
                 })()}
             </>
 
-            {/* Activities Summary */}
             {(() => {
-              // Calculate status counts based on activityStatus
               const activities = lookaheadData?.activities || [];
               let readyCount = 0;
               let atRiskCount = 0;
@@ -2933,7 +3294,7 @@ const AdminProjectWorkspace = () => {
                     completeCount++;
                     break;
                   default:
-                    readyCount++; // Default to Ready
+                    readyCount++;
                 }
               });
 
@@ -3449,32 +3810,110 @@ const AdminProjectWorkspace = () => {
                           <Box
                             component="img"
                             src={viewIcon}
-                            onClick={() =>
-                              action.status !== "Completed"
-                                ? handleOpenCompleteConfirm({
-                                    _id: action._id,
-                                    title: action.title,
-                                  })
-                                : null
+                            onClick={() => {
+                              const assigneeId = String(
+                                (action.assignee as unknown as { _id?: string })
+                                  ?._id || "",
+                              );
+                              const userId = String(user?.id || "");
+                              const isAssignee =
+                                assigneeId === userId && assigneeId !== "";
+                              const canComplete =
+                                user?.role === "admin" || isAssignee;
+
+                              console.log("Complete check:", {
+                                assigneeId,
+                                userId,
+                                isAssignee,
+                                canComplete,
+                                role: user?.role,
+                              });
+
+                              if (
+                                action.status !== "Completed" &&
+                                canComplete
+                              ) {
+                                handleOpenCompleteConfirm({
+                                  _id: action._id,
+                                  title: action.title,
+                                });
+                              }
+                            }}
+                            title={
+                              action.status === "Completed"
+                                ? "Already completed"
+                                : String(
+                                      (
+                                        action.assignee as unknown as {
+                                          _id?: string;
+                                        }
+                                      )?._id || "",
+                                    ) !== String(user?.id || "") &&
+                                    user?.role !== "admin"
+                                  ? "Only the assignee can complete this action"
+                                  : "Mark as complete"
                             }
                             sx={{
                               width: 16,
                               height: 16,
                               cursor:
-                                action.status === "Completed"
-                                  ? "default"
+                                action.status === "Completed" ||
+                                (String(
+                                  (
+                                    action.assignee as unknown as {
+                                      _id?: string;
+                                    }
+                                  )?._id || "",
+                                ) !== String(user?.id || "") &&
+                                  user?.role !== "admin")
+                                  ? "not-allowed"
                                   : "pointer",
-                              opacity: action.status === "Completed" ? 1 : 0.7,
+                              opacity:
+                                action.status === "Completed"
+                                  ? 1
+                                  : String(
+                                        (
+                                          action.assignee as unknown as {
+                                            _id?: string;
+                                          }
+                                        )?._id || "",
+                                      ) !== String(user?.id || "") &&
+                                      user?.role !== "admin"
+                                    ? 0.3
+                                    : 0.7,
                               filter:
                                 action.status === "Completed"
                                   ? "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(5323%) hue-rotate(107deg) brightness(92%) contrast(88%)"
                                   : "none",
                               "&:hover": {
-                                opacity: 1,
+                                opacity:
+                                  action.status === "Completed" ||
+                                  (String(
+                                    (
+                                      action.assignee as unknown as {
+                                        _id?: string;
+                                      }
+                                    )?._id || "",
+                                  ) !== String(user?.id || "") &&
+                                    user?.role !== "admin")
+                                    ? action.status === "Completed"
+                                      ? 1
+                                      : 0.3
+                                    : 1,
                                 filter:
-                                  action.status !== "Completed"
+                                  action.status !== "Completed" &&
+                                  (String(
+                                    (
+                                      action.assignee as unknown as {
+                                        _id?: string;
+                                      }
+                                    )?._id || "",
+                                  ) === String(user?.id || "") ||
+                                    user?.role === "admin")
                                     ? "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(5323%) hue-rotate(107deg) brightness(92%) contrast(88%)"
-                                    : "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(5323%) hue-rotate(107deg) brightness(92%) contrast(88%)",
+                                    : action.status === "Completed"
+                                      ? "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(5323%) hue-rotate(107deg) brightness(92%) contrast(88%)"
+                                      : "none",
                               },
                             }}
                           />
@@ -3862,7 +4301,7 @@ const AdminProjectWorkspace = () => {
                     actionsData.overdue,
                     1,
                   );
-                  const yAxisMax = Math.ceil(maxValue / 2) * 2; // Round up to nearest even number
+                  const yAxisMax = Math.ceil(maxValue / 2) * 2;
                   const yAxisSteps = [
                     yAxisMax,
                     Math.round((yAxisMax * 5) / 6),
@@ -4068,7 +4507,7 @@ const AdminProjectWorkspace = () => {
                         : "Execution in progress. Monitor activities and actions."}
               </Typography>
               {/* Closed Stage - Show locked message */}
-              {(uploadedProgramme?.cycleStatus === "Closed" || isWeekClosed) ? (
+              {uploadedProgramme?.cycleStatus === "Closed" || isWeekClosed ? (
                 <Box
                   sx={{
                     bgcolor: "rgba(107, 114, 128, 0.1)",
@@ -4111,7 +4550,9 @@ const AdminProjectWorkspace = () => {
                       mb: 2,
                     }}
                   >
-                    <Typography sx={{ color: COLORS.blue, fontSize: "18px" }}>📋</Typography>
+                    <Typography sx={{ color: COLORS.blue, fontSize: "18px" }}>
+                      📋
+                    </Typography>
                     <Box>
                       <Typography
                         sx={{
@@ -4128,7 +4569,8 @@ const AdminProjectWorkspace = () => {
                           fontSize: "12px",
                         }}
                       >
-                        Export documents can be generated. Ready to close and lock the week.
+                        Export documents can be generated. Ready to close and
+                        lock the week.
                       </Typography>
                     </Box>
                   </Box>
@@ -4186,7 +4628,11 @@ const AdminProjectWorkspace = () => {
                           mb: 2,
                         }}
                       >
-                        <Typography sx={{ color: COLORS.green, fontSize: "18px" }}>✓</Typography>
+                        <Typography
+                          sx={{ color: COLORS.green, fontSize: "18px" }}
+                        >
+                          ✓
+                        </Typography>
                         <Typography
                           sx={{
                             color: COLORS.green,
@@ -4230,7 +4676,12 @@ const AdminProjectWorkspace = () => {
                           mb: 2,
                         }}
                       >
-                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <svg
+                          width="20"
+                          height="20"
+                          viewBox="0 0 20 20"
+                          fill="none"
+                        >
                           <circle
                             cx="10"
                             cy="10"
@@ -4253,10 +4704,17 @@ const AdminProjectWorkspace = () => {
                             fontWeight: 500,
                           }}
                         >
-                          {actionStats.open} open action(s) need to be completed before closing.
+                          {actionStats.open} open action(s) need to be completed
+                          before closing.
                         </Typography>
                       </Box>
-                      <Box sx={{ display: "flex", gap: 2, alignItems: "flex-start" }}>
+                      <Box
+                        sx={{
+                          display: "flex",
+                          gap: 2,
+                          alignItems: "flex-start",
+                        }}
+                      >
                         <Button
                           onClick={() => setActiveTab(3)}
                           sx={{
@@ -4318,7 +4776,8 @@ const AdminProjectWorkspace = () => {
                               mb: 2,
                             }}
                           >
-                            Enter a mandatory reason (min 10 characters) to close this week despite incomplete actions.
+                            Enter a mandatory reason (min 10 characters) to
+                            close this week despite incomplete actions.
                           </Typography>
                           <TextField
                             fullWidth
@@ -4333,8 +4792,12 @@ const AdminProjectWorkspace = () => {
                                 bgcolor: COLORS.bgSecondary,
                                 borderRadius: "8px",
                                 "& fieldset": { borderColor: COLORS.border },
-                                "&:hover fieldset": { borderColor: COLORS.amber },
-                                "&.Mui-focused fieldset": { borderColor: COLORS.amber },
+                                "&:hover fieldset": {
+                                  borderColor: COLORS.amber,
+                                },
+                                "&.Mui-focused fieldset": {
+                                  borderColor: COLORS.amber,
+                                },
                               },
                               "& .MuiInputBase-input": {
                                 color: COLORS.textPrimary,
@@ -4344,20 +4807,23 @@ const AdminProjectWorkspace = () => {
                           />
                           <Button
                             onClick={handleOverrideClose}
-                        disabled={overrideReason.length < 10}
-                        sx={{
-                          bgcolor: COLORS.amber,
-                          color: "#fff",
-                          textTransform: "none",
-                          px: 3,
-                          py: 1,
-                          borderRadius: "8px",
-                          fontSize: "13px",
-                          fontWeight: 500,
-                          "&:hover": { bgcolor: "#d97706" },
-                          "&.Mui-disabled": { bgcolor: COLORS.bgTertiary, color: COLORS.textMuted },
-                        }}
-                      >
+                            disabled={overrideReason.length < 10}
+                            sx={{
+                              bgcolor: COLORS.amber,
+                              color: "#fff",
+                              textTransform: "none",
+                              px: 3,
+                              py: 1,
+                              borderRadius: "8px",
+                              fontSize: "13px",
+                              fontWeight: 500,
+                              "&:hover": { bgcolor: "#d97706" },
+                              "&.Mui-disabled": {
+                                bgcolor: COLORS.bgTertiary,
+                                color: COLORS.textMuted,
+                              },
+                            }}
+                          >
                             Force Close Week
                           </Button>
                         </Box>
@@ -4426,7 +4892,10 @@ const AdminProjectWorkspace = () => {
                   sx={{
                     color: COLORS.textSecondary,
                     fontSize: "14px",
-                    mb: (savedOverrideReason || uploadedProgramme?.overrideReason) ? 1 : 0,
+                    mb:
+                      savedOverrideReason || uploadedProgramme?.overrideReason
+                        ? 1
+                        : 0,
                   }}
                 >
                   This week has been closed. No further changes allowed.
@@ -4438,7 +4907,8 @@ const AdminProjectWorkspace = () => {
                       fontSize: "14px",
                     }}
                   >
-                    Override reason: {savedOverrideReason || uploadedProgramme?.overrideReason}
+                    Override reason:{" "}
+                    {savedOverrideReason || uploadedProgramme?.overrideReason}
                   </Typography>
                 )}
               </Box>
@@ -4740,7 +5210,8 @@ const AdminProjectWorkspace = () => {
                     Close Week
                   </Typography>
 
-                  {(uploadedProgramme?.cycleStatus === "Closed" || isWeekClosed) ? (
+                  {uploadedProgramme?.cycleStatus === "Closed" ||
+                  isWeekClosed ? (
                     <Box
                       sx={{
                         bgcolor: "rgba(107, 114, 128, 0.1)",
@@ -4749,17 +5220,23 @@ const AdminProjectWorkspace = () => {
                         p: 2,
                       }}
                     >
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 1.5 }}
+                      >
                         <Box
                           component="img"
                           src={lockIcon}
                           sx={{ width: 20, height: 20, opacity: 0.6 }}
                         />
-                        <Typography sx={{ color: COLORS.textMuted, fontSize: "13px" }}>
-                          This week is closed and locked. No further changes allowed.
+                        <Typography
+                          sx={{ color: COLORS.textMuted, fontSize: "13px" }}
+                        >
+                          This week is closed and locked. No further changes
+                          allowed.
                         </Typography>
                       </Box>
-                      {(savedOverrideReason || uploadedProgramme?.overrideReason) && (
+                      {(savedOverrideReason ||
+                        uploadedProgramme?.overrideReason) && (
                         <Typography
                           sx={{
                             color: COLORS.amber,
@@ -4768,145 +5245,158 @@ const AdminProjectWorkspace = () => {
                             pl: 4.5,
                           }}
                         >
-                          Override reason: {savedOverrideReason || uploadedProgramme?.overrideReason}
+                          Override reason:{" "}
+                          {savedOverrideReason ||
+                            uploadedProgramme?.overrideReason}
                         </Typography>
                       )}
                     </Box>
                   ) : (
-                  <>
-                  <Typography
-                    sx={{
-                      color: COLORS.textSecondary,
-                      fontSize: "12px",
-                      mb: 2,
-                    }}
-                  >
-                    {uploadedProgramme?.cycleStatus === "Close-Out Eligible"
-                      ? "Week is ready to be closed. Click 'Close Week' to finalize."
-                      : "Complete all actions and mark as Close-Out Eligible first, or use PM Override to force close."}
-                  </Typography>
-                  <Box sx={{ display: "flex", gap: 2, mb: 3 }}>
-                    <Button
-                      onClick={handleFinalClose}
-                      disabled={uploadedProgramme?.cycleStatus !== "Close-Out Eligible"}
-                      sx={{
-                        bgcolor: "transparent",
-                        border: `1px solid ${COLORS.green}`,
-                        color: COLORS.green,
-                        textTransform: "none",
-                        px: 2.5,
-                        py: 1,
-                        borderRadius: "8px",
-                        fontSize: "13px",
-                        fontWeight: 500,
-                        "&:hover": { bgcolor: `${COLORS.green}10` },
-                        "&.Mui-disabled": {
-                          borderColor: COLORS.border,
-                          color: COLORS.textMuted,
-                        },
-                      }}
-                    >
-                      Close Week
-                    </Button>
-                    <Button
-                      onClick={() => setShowOverrideForm(!showOverrideForm)}
-                      disabled={uploadedProgramme?.cycleStatus === "Closed" || isWeekClosed}
-                      sx={{
-                        bgcolor: COLORS.red,
-                        color: "#fff",
-                        textTransform: "none",
-                        px: 2.5,
-                        py: 1,
-                        borderRadius: "8px",
-                        fontSize: "13px",
-                        fontWeight: 500,
-                        "&:hover": { bgcolor: "#DC2626" },
-                        "&.Mui-disabled": {
-                          bgcolor: COLORS.bgTertiary,
-                          color: COLORS.textMuted,
-                        },
-                      }}
-                    >
-                      PM Override Close
-                    </Button>
-                  </Box>
-
-                  {showOverrideForm && (
-                    <Box
-                      sx={{
-                        bgcolor: "#2D2A24",
-                        border: `1px solid ${COLORS.amber}`,
-                        borderRadius: "12px",
-                        p: 2.5,
-                      }}
-                    >
+                    <>
                       <Typography
                         sx={{
-                          color: COLORS.amber,
-                          fontSize: "13px",
-                          fontWeight: 500,
+                          color: COLORS.textSecondary,
+                          fontSize: "12px",
                           mb: 2,
                         }}
                       >
-                        PM Override — Mandatory Justification
+                        {uploadedProgramme?.cycleStatus === "Close-Out Eligible"
+                          ? "Week is ready to be closed. Click 'Close Week' to finalize."
+                          : "Complete all actions and mark as Close-Out Eligible first, or use PM Override to force close."}
                       </Typography>
-                      <TextField
-                        fullWidth
-                        multiline
-                        rows={3}
-                        placeholder="Enter the reason for override closure (required)..."
-                        value={overrideReason}
-                        onChange={(e) => setOverrideReason(e.target.value)}
-                        sx={{
-                          mb: 2,
-                          "& .MuiOutlinedInput-root": {
-                            bgcolor: COLORS.bgPrimary,
+                      <Box sx={{ display: "flex", gap: 2, mb: 3 }}>
+                        <Button
+                          onClick={handleFinalClose}
+                          disabled={
+                            uploadedProgramme?.cycleStatus !==
+                            "Close-Out Eligible"
+                          }
+                          sx={{
+                            bgcolor: "transparent",
+                            border: `1px solid ${COLORS.green}`,
+                            color: COLORS.green,
+                            textTransform: "none",
+                            px: 2.5,
+                            py: 1,
                             borderRadius: "8px",
-                            "& fieldset": { borderColor: COLORS.border },
-                            "&:hover fieldset": { borderColor: COLORS.border },
-                            "&.Mui-focused fieldset": {
-                              borderColor: COLORS.amber,
-                              borderWidth: 1,
-                            },
-                          },
-                          "& .MuiOutlinedInput-input": {
-                            color: COLORS.textPrimary,
                             fontSize: "13px",
-                            "&::placeholder": {
+                            fontWeight: 500,
+                            "&:hover": { bgcolor: `${COLORS.green}10` },
+                            "&.Mui-disabled": {
+                              borderColor: COLORS.border,
                               color: COLORS.textMuted,
-                              opacity: 1,
                             },
-                          },
-                        }}
-                      />
-                      <Button
-                        disabled={overrideReason.length < 10}
-                        onClick={handleOverrideClose}
-                        sx={{
-                          bgcolor: COLORS.amber,
-                          color: "#fff",
-                          textTransform: "none",
-                          px: 2.5,
-                          py: 1,
-                          borderRadius: "8px",
-                          fontSize: "13px",
-                          fontWeight: 500,
-                          mb: 1,
-                          "&:hover": { bgcolor: "#D97706" },
-                          "&:disabled": { bgcolor: COLORS.amber, opacity: 0.5 },
-                        }}
-                      >
-                        Confirm Override Close
-                      </Button>
-                      <Typography
-                        sx={{ color: COLORS.textMuted, fontSize: "11px" }}
-                      >
-                        Minimum 10 characters required. This will be recorded in
-                        the audit trail.
-                      </Typography>
-                    </Box>
-                  )}
-                  </>
+                          }}
+                        >
+                          Close Week
+                        </Button>
+                        <Button
+                          onClick={() => setShowOverrideForm(!showOverrideForm)}
+                          disabled={
+                            uploadedProgramme?.cycleStatus === "Closed" ||
+                            isWeekClosed
+                          }
+                          sx={{
+                            bgcolor: COLORS.red,
+                            color: "#fff",
+                            textTransform: "none",
+                            px: 2.5,
+                            py: 1,
+                            borderRadius: "8px",
+                            fontSize: "13px",
+                            fontWeight: 500,
+                            "&:hover": { bgcolor: "#DC2626" },
+                            "&.Mui-disabled": {
+                              bgcolor: COLORS.bgTertiary,
+                              color: COLORS.textMuted,
+                            },
+                          }}
+                        >
+                          PM Override Close
+                        </Button>
+                      </Box>
+
+                      {showOverrideForm && (
+                        <Box
+                          sx={{
+                            bgcolor: "#2D2A24",
+                            border: `1px solid ${COLORS.amber}`,
+                            borderRadius: "12px",
+                            p: 2.5,
+                          }}
+                        >
+                          <Typography
+                            sx={{
+                              color: COLORS.amber,
+                              fontSize: "13px",
+                              fontWeight: 500,
+                              mb: 2,
+                            }}
+                          >
+                            PM Override — Mandatory Justification
+                          </Typography>
+                          <TextField
+                            fullWidth
+                            multiline
+                            rows={3}
+                            placeholder="Enter the reason for override closure (required)..."
+                            value={overrideReason}
+                            onChange={(e) => setOverrideReason(e.target.value)}
+                            sx={{
+                              mb: 2,
+                              "& .MuiOutlinedInput-root": {
+                                bgcolor: COLORS.bgPrimary,
+                                borderRadius: "8px",
+                                "& fieldset": { borderColor: COLORS.border },
+                                "&:hover fieldset": {
+                                  borderColor: COLORS.border,
+                                },
+                                "&.Mui-focused fieldset": {
+                                  borderColor: COLORS.amber,
+                                  borderWidth: 1,
+                                },
+                              },
+                              "& .MuiOutlinedInput-input": {
+                                color: COLORS.textPrimary,
+                                fontSize: "13px",
+                                "&::placeholder": {
+                                  color: COLORS.textMuted,
+                                  opacity: 1,
+                                },
+                              },
+                            }}
+                          />
+                          <Button
+                            disabled={overrideReason.length < 10}
+                            onClick={handleOverrideClose}
+                            sx={{
+                              bgcolor: COLORS.amber,
+                              color: "#fff",
+                              textTransform: "none",
+                              px: 2.5,
+                              py: 1,
+                              borderRadius: "8px",
+                              fontSize: "13px",
+                              fontWeight: 500,
+                              mb: 1,
+                              "&:hover": { bgcolor: "#D97706" },
+                              "&:disabled": {
+                                bgcolor: COLORS.amber,
+                                opacity: 0.5,
+                              },
+                            }}
+                          >
+                            Confirm Override Close
+                          </Button>
+                          <Typography
+                            sx={{ color: COLORS.textMuted, fontSize: "11px" }}
+                          >
+                            Minimum 10 characters required. This will be
+                            recorded in the audit trail.
+                          </Typography>
+                        </Box>
+                      )}
+                    </>
                   )}
                 </Box>
               </>
@@ -5734,6 +6224,755 @@ const AdminProjectWorkspace = () => {
                 <CircularProgress size={20} sx={{ color: COLORS.white }} />
               ) : (
                 "Yes, Complete"
+              )}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Assign Activity Modal */}
+        <Dialog
+          open={assignModalOpen}
+          onClose={handleAssignClose}
+          maxWidth="sm"
+          fullWidth
+          slotProps={{
+            backdrop: {
+              sx: {
+                bgcolor: "rgba(0, 0, 0, 0.8)",
+              },
+            },
+            paper: {
+              sx: {
+                bgcolor: COLORS.bgSecondary,
+                border: `1px solid ${COLORS.border}`,
+                borderRadius: "12px",
+                backgroundImage: "none",
+                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
+                maxWidth: 500,
+              },
+            },
+          }}
+        >
+          <DialogTitle
+            sx={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              pb: 1,
+              pt: 2,
+              borderBottom: `1px solid ${COLORS.border}`,
+            }}
+          >
+            <Box>
+              <Typography
+                sx={{
+                  color: COLORS.textPrimary,
+                  fontSize: "18px",
+                  fontWeight: 600,
+                }}
+              >
+                Assign Activity
+              </Typography>
+              <Typography
+                sx={{
+                  color: COLORS.textSecondary,
+                  fontSize: "12px",
+                  fontWeight: 400,
+                }}
+              >
+                {assigningActivity?.activityId}
+              </Typography>
+            </Box>
+            <IconButton
+              onClick={handleAssignClose}
+              sx={{ color: COLORS.textMuted, p: 0.5 }}
+            >
+              <CloseIcon sx={{ fontSize: 20 }} />
+            </IconButton>
+          </DialogTitle>
+
+          <DialogContent sx={{ px: 3, py: 2 }}>
+            {/* Error Message */}
+            {assignError && (
+              <Box
+                sx={{
+                  bgcolor: "rgba(239, 68, 68, 0.15)",
+                  border: `1px solid ${COLORS.red}`,
+                  borderRadius: "8px",
+                  px: 2,
+                  py: 1.5,
+                  mb: 2,
+                }}
+              >
+                <Typography
+                  sx={{
+                    color: COLORS.red,
+                    fontSize: "13px",
+                    fontWeight: 500,
+                  }}
+                >
+                  {assignError}
+                </Typography>
+              </Box>
+            )}
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 0 }}>
+              {/* Activity Name (Read-only) */}
+              <Box>
+                <Typography
+                  sx={{
+                    color: COLORS.textSecondary,
+                    fontSize: "12px",
+                    fontWeight: 500,
+                    mb: 0.5,
+                    mt: 1,
+                  }}
+                >
+                  Activity
+                </Typography>
+                <Box
+                  sx={{
+                    bgcolor: COLORS.bgPrimary,
+                    borderRadius: "8px",
+                    border: `1px solid ${COLORS.border}`,
+                    px: 1.5,
+                    py: 1.2,
+                  }}
+                >
+                  <Typography
+                    sx={{
+                      color: COLORS.textPrimary,
+                      fontSize: "14px",
+                    }}
+                  >
+                    {assigningActivity?.activityName || "Unknown Activity"}
+                  </Typography>
+                </Box>
+              </Box>
+
+              {/* Title */}
+              <Box>
+                <Typography
+                  sx={{
+                    color: COLORS.textSecondary,
+                    fontSize: "12px",
+                    fontWeight: 500,
+                    mb: 0.5,
+                    mt: 2,
+                  }}
+                >
+                  Action Title <span style={{ color: COLORS.red }}>*</span>
+                </Typography>
+                <TextField
+                  fullWidth
+                  placeholder="Enter action title..."
+                  value={assignFormData.title}
+                  onChange={(e) => handleAssignChange("title", e.target.value)}
+                  sx={{
+                    "& .MuiOutlinedInput-root": {
+                      bgcolor: COLORS.bgPrimary,
+                      borderRadius: "8px",
+                      "& fieldset": { borderColor: COLORS.border },
+                      "&:hover fieldset": { borderColor: COLORS.border },
+                      "&.Mui-focused fieldset": {
+                        borderColor: COLORS.blue,
+                        borderWidth: 1,
+                      },
+                    },
+                    "& .MuiOutlinedInput-input": {
+                      color: COLORS.textPrimary,
+                      fontSize: "14px",
+                      py: 1.2,
+                      "&::placeholder": {
+                        color: COLORS.textMuted,
+                        opacity: 1,
+                      },
+                    },
+                  }}
+                />
+              </Box>
+
+              {/* Type | Priority row */}
+              <Box
+                sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}
+              >
+                <Box>
+                  <Typography
+                    sx={{
+                      color: COLORS.textSecondary,
+                      fontSize: "12px",
+                      fontWeight: 500,
+                      mb: 0.5,
+                      mt: 2,
+                    }}
+                  >
+                    Type
+                  </Typography>
+                  <Select
+                    fullWidth
+                    value={assignFormData.type}
+                    onChange={(e) => handleAssignChange("type", e.target.value)}
+                    IconComponent={ArrowDownIcon}
+                    sx={{
+                      bgcolor: COLORS.bgPrimary,
+                      borderRadius: "8px",
+                      "& .MuiOutlinedInput-notchedOutline": {
+                        borderColor: COLORS.border,
+                      },
+                      "&:hover .MuiOutlinedInput-notchedOutline": {
+                        borderColor: COLORS.border,
+                      },
+                      "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                        borderColor: COLORS.blue,
+                        borderWidth: 1,
+                      },
+                      "& .MuiSelect-select": {
+                        color: COLORS.textPrimary,
+                        fontSize: "14px",
+                        py: 1.2,
+                      },
+                      "& .MuiSvgIcon-root": { color: COLORS.textSecondary },
+                    }}
+                    MenuProps={{
+                      slotProps: {
+                        paper: {
+                          sx: {
+                            bgcolor: COLORS.bgSecondary,
+                            border: `1px solid ${COLORS.border}`,
+                            borderRadius: "8px",
+                            "& .MuiMenuItem-root": {
+                              color: COLORS.textPrimary,
+                              fontSize: "14px",
+                              "&:hover": { bgcolor: COLORS.bgTertiary },
+                              "&.Mui-selected": {
+                                bgcolor: COLORS.blueBgMedium,
+                              },
+                            },
+                          },
+                        },
+                      },
+                    }}
+                  >
+                    <MenuItem value="Required">Required</MenuItem>
+                    <MenuItem value="Optional">Optional</MenuItem>
+                  </Select>
+                </Box>
+                <Box>
+                  <Typography
+                    sx={{
+                      color: COLORS.textSecondary,
+                      fontSize: "12px",
+                      fontWeight: 500,
+                      mb: 0.5,
+                      mt: 2,
+                    }}
+                  >
+                    Priority
+                  </Typography>
+                  <Select
+                    fullWidth
+                    value={assignFormData.priority}
+                    onChange={(e) =>
+                      handleAssignChange("priority", e.target.value)
+                    }
+                    IconComponent={ArrowDownIcon}
+                    sx={{
+                      bgcolor: COLORS.bgPrimary,
+                      borderRadius: "8px",
+                      "& .MuiOutlinedInput-notchedOutline": {
+                        borderColor: COLORS.border,
+                      },
+                      "&:hover .MuiOutlinedInput-notchedOutline": {
+                        borderColor: COLORS.border,
+                      },
+                      "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                        borderColor: COLORS.blue,
+                        borderWidth: 1,
+                      },
+                      "& .MuiSelect-select": {
+                        color: COLORS.textPrimary,
+                        fontSize: "14px",
+                        py: 1.2,
+                      },
+                      "& .MuiSvgIcon-root": { color: COLORS.textSecondary },
+                    }}
+                    MenuProps={{
+                      slotProps: {
+                        paper: {
+                          sx: {
+                            bgcolor: COLORS.bgSecondary,
+                            border: `1px solid ${COLORS.border}`,
+                            borderRadius: "8px",
+                            "& .MuiMenuItem-root": {
+                              color: COLORS.textPrimary,
+                              fontSize: "14px",
+                              "&:hover": { bgcolor: COLORS.bgTertiary },
+                              "&.Mui-selected": {
+                                bgcolor: COLORS.blueBgMedium,
+                              },
+                            },
+                          },
+                        },
+                      },
+                    }}
+                  >
+                    <MenuItem value="Low">Low</MenuItem>
+                    <MenuItem value="Medium">Medium</MenuItem>
+                    <MenuItem value="High">High</MenuItem>
+                    <MenuItem value="Critical">Critical</MenuItem>
+                  </Select>
+                </Box>
+              </Box>
+
+              {/* Assignee | Due Date row */}
+              <Box
+                sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}
+              >
+                <Box>
+                  <Typography
+                    sx={{
+                      color: COLORS.textSecondary,
+                      fontSize: "12px",
+                      fontWeight: 500,
+                      mb: 0.5,
+                      mt: 2,
+                    }}
+                  >
+                    Assignee <span style={{ color: COLORS.red }}>*</span>
+                  </Typography>
+                  <Select
+                    fullWidth
+                    value={assignFormData.assignee}
+                    onChange={(e) =>
+                      handleAssignChange("assignee", e.target.value)
+                    }
+                    displayEmpty
+                    IconComponent={ArrowDownIcon}
+                    sx={{
+                      bgcolor: COLORS.bgPrimary,
+                      borderRadius: "8px",
+                      "& .MuiOutlinedInput-notchedOutline": {
+                        borderColor: COLORS.border,
+                      },
+                      "&:hover .MuiOutlinedInput-notchedOutline": {
+                        borderColor: COLORS.border,
+                      },
+                      "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                        borderColor: COLORS.blue,
+                        borderWidth: 1,
+                      },
+                      "& .MuiSelect-select": {
+                        color: assignFormData.assignee
+                          ? COLORS.textPrimary
+                          : COLORS.textMuted,
+                        fontSize: "14px",
+                        py: 1.2,
+                      },
+                      "& .MuiSvgIcon-root": { color: COLORS.textSecondary },
+                    }}
+                    MenuProps={{
+                      slotProps: {
+                        paper: {
+                          sx: {
+                            bgcolor: COLORS.bgSecondary,
+                            border: `1px solid ${COLORS.border}`,
+                            borderRadius: "8px",
+                            maxHeight: 200,
+                            "& .MuiMenuItem-root": {
+                              color: COLORS.textPrimary,
+                              fontSize: "14px",
+                              "&:hover": { bgcolor: COLORS.bgTertiary },
+                              "&.Mui-selected": {
+                                bgcolor: COLORS.blueBgMedium,
+                              },
+                            },
+                          },
+                        },
+                      },
+                    }}
+                  >
+                    <MenuItem value="" disabled>
+                      {users.length === 0
+                        ? "No users available"
+                        : "Select assignee..."}
+                    </MenuItem>
+                    {users.map((u) => (
+                      <MenuItem key={u._id} value={u._id}>
+                        {u.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </Box>
+                <Box>
+                  <Typography
+                    sx={{
+                      color: COLORS.textSecondary,
+                      fontSize: "12px",
+                      fontWeight: 500,
+                      mb: 0.5,
+                      mt: 2,
+                    }}
+                  >
+                    Due Date <span style={{ color: COLORS.red }}>*</span>
+                  </Typography>
+                  <TextField
+                    fullWidth
+                    type="date"
+                    value={assignFormData.dueDate}
+                    onChange={(e) =>
+                      handleAssignChange("dueDate", e.target.value)
+                    }
+                    sx={{
+                      "& .MuiOutlinedInput-root": {
+                        bgcolor: COLORS.bgPrimary,
+                        borderRadius: "8px",
+                        "& fieldset": { borderColor: COLORS.border },
+                        "&:hover fieldset": { borderColor: COLORS.border },
+                        "&.Mui-focused fieldset": {
+                          borderColor: COLORS.blue,
+                          borderWidth: 1,
+                        },
+                      },
+                      "& .MuiOutlinedInput-input": {
+                        color: assignFormData.dueDate
+                          ? COLORS.textPrimary
+                          : COLORS.textMuted,
+                        fontSize: "14px",
+                        py: 1.2,
+                        "&::-webkit-calendar-picker-indicator": {
+                          filter: "invert(1)",
+                          cursor: "pointer",
+                          opacity: 0.6,
+                        },
+                      },
+                    }}
+                  />
+                </Box>
+              </Box>
+            </Box>
+          </DialogContent>
+
+          <DialogActions
+            sx={{
+              px: 3,
+              py: 2,
+              borderTop: `1px solid ${COLORS.border}`,
+              gap: 1.5,
+            }}
+          >
+            <Button
+              onClick={handleAssignClose}
+              sx={{
+                color: COLORS.textSecondary,
+                bgcolor: "transparent",
+                border: `1px solid ${COLORS.border}`,
+                borderRadius: "8px",
+                textTransform: "none",
+                px: 2.5,
+                py: 1,
+                fontSize: "14px",
+                fontWeight: 500,
+                "&:hover": {
+                  bgcolor: COLORS.bgTertiary,
+                },
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAssignSave}
+              disabled={assignSaveLoading}
+              sx={{
+                color: "#fff",
+                bgcolor: COLORS.blue,
+                borderRadius: "8px",
+                textTransform: "none",
+                px: 2.5,
+                py: 1,
+                fontSize: "14px",
+                fontWeight: 500,
+                "&:hover": {
+                  bgcolor: COLORS.blueHover,
+                },
+                "&:disabled": {
+                  bgcolor: COLORS.blue,
+                  opacity: 0.7,
+                },
+              }}
+            >
+              {assignSaveLoading ? (
+                <CircularProgress size={20} sx={{ color: "#fff" }} />
+              ) : (
+                "Assign"
+              )}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Reassign Modal */}
+        <Dialog
+          open={reassignModalOpen}
+          onClose={handleCloseReassign}
+          maxWidth="xs"
+          fullWidth
+          slotProps={{
+            backdrop: {
+              sx: {
+                bgcolor: "rgba(0, 0, 0, 0.8)",
+              },
+            },
+            paper: {
+              sx: {
+                bgcolor: COLORS.bgSecondary,
+                border: `1px solid ${COLORS.border}`,
+                borderRadius: "12px",
+                backgroundImage: "none",
+                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
+              },
+            },
+          }}
+        >
+          <DialogTitle
+            sx={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              pb: 1,
+              pt: 2,
+              borderBottom: `1px solid ${COLORS.border}`,
+            }}
+          >
+            <Box>
+              <Typography
+                sx={{
+                  color: COLORS.textPrimary,
+                  fontSize: "18px",
+                  fontWeight: 600,
+                }}
+              >
+                Reassign Action
+              </Typography>
+              <Typography
+                sx={{
+                  color: COLORS.textSecondary,
+                  fontSize: "12px",
+                  fontWeight: 400,
+                  mt: 0.5,
+                }}
+              >
+                {reassigningAction?.title}
+              </Typography>
+            </Box>
+            <IconButton
+              onClick={handleCloseReassign}
+              sx={{ color: COLORS.textMuted, p: 0.5 }}
+            >
+              <CloseIcon sx={{ fontSize: 20 }} />
+            </IconButton>
+          </DialogTitle>
+
+          <DialogContent sx={{ px: 3, py: 2 }}>
+            {/* Error Message */}
+            {reassignError && (
+              <Box
+                sx={{
+                  bgcolor: "rgba(239, 68, 68, 0.15)",
+                  border: `1px solid ${COLORS.red}`,
+                  borderRadius: "8px",
+                  px: 2,
+                  py: 1.5,
+                  mb: 2,
+                }}
+              >
+                <Typography
+                  sx={{
+                    color: COLORS.red,
+                    fontSize: "13px",
+                    fontWeight: 500,
+                  }}
+                >
+                  {reassignError}
+                </Typography>
+              </Box>
+            )}
+
+            {/* Current Assignee */}
+            <Box sx={{ mb: 2 }}>
+              <Typography
+                sx={{
+                  color: COLORS.textSecondary,
+                  fontSize: "12px",
+                  fontWeight: 500,
+                  mb: 0.5,
+                }}
+              >
+                Current Assignee
+              </Typography>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1,
+                  bgcolor: COLORS.bgPrimary,
+                  borderRadius: "8px",
+                  border: `1px solid ${COLORS.border}`,
+                  px: 1.5,
+                  py: 1,
+                }}
+              >
+                <Avatar
+                  sx={{
+                    width: 24,
+                    height: 24,
+                    fontSize: "10px",
+                    fontWeight: 600,
+                    bgcolor: COLORS.blue,
+                  }}
+                >
+                  {reassigningAction?.currentAssigneeName
+                    ?.split(" ")
+                    .map((n) => n[0])
+                    .join("")
+                    .toUpperCase()
+                    .slice(0, 2) || "?"}
+                </Avatar>
+                <Typography
+                  sx={{
+                    color: COLORS.textPrimary,
+                    fontSize: "14px",
+                  }}
+                >
+                  {reassigningAction?.currentAssigneeName || "Unknown"}
+                </Typography>
+              </Box>
+            </Box>
+
+            {/* New Assignee */}
+            <Box>
+              <Typography
+                sx={{
+                  color: COLORS.textSecondary,
+                  fontSize: "12px",
+                  fontWeight: 500,
+                  mb: 0.5,
+                }}
+              >
+                Reassign To <span style={{ color: COLORS.red }}>*</span>
+              </Typography>
+              <Select
+                fullWidth
+                value={reassignAssignee}
+                onChange={(e) => setReassignAssignee(e.target.value)}
+                displayEmpty
+                IconComponent={ArrowDownIcon}
+                sx={{
+                  bgcolor: COLORS.bgPrimary,
+                  borderRadius: "8px",
+                  "& .MuiOutlinedInput-notchedOutline": {
+                    borderColor: COLORS.border,
+                  },
+                  "&:hover .MuiOutlinedInput-notchedOutline": {
+                    borderColor: COLORS.border,
+                  },
+                  "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                    borderColor: COLORS.blue,
+                    borderWidth: 1,
+                  },
+                  "& .MuiSelect-select": {
+                    color: reassignAssignee
+                      ? COLORS.textPrimary
+                      : COLORS.textMuted,
+                    fontSize: "14px",
+                    py: 1.2,
+                  },
+                  "& .MuiSvgIcon-root": { color: COLORS.textSecondary },
+                }}
+                MenuProps={{
+                  slotProps: {
+                    paper: {
+                      sx: {
+                        bgcolor: COLORS.bgSecondary,
+                        border: `1px solid ${COLORS.border}`,
+                        borderRadius: "8px",
+                        maxHeight: 200,
+                        "& .MuiMenuItem-root": {
+                          color: COLORS.textPrimary,
+                          fontSize: "14px",
+                          "&:hover": { bgcolor: COLORS.bgTertiary },
+                          "&.Mui-selected": {
+                            bgcolor: COLORS.blueBgMedium,
+                          },
+                        },
+                      },
+                    },
+                  },
+                }}
+              >
+                <MenuItem value="" disabled>
+                  Select new assignee...
+                </MenuItem>
+                {users
+                  .filter((u) => u._id !== reassigningAction?.currentAssignee)
+                  .map((u) => (
+                    <MenuItem key={u._id} value={u._id}>
+                      {u.name}
+                    </MenuItem>
+                  ))}
+              </Select>
+            </Box>
+          </DialogContent>
+
+          <DialogActions
+            sx={{
+              px: 3,
+              py: 2,
+              borderTop: `1px solid ${COLORS.border}`,
+              gap: 1.5,
+            }}
+          >
+            <Button
+              onClick={handleCloseReassign}
+              sx={{
+                color: COLORS.textSecondary,
+                bgcolor: "transparent",
+                border: `1px solid ${COLORS.border}`,
+                borderRadius: "8px",
+                textTransform: "none",
+                px: 2.5,
+                py: 1,
+                fontSize: "14px",
+                fontWeight: 500,
+                "&:hover": {
+                  bgcolor: COLORS.bgTertiary,
+                },
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleReassignSave}
+              disabled={reassignLoading || !reassignAssignee}
+              sx={{
+                color: "#fff",
+                bgcolor: COLORS.amber,
+                borderRadius: "8px",
+                textTransform: "none",
+                px: 2.5,
+                py: 1,
+                fontSize: "14px",
+                fontWeight: 500,
+                "&:hover": {
+                  bgcolor: "#d97706",
+                },
+                "&:disabled": {
+                  bgcolor: COLORS.amber,
+                  opacity: 0.7,
+                },
+              }}
+            >
+              {reassignLoading ? (
+                <CircularProgress size={20} sx={{ color: "#fff" }} />
+              ) : (
+                "Reassign"
               )}
             </Button>
           </DialogActions>

@@ -269,13 +269,22 @@ const StatCard = ({
   </Card>
 );
 
-// Format date as YYYY-MM-DD
 const formatDate = (dateStr: string) => {
   if (!dateStr) return "-";
 
   const months: { [key: string]: number } = {
-    Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
-    Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11,
+    Jan: 0,
+    Feb: 1,
+    Mar: 2,
+    Apr: 3,
+    May: 4,
+    Jun: 5,
+    Jul: 6,
+    Aug: 7,
+    Sep: 8,
+    Oct: 9,
+    Nov: 10,
+    Dec: 11,
   };
 
   const cleanDate = dateStr.replace(/\s*[A*]$/, "").trim();
@@ -297,13 +306,22 @@ const formatDate = (dateStr: string) => {
   return `${year}-${month}-${day}`;
 };
 
-// Calculate RAG zone from dates
 const calculateRagZone = (startDate: string, endDate: string) => {
   if (!startDate || !endDate) return { zone: "Week 1-2", color: COLORS.green };
 
   const months: { [key: string]: number } = {
-    Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
-    Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11,
+    Jan: 0,
+    Feb: 1,
+    Mar: 2,
+    Apr: 3,
+    May: 4,
+    Jun: 5,
+    Jul: 6,
+    Aug: 7,
+    Sep: 8,
+    Oct: 9,
+    Nov: 10,
+    Dec: 11,
   };
 
   const parseDate = (dateStr: string): Date | null => {
@@ -338,21 +356,31 @@ const calculateRagZone = (startDate: string, endDate: string) => {
 
 const getStatusColor = (status: string) => {
   switch (status) {
-    case "Ready": return { bg: "rgba(34, 197, 94, 0.15)", text: COLORS.green };
-    case "At Risk": return { bg: "rgba(245, 158, 11, 0.15)", text: COLORS.amber };
-    case "Blocked": return { bg: "rgba(239, 68, 68, 0.15)", text: COLORS.red };
-    case "Complete": return { bg: "rgba(59, 130, 246, 0.15)", text: COLORS.blue };
-    default: return { bg: "rgba(142, 156, 177, 0.15)", text: COLORS.textSecondary };
+    case "Ready":
+      return { bg: "rgba(34, 197, 94, 0.15)", text: COLORS.green };
+    case "At Risk":
+      return { bg: "rgba(245, 158, 11, 0.15)", text: COLORS.amber };
+    case "Blocked":
+      return { bg: "rgba(239, 68, 68, 0.15)", text: COLORS.red };
+    case "Complete":
+      return { bg: "rgba(59, 130, 246, 0.15)", text: COLORS.blue };
+    default:
+      return { bg: "rgba(142, 156, 177, 0.15)", text: COLORS.textSecondary };
   }
 };
 
 const getIndicatorColor = (status: string) => {
   switch (status) {
-    case "Ready": return COLORS.green;
-    case "At Risk": return COLORS.amber;
-    case "Blocked": return COLORS.red;
-    case "Complete": return COLORS.blue;
-    default: return COLORS.textMuted;
+    case "Ready":
+      return COLORS.green;
+    case "At Risk":
+      return COLORS.amber;
+    case "Blocked":
+      return COLORS.red;
+    case "Complete":
+      return COLORS.blue;
+    default:
+      return COLORS.textMuted;
   }
 };
 
@@ -363,9 +391,10 @@ const ProjectWorkspace = () => {
   const [activeTab, setActiveTab] = useState(0);
   const [currentStep] = useState(1);
   const [ragFilter, setRagFilter] = useState("all");
-  const [expandedActivityId, setExpandedActivityId] = useState<string | null>(null);
+  const [expandedActivityId, setExpandedActivityId] = useState<string | null>(
+    null,
+  );
 
-  // API data states
   const [project, setProject] = useState<ProjectData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -394,7 +423,6 @@ const ProjectWorkspace = () => {
     "Closed",
   ];
 
-  // Fetch project data
   useEffect(() => {
     const fetchProject = async () => {
       if (!projectId) return;
@@ -413,7 +441,6 @@ const ProjectWorkspace = () => {
     fetchProject();
   }, [projectId]);
 
-  // Fetch programme/activities data and actions
   useEffect(() => {
     const fetchProgramme = async () => {
       if (!projectId) return;
@@ -434,7 +461,6 @@ const ProjectWorkspace = () => {
           setActivities(activitiesData);
           setSummary(summaryData);
 
-          // Fetch actions for this programme
           try {
             const actionsRes = await actionAPI.getByProgramme(programme._id);
             if (actionsRes.success) {
@@ -451,31 +477,27 @@ const ProjectWorkspace = () => {
     fetchProgramme();
   }, [projectId]);
 
-  // Get actions count for a specific activity
   const getActionsForActivity = (activityId: string) => {
     return projectActions.filter(
-      (action) => action.linkedActivity?.activityId === activityId
+      (action) => action.linkedActivity?.activityId === activityId,
     );
   };
 
-  // Filter activities by status
   const filteredActivities = activities.filter((activity) => {
     if (ragFilter === "all") return true;
     return activity.activityStatus === ragFilter;
   });
 
-  // Count activities by status
   const greenCount = activities.filter(
-    (a) => a.activityStatus === "Complete" || a.activityStatus === "Ready"
+    (a) => a.activityStatus === "Complete" || a.activityStatus === "Ready",
   ).length;
   const amberCount = activities.filter(
-    (a) => a.activityStatus === "At Risk"
+    (a) => a.activityStatus === "At Risk",
   ).length;
   const redCount = activities.filter(
-    (a) => a.activityStatus === "Blocked"
+    (a) => a.activityStatus === "Blocked",
   ).length;
 
-  // Owner info
   const ownerName = user?.name || "User";
   const ownerInitials = ownerName
     .split(" ")
@@ -836,7 +858,9 @@ const ProjectWorkspace = () => {
                     py: 4,
                   }}
                 >
-                  <Typography sx={{ color: COLORS.textMuted, fontSize: "14px" }}>
+                  <Typography
+                    sx={{ color: COLORS.textMuted, fontSize: "14px" }}
+                  >
                     No cycle history available
                   </Typography>
                 </Box>
@@ -883,13 +907,24 @@ const ProjectWorkspace = () => {
                     flexDirection: "column",
                     alignItems: "center",
                     justifyContent: "center",
-                    bgcolor: item.label !== "Committed" ? `${item.color}10` : "transparent",
+                    bgcolor:
+                      item.label !== "Committed"
+                        ? `${item.color}10`
+                        : "transparent",
                   }}
                 >
-                  <Typography sx={{ color: item.color, fontSize: "12px", fontWeight: 500 }}>
+                  <Typography
+                    sx={{
+                      color: item.color,
+                      fontSize: "12px",
+                      fontWeight: 500,
+                    }}
+                  >
                     {item.week}
                   </Typography>
-                  <Typography sx={{ color: "#8E9CB1", fontSize: "12px", fontWeight: 400 }}>
+                  <Typography
+                    sx={{ color: "#8E9CB1", fontSize: "12px", fontWeight: 400 }}
+                  >
                     {item.label}
                   </Typography>
                 </Box>
@@ -926,12 +961,21 @@ const ProjectWorkspace = () => {
                     cursor: "pointer",
                     flexShrink: 0,
                     whiteSpace: "nowrap",
-                    bgcolor: ragFilter === filter.value ? COLORS.blueBgMedium : "transparent",
-                    color: ragFilter === filter.value ? COLORS.blue : COLORS.textSecondary,
+                    bgcolor:
+                      ragFilter === filter.value
+                        ? COLORS.blueBgMedium
+                        : "transparent",
+                    color:
+                      ragFilter === filter.value
+                        ? COLORS.blue
+                        : COLORS.textSecondary,
                     border: `1px solid ${ragFilter === filter.value ? COLORS.blue : COLORS.border}`,
                     transition: "all 0.2s ease",
                     "&:hover": {
-                      bgcolor: ragFilter === filter.value ? COLORS.blueBgMedium : COLORS.whiteHoverLight,
+                      bgcolor:
+                        ragFilter === filter.value
+                          ? COLORS.blueBgMedium
+                          : COLORS.whiteHoverLight,
                     },
                   }}
                 >
@@ -947,7 +991,10 @@ const ProjectWorkspace = () => {
                 mb: 2,
                 "&::-webkit-scrollbar": { height: 6 },
                 "&::-webkit-scrollbar-track": { bgcolor: "transparent" },
-                "&::-webkit-scrollbar-thumb": { bgcolor: COLORS.border, borderRadius: 3 },
+                "&::-webkit-scrollbar-thumb": {
+                  bgcolor: COLORS.border,
+                  borderRadius: 3,
+                },
               }}
             >
               <Box
@@ -963,7 +1010,8 @@ const ProjectWorkspace = () => {
                 <Box
                   sx={{
                     display: "grid",
-                    gridTemplateColumns: "4px 100px 1fr 95px 95px 70px 95px 60px 75px 120px",
+                    gridTemplateColumns:
+                      "4px 100px 1fr 95px 95px 70px 95px 60px 75px 120px",
                     bgcolor: COLORS.bgTertiary,
                     borderBottom: `1px solid ${COLORS.border}`,
                     px: 2,
@@ -972,7 +1020,17 @@ const ProjectWorkspace = () => {
                   }}
                 >
                   <Box />
-                  {["Activity ID", "Activity Name", "Start Date", "End Date", "Duration", "RAG Zone", "Actions", "Status", "Owner"].map((header, idx) => (
+                  {[
+                    "Activity ID",
+                    "Activity Name",
+                    "Start Date",
+                    "End Date",
+                    "Duration",
+                    "RAG Zone",
+                    "Actions",
+                    "Status",
+                    "Owner",
+                  ].map((header, idx) => (
                     <Typography
                       key={header}
                       sx={{
@@ -980,7 +1038,9 @@ const ProjectWorkspace = () => {
                         fontWeight: 600,
                         color: COLORS.textSecondary,
                         textTransform: "uppercase",
-                        textAlign: [2, 3, 4, 5, 6, 7, 8].includes(idx) ? "center" : "left",
+                        textAlign: [2, 3, 4, 5, 6, 7, 8].includes(idx)
+                          ? "center"
+                          : "left",
                       }}
                     >
                       {header}
@@ -991,36 +1051,58 @@ const ProjectWorkspace = () => {
                 {/* Table Body */}
                 {filteredActivities.length === 0 ? (
                   <Box sx={{ py: 4, textAlign: "center" }}>
-                    <Typography sx={{ color: COLORS.textMuted, fontSize: "14px" }}>
-                      {activities.length === 0 ? "No activities data available" : "No activities match the selected filter"}
+                    <Typography
+                      sx={{ color: COLORS.textMuted, fontSize: "14px" }}
+                    >
+                      {activities.length === 0
+                        ? "No activities data available"
+                        : "No activities match the selected filter"}
                     </Typography>
                   </Box>
                 ) : (
                   filteredActivities.map((activity, index) => {
-                    const statusColors = getStatusColor(activity.activityStatus || "Ready");
-                    const indicatorColor = getIndicatorColor(activity.activityStatus || "Ready");
-                    const ragZone = calculateRagZone(activity.startDate, activity.finishDate);
-                    const actionsForThisActivity = getActionsForActivity(activity.activityId);
-                    const isExpanded = expandedActivityId === activity.activityId;
+                    const statusColors = getStatusColor(
+                      activity.activityStatus || "Ready",
+                    );
+                    const indicatorColor = getIndicatorColor(
+                      activity.activityStatus || "Ready",
+                    );
+                    const ragZone = calculateRagZone(
+                      activity.startDate,
+                      activity.finishDate,
+                    );
+                    const actionsForThisActivity = getActionsForActivity(
+                      activity.activityId,
+                    );
+                    const isExpanded =
+                      expandedActivityId === activity.activityId;
 
                     return (
                       <Box key={activity.activityId || index}>
                         <Box
                           sx={{
                             display: "grid",
-                            gridTemplateColumns: "4px 100px 1fr 95px 95px 70px 95px 60px 75px 120px",
+                            gridTemplateColumns:
+                              "4px 100px 1fr 95px 95px 70px 95px 60px 75px 120px",
                             px: 2,
                             py: 1.5,
-                            borderBottom: isExpanded ? "none" : `1px solid ${COLORS.border}`,
+                            borderBottom: isExpanded
+                              ? "none"
+                              : `1px solid ${COLORS.border}`,
                             alignItems: "center",
                             gap: 1,
                             "&:hover": { bgcolor: COLORS.whiteHoverLight },
                             position: "relative",
-                            cursor: actionsForThisActivity.length > 0 ? "pointer" : "default",
+                            cursor:
+                              actionsForThisActivity.length > 0
+                                ? "pointer"
+                                : "default",
                           }}
                           onClick={() => {
                             if (actionsForThisActivity.length > 0) {
-                              setExpandedActivityId(isExpanded ? null : activity.activityId);
+                              setExpandedActivityId(
+                                isExpanded ? null : activity.activityId,
+                              );
                             }
                           }}
                         >
@@ -1038,36 +1120,86 @@ const ProjectWorkspace = () => {
                           <Box />
 
                           {/* Activity ID */}
-                          <Typography sx={{ fontSize: "12px", color: COLORS.blue, fontWeight: 500 }}>
+                          <Typography
+                            sx={{
+                              fontSize: "12px",
+                              color: COLORS.blue,
+                              fontWeight: 500,
+                            }}
+                          >
                             {activity.activityId}
                           </Typography>
 
                           {/* Activity Name */}
-                          <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5 }}>
-                            {actionsForThisActivity.length > 0 && (
-                              isExpanded ? (
-                                <ArrowDownIcon sx={{ fontSize: 16, color: COLORS.textSecondary, mt: 0.2, flexShrink: 0 }} />
+                          <Box
+                            sx={{
+                              display: "flex",
+                              alignItems: "flex-start",
+                              gap: 0.5,
+                            }}
+                          >
+                            {actionsForThisActivity.length > 0 &&
+                              (isExpanded ? (
+                                <ArrowDownIcon
+                                  sx={{
+                                    fontSize: 16,
+                                    color: COLORS.textSecondary,
+                                    mt: 0.2,
+                                    flexShrink: 0,
+                                  }}
+                                />
                               ) : (
-                                <ArrowRightIcon sx={{ fontSize: 16, color: COLORS.textSecondary, mt: 0.2, flexShrink: 0 }} />
-                              )
-                            )}
-                            <Typography sx={{ fontSize: "12px", color: COLORS.textPrimary, wordBreak: "break-word", lineHeight: 1.5 }}>
+                                <ArrowRightIcon
+                                  sx={{
+                                    fontSize: 16,
+                                    color: COLORS.textSecondary,
+                                    mt: 0.2,
+                                    flexShrink: 0,
+                                  }}
+                                />
+                              ))}
+                            <Typography
+                              sx={{
+                                fontSize: "12px",
+                                color: COLORS.textPrimary,
+                                wordBreak: "break-word",
+                                lineHeight: 1.5,
+                              }}
+                            >
                               {activity.activityName || activity.activityId}
                             </Typography>
                           </Box>
 
                           {/* Start Date */}
-                          <Typography sx={{ fontSize: "12px", color: COLORS.textSecondary, textAlign: "center" }}>
+                          <Typography
+                            sx={{
+                              fontSize: "12px",
+                              color: COLORS.textSecondary,
+                              textAlign: "center",
+                            }}
+                          >
                             {formatDate(activity.startDate)}
                           </Typography>
 
                           {/* End Date */}
-                          <Typography sx={{ fontSize: "12px", color: COLORS.textSecondary, textAlign: "center" }}>
+                          <Typography
+                            sx={{
+                              fontSize: "12px",
+                              color: COLORS.textSecondary,
+                              textAlign: "center",
+                            }}
+                          >
                             {formatDate(activity.finishDate)}
                           </Typography>
 
                           {/* Duration */}
-                          <Typography sx={{ fontSize: "12px", color: COLORS.textSecondary, textAlign: "center" }}>
+                          <Typography
+                            sx={{
+                              fontSize: "12px",
+                              color: COLORS.textSecondary,
+                              textAlign: "center",
+                            }}
+                          >
                             {activity.duration || "-"}
                           </Typography>
 
@@ -1088,8 +1220,23 @@ const ProjectWorkspace = () => {
                               mx: "auto",
                             }}
                           >
-                            <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: ragZone.color, flexShrink: 0 }} />
-                            <Typography sx={{ fontSize: "10px", fontWeight: 500, color: ragZone.color, whiteSpace: "nowrap" }}>
+                            <Box
+                              sx={{
+                                width: 6,
+                                height: 6,
+                                borderRadius: "50%",
+                                bgcolor: ragZone.color,
+                                flexShrink: 0,
+                              }}
+                            />
+                            <Typography
+                              sx={{
+                                fontSize: "10px",
+                                fontWeight: 500,
+                                color: ragZone.color,
+                                whiteSpace: "nowrap",
+                              }}
+                            >
                               {ragZone.zone}
                             </Typography>
                           </Box>
@@ -1103,16 +1250,25 @@ const ProjectWorkspace = () => {
                                 textAlign: "center",
                               }}
                             >
-                              {actionsForThisActivity.length} action{actionsForThisActivity.length !== 1 ? "s" : ""}
+                              {actionsForThisActivity.length} action
+                              {actionsForThisActivity.length !== 1 ? "s" : ""}
                             </Typography>
                           ) : (
-                            <Typography sx={{ fontSize: "12px", color: COLORS.textSecondary, textAlign: "center" }}>
+                            <Typography
+                              sx={{
+                                fontSize: "12px",
+                                color: COLORS.textSecondary,
+                                textAlign: "center",
+                              }}
+                            >
                               -
                             </Typography>
                           )}
 
                           {/* Status */}
-                          <Box sx={{ display: "flex", justifyContent: "center" }}>
+                          <Box
+                            sx={{ display: "flex", justifyContent: "center" }}
+                          >
                             <Box
                               sx={{
                                 display: "inline-flex",
@@ -1124,14 +1280,28 @@ const ProjectWorkspace = () => {
                                 bgcolor: statusColors.bg,
                               }}
                             >
-                              <Typography sx={{ fontSize: "11px", fontWeight: 500, color: statusColors.text, whiteSpace: "nowrap" }}>
+                              <Typography
+                                sx={{
+                                  fontSize: "11px",
+                                  fontWeight: 500,
+                                  color: statusColors.text,
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
                                 {activity.activityStatus || "Ready"}
                               </Typography>
                             </Box>
                           </Box>
 
                           {/* Owner */}
-                          <Box sx={{ display: "flex", alignItems: "center", gap: 1, justifyContent: "center" }}>
+                          <Box
+                            sx={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 1,
+                              justifyContent: "center",
+                            }}
+                          >
                             <Avatar
                               sx={{
                                 width: 26,
@@ -1143,7 +1313,12 @@ const ProjectWorkspace = () => {
                             >
                               {ownerInitials}
                             </Avatar>
-                            <Typography sx={{ fontSize: "12px", color: COLORS.textSecondary }}>
+                            <Typography
+                              sx={{
+                                fontSize: "12px",
+                                color: COLORS.textSecondary,
+                              }}
+                            >
                               {ownerName.split(" ")[0]}
                             </Typography>
                           </Box>
@@ -1180,7 +1355,13 @@ const ProjectWorkspace = () => {
                                 >
                                   Linked Actions
                                 </Typography>
-                                <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75 }}>
+                                <Box
+                                  sx={{
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: 0.75,
+                                  }}
+                                >
                                   {actionsForThisActivity.map((action) => (
                                     <Box
                                       key={action._id}
@@ -1190,8 +1371,18 @@ const ProjectWorkspace = () => {
                                         gap: 0.5,
                                       }}
                                     >
-                                      <ChevronRight sx={{ fontSize: 16, color: COLORS.blue }} />
-                                      <Typography sx={{ fontSize: "12px", color: COLORS.textPrimary }}>
+                                      <ChevronRight
+                                        sx={{
+                                          fontSize: 16,
+                                          color: COLORS.blue,
+                                        }}
+                                      />
+                                      <Typography
+                                        sx={{
+                                          fontSize: "12px",
+                                          color: COLORS.textPrimary,
+                                        }}
+                                      >
                                         {action.title}
                                       </Typography>
                                     </Box>
@@ -1213,7 +1404,12 @@ const ProjectWorkspace = () => {
                                 >
                                   Dependencies
                                 </Typography>
-                                <Typography sx={{ fontSize: "12px", color: COLORS.textSecondary }}>
+                                <Typography
+                                  sx={{
+                                    fontSize: "12px",
+                                    color: COLORS.textSecondary,
+                                  }}
+                                >
                                   -
                                 </Typography>
                               </Box>
@@ -1232,7 +1428,12 @@ const ProjectWorkspace = () => {
                                 >
                                   Notes
                                 </Typography>
-                                <Typography sx={{ fontSize: "12px", color: COLORS.textSecondary }}>
+                                <Typography
+                                  sx={{
+                                    fontSize: "12px",
+                                    color: COLORS.textSecondary,
+                                  }}
+                                >
                                   -
                                 </Typography>
                               </Box>
@@ -1261,7 +1462,9 @@ const ProjectWorkspace = () => {
                   gap: 2,
                 }}
               >
-                <Typography sx={{ color: COLORS.textSecondary, fontSize: "13px" }}>
+                <Typography
+                  sx={{ color: COLORS.textSecondary, fontSize: "13px" }}
+                >
                   Total: {activities.length} activities
                 </Typography>
                 <Box sx={{ display: "flex", gap: 3 }}>

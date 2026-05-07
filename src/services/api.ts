@@ -4,7 +4,6 @@ const API_URL =
   import.meta.env.VITE_API_URL ||
   "https://plansure-backend-production-d3e7.up.railway.app/api";
 
-// Create axios instance
 const api = axios.create({
   baseURL: API_URL,
   headers: {
@@ -12,7 +11,6 @@ const api = axios.create({
   },
 });
 
-// Request interceptor to add auth token
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("plansure_token");
@@ -26,14 +24,11 @@ api.interceptors.request.use(
   },
 );
 
-// Response interceptor for error handling
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     const isAuthEndpoint = error.config?.url?.includes("/auth/login");
 
-    // Handle 401 Unauthorized - token expired or invalid
-    // Skip redirect for auth endpoints (let them handle their own errors)
     if (error.response?.status === 401 && !isAuthEndpoint) {
       localStorage.removeItem("plansure_token");
       localStorage.removeItem("plansure_user");
@@ -43,7 +38,6 @@ api.interceptors.response.use(
   },
 );
 
-// Auth API calls
 export const authAPI = {
   login: async (email: string, password: string) => {
     const response = await api.post("/auth/login", { email, password });
@@ -66,7 +60,6 @@ export const authAPI = {
   },
 };
 
-// Project API calls
 export const projectAPI = {
   getAll: async (filters?: { status?: string; phase?: string }) => {
     const params = new URLSearchParams();
@@ -118,7 +111,6 @@ export const projectAPI = {
   },
 };
 
-// Programme API calls
 export const programmeAPI = {
   upload: async (file: File, name: string, projectId?: string) => {
     const formData = new FormData();
@@ -189,8 +181,6 @@ export const programmeAPI = {
     return response.data;
   },
 
-  // Transition cycle status (one step forward at a time)
-  // Valid transitions: Uploaded → Meeting Open → Execution → Close-Out Eligible → Closed
   updateCycleStatus: async (id: string, cycleStatus: string) => {
     const response = await api.patch(`/programmes/${id}/cycle-status`, {
       cycleStatus,
@@ -198,7 +188,6 @@ export const programmeAPI = {
     return response.data;
   },
 
-  // PM Override - force close with reason (skips to Closed)
   pmOverride: async (id: string, overrideReason: string) => {
     const response = await api.patch(`/programmes/${id}/cycle-status`, {
       cycleStatus: "Closed",
@@ -207,7 +196,6 @@ export const programmeAPI = {
     return response.data;
   },
 
-  // Check if programme is eligible for close-out
   getCloseEligibility: async (id: string) => {
     const response = await api.get(`/programmes/${id}/close-eligibility`);
     return response.data;
@@ -231,13 +219,11 @@ export const programmeAPI = {
     return response.data;
   },
 
-  // Recalculate RAG for all programmes
   recalculateAllRAG: async () => {
     const response = await api.post("/programmes/recalculate-rag");
     return response.data;
   },
 
-  // Recalculate RAG for a specific programme
   recalculateRAG: async (id: string) => {
     const response = await api.post(`/programmes/${id}/recalculate-rag`);
     return response.data;
@@ -260,7 +246,6 @@ export const programmeAPI = {
   },
 };
 
-// User API calls
 export const userAPI = {
   invite: async (data: {
     name: string;
@@ -319,7 +304,6 @@ export const userAPI = {
   },
 };
 
-// Action API calls
 export const actionAPI = {
   getAll: async (filters?: {
     programmeId?: string;
@@ -395,7 +379,6 @@ export const actionAPI = {
   },
 };
 
-// Dashboard API calls
 export const dashboardAPI = {
   getStats: async () => {
     const response = await api.get("/dashboard/stats");
@@ -416,6 +399,64 @@ export const dashboardAPI = {
   getWeeklyDashboard: async (projectId?: string) => {
     const params = projectId ? `?projectId=${projectId}` : "";
     const response = await api.get(`/dashboard/weekly${params}`);
+    return response.data;
+  },
+};
+
+export const notificationAPI = {
+  getAll: async (limit: number = 20, unreadOnly: boolean = false) => {
+    const response = await api.get(
+      `/notifications?limit=${limit}&unreadOnly=${unreadOnly}`,
+    );
+    return response.data;
+  },
+
+  getUnreadCount: async () => {
+    const response = await api.get("/notifications/unread-count");
+    return response.data;
+  },
+
+  markAsRead: async (id: string) => {
+    const response = await api.patch(`/notifications/${id}/read`);
+    return response.data;
+  },
+
+  markAllAsRead: async () => {
+    const response = await api.patch("/notifications/read-all");
+    return response.data;
+  },
+
+  delete: async (id: string) => {
+    const response = await api.delete(`/notifications/${id}`);
+    return response.data;
+  },
+};
+
+export const fcmAPI = {
+  registerToken: async (token: string, deviceInfo?: string) => {
+    const response = await api.post("/fcm/register-token", {
+      token,
+      deviceInfo,
+    });
+    localStorage.setItem("plansure_fcm_token", token);
+    return response.data;
+  },
+
+  unregisterToken: async (token: string) => {
+    const response = await api.delete("/fcm/unregister-token", {
+      data: { token },
+    });
+    localStorage.removeItem("plansure_fcm_token");
+    return response.data;
+  },
+
+  togglePush: async (enabled: boolean) => {
+    const response = await api.patch("/fcm/toggle-push", { enabled });
+    return response.data;
+  },
+
+  getStatus: async () => {
+    const response = await api.get("/fcm/status");
     return response.data;
   },
 };

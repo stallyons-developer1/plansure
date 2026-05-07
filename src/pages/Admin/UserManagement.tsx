@@ -52,11 +52,20 @@ const roleColors: Record<string, { bg: string; color: string }> = {
   user: { bg: "rgba(34, 197, 94, 0.15)", color: "#22c55e" },
 };
 
-const statusColors: Record<string, { bg: string; color: string; dot: string }> = {
-  active: { bg: "rgba(34, 197, 94, 0.15)", color: "#22c55e", dot: "#22c55e" },
-  pending: { bg: "rgba(245, 158, 11, 0.15)", color: "#f59e0b", dot: "#f59e0b" },
-  blocked: { bg: "rgba(107, 114, 128, 0.15)", color: "#6b7280", dot: "#6b7280" },
-};
+const statusColors: Record<string, { bg: string; color: string; dot: string }> =
+  {
+    active: { bg: "rgba(34, 197, 94, 0.15)", color: "#22c55e", dot: "#22c55e" },
+    pending: {
+      bg: "rgba(245, 158, 11, 0.15)",
+      color: "#f59e0b",
+      dot: "#f59e0b",
+    },
+    blocked: {
+      bg: "rgba(107, 114, 128, 0.15)",
+      color: "#6b7280",
+      dot: "#6b7280",
+    },
+  };
 
 const getAvatarStyle = (role: string) => {
   switch (role) {
@@ -87,17 +96,17 @@ const UserManagement = () => {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editName, setEditName] = useState("");
   const [editEmail, setEditEmail] = useState("");
-  const [editRole, setEditRole] = useState<"admin" | "planner" | "user">("user");
+  const [editRole, setEditRole] = useState<"admin" | "planner" | "user">(
+    "user",
+  );
   const [editStatus, setEditStatus] = useState<"active" | "blocked">("active");
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState("");
 
-  // Block/Unblock modal state
   const [blockModalOpen, setBlockModalOpen] = useState(false);
   const [userToBlock, setUserToBlock] = useState<User | null>(null);
   const [blockLoading, setBlockLoading] = useState(false);
 
-  // Fetch users and projects on mount
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -142,7 +151,6 @@ const UserManagement = () => {
       });
 
       if (response.success) {
-        // Refresh users list
         const usersRes = await userAPI.getAll();
         setUsers(usersRes.users || []);
         handleCloseInviteModal();
@@ -155,9 +163,15 @@ const UserManagement = () => {
       console.log("Error status:", (error as any).response?.status);
       console.log("================================");
 
-      const err = error as { response?: { data?: { errors?: { message: string }[]; message?: string } } };
+      const err = error as {
+        response?: {
+          data?: { errors?: { message: string }[]; message?: string };
+        };
+      };
       if (err.response?.data?.errors) {
-        setInviteError(err.response.data.errors.map((e) => e.message).join(", "));
+        setInviteError(
+          err.response.data.errors.map((e) => e.message).join(", "),
+        );
       } else if (err.response?.data?.message) {
         setInviteError(err.response.data.message);
       } else {
@@ -200,19 +214,20 @@ const UserManagement = () => {
         status: editStatus,
       });
 
-      // Refresh users list
       const usersRes = await userAPI.getAll();
       setUsers(usersRes.users || []);
       handleCloseEditModal();
     } catch (error: unknown) {
       const err = error as { response?: { data?: { message?: string } } };
-      setEditError(err.response?.data?.message || "Failed to update user. Please try again.");
+      setEditError(
+        err.response?.data?.message ||
+          "Failed to update user. Please try again.",
+      );
     } finally {
       setEditLoading(false);
     }
   };
 
-  // Open block confirmation modal
   const handleOpenBlockModal = (user: User) => {
     setUserToBlock(user);
     setBlockModalOpen(true);
@@ -229,7 +244,6 @@ const UserManagement = () => {
     setBlockLoading(true);
     try {
       await userAPI.block(userToBlock._id);
-      // Refresh users list
       const usersRes = await userAPI.getAll();
       setUsers(usersRes.users || []);
       handleCloseBlockModal();
@@ -251,8 +265,10 @@ const UserManagement = () => {
   const plannerCount = users.filter((u) => u.role === "planner").length;
   const userCount = users.filter((u) => u.role === "user").length;
 
-  const formatRole = (role: string) => role.charAt(0).toUpperCase() + role.slice(1);
-  const formatStatus = (status: string) => status.charAt(0).toUpperCase() + status.slice(1);
+  const formatRole = (role: string) =>
+    role.charAt(0).toUpperCase() + role.slice(1);
+  const formatStatus = (status: string) =>
+    status.charAt(0).toUpperCase() + status.slice(1);
   const formatLastLogin = (lastLogin: string | null) => {
     if (!lastLogin) return "Never";
     return new Date(lastLogin).toLocaleDateString("en-GB", {
@@ -267,7 +283,14 @@ const UserManagement = () => {
   if (loading) {
     return (
       <AdminLayout title="User Management" subtitle="Manage users and roles">
-        <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: 400 }}>
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            minHeight: 400,
+          }}
+        >
           <CircularProgress sx={{ color: COLORS.blue }} />
         </Box>
       </AdminLayout>
@@ -588,8 +611,7 @@ const UserManagement = () => {
             <Box
               sx={{
                 display: "grid",
-                gridTemplateColumns:
-                  "140px 1fr 100px 140px 100px 130px 100px",
+                gridTemplateColumns: "140px 1fr 100px 140px 100px 130px 100px",
                 gap: 2,
                 px: 3,
                 py: 2,
@@ -683,166 +705,175 @@ const UserManagement = () => {
               </Box>
             ) : (
               filteredUsers.map((user) => (
-              <Box
-                key={user._id}
-                sx={{
-                  display: "grid",
-                  gridTemplateColumns:
-                    "140px 1fr 100px 140px 100px 130px 100px",
-                  gap: 2,
-                  px: 3,
-                  py: 2,
-                  borderBottom: `1px solid ${COLORS.border}`,
-                  alignItems: "center",
-                  "&:hover": {
-                    bgcolor: "#1E293B",
-                  },
-                  "&:last-child": {
-                    borderBottom: "none",
-                  },
-                }}
-              >
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-                  <Box
-                    sx={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: "50%",
-                      bgcolor: getAvatarStyle(user.role).bg,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <Typography
-                      sx={{
-                        color: getAvatarStyle(user.role).color,
-                        fontSize: "14px",
-                        fontWeight: 600,
-                      }}
-                    >
-                      {user.initials}
-                    </Typography>
-                  </Box>
-                  <Typography
-                    sx={{
-                      color: COLORS.textPrimary,
-                      fontSize: "14px",
-                      fontWeight: 500,
-                    }}
-                  >
-                    {user.name}
-                  </Typography>
-                </Box>
-
-                <Typography
+                <Box
+                  key={user._id}
                   sx={{
-                    color: COLORS.textSecondary,
-                    fontSize: "14px",
-                    textAlign: "center",
+                    display: "grid",
+                    gridTemplateColumns:
+                      "140px 1fr 100px 140px 100px 130px 100px",
+                    gap: 2,
+                    px: 3,
+                    py: 2,
+                    borderBottom: `1px solid ${COLORS.border}`,
+                    alignItems: "center",
+                    "&:hover": {
+                      bgcolor: "#1E293B",
+                    },
+                    "&:last-child": {
+                      borderBottom: "none",
+                    },
                   }}
                 >
-                  {user.email}
-                </Typography>
-
-                <Box sx={{ display: "flex", justifyContent: "center" }}>
-                  <Box
-                    sx={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      bgcolor: roleColors[user.role]?.bg || "rgba(107, 114, 128, 0.15)",
-                      color: roleColors[user.role]?.color || "#6b7280",
-                      px: 2.5,
-                      py: 0.75,
-                      borderRadius: "20px",
-                      fontSize: "13px",
-                      fontWeight: 500,
-                      minWidth: "70px",
-                    }}
-                  >
-                    {formatRole(user.role)}
-                  </Box>
-                </Box>
-
-                <Typography
-                  sx={{
-                    color: COLORS.textSecondary,
-                    fontSize: "14px",
-                    textAlign: "center",
-                  }}
-                >
-                  {user.projectAccess}
-                </Typography>
-
-                <Box sx={{ display: "flex", justifyContent: "center" }}>
-                  <Box
-                    sx={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 0.75,
-                      bgcolor: statusColors[user.status]?.bg || "rgba(107, 114, 128, 0.15)",
-                      px: 2,
-                      py: 0.75,
-                      borderRadius: "20px",
-                    }}
-                  >
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
                     <Box
                       sx={{
-                        width: 8,
-                        height: 8,
+                        width: 40,
+                        height: 40,
                         borderRadius: "50%",
-                        bgcolor: statusColors[user.status]?.dot || "#6b7280",
+                        bgcolor: getAvatarStyle(user.role).bg,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
                       }}
-                    />
+                    >
+                      <Typography
+                        sx={{
+                          color: getAvatarStyle(user.role).color,
+                          fontSize: "14px",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {user.initials}
+                      </Typography>
+                    </Box>
                     <Typography
                       sx={{
-                        color: statusColors[user.status]?.color || "#6b7280",
-                        fontSize: "13px",
+                        color: COLORS.textPrimary,
+                        fontSize: "14px",
                         fontWeight: 500,
                       }}
                     >
-                      {formatStatus(user.status)}
+                      {user.name}
                     </Typography>
                   </Box>
-                </Box>
 
-                <Typography
-                  sx={{
-                    color: COLORS.textSecondary,
-                    fontSize: "14px",
-                    textAlign: "center",
-                  }}
-                >
-                  {formatLastLogin(user.lastLogin)}
-                </Typography>
+                  <Typography
+                    sx={{
+                      color: COLORS.textSecondary,
+                      fontSize: "14px",
+                      textAlign: "center",
+                    }}
+                  >
+                    {user.email}
+                  </Typography>
 
-                <Box sx={{ display: "flex", justifyContent: "center", gap: 2 }}>
+                  <Box sx={{ display: "flex", justifyContent: "center" }}>
+                    <Box
+                      sx={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        bgcolor:
+                          roleColors[user.role]?.bg ||
+                          "rgba(107, 114, 128, 0.15)",
+                        color: roleColors[user.role]?.color || "#6b7280",
+                        px: 2.5,
+                        py: 0.75,
+                        borderRadius: "20px",
+                        fontSize: "13px",
+                        fontWeight: 500,
+                        minWidth: "70px",
+                      }}
+                    >
+                      {formatRole(user.role)}
+                    </Box>
+                  </Box>
+
+                  <Typography
+                    sx={{
+                      color: COLORS.textSecondary,
+                      fontSize: "14px",
+                      textAlign: "center",
+                    }}
+                  >
+                    {user.projectAccess}
+                  </Typography>
+
+                  <Box sx={{ display: "flex", justifyContent: "center" }}>
+                    <Box
+                      sx={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 0.75,
+                        bgcolor:
+                          statusColors[user.status]?.bg ||
+                          "rgba(107, 114, 128, 0.15)",
+                        px: 2,
+                        py: 0.75,
+                        borderRadius: "20px",
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: "50%",
+                          bgcolor: statusColors[user.status]?.dot || "#6b7280",
+                        }}
+                      />
+                      <Typography
+                        sx={{
+                          color: statusColors[user.status]?.color || "#6b7280",
+                          fontSize: "13px",
+                          fontWeight: 500,
+                        }}
+                      >
+                        {formatStatus(user.status)}
+                      </Typography>
+                    </Box>
+                  </Box>
+
+                  <Typography
+                    sx={{
+                      color: COLORS.textSecondary,
+                      fontSize: "14px",
+                      textAlign: "center",
+                    }}
+                  >
+                    {formatLastLogin(user.lastLogin)}
+                  </Typography>
+
                   <Box
-                    component="img"
-                    src={editIcon}
-                    onClick={() => handleOpenEditModal(user)}
-                    sx={{
-                      width: 20,
-                      height: 20,
-                      cursor: "pointer",
-                      opacity: 0.5,
-                      "&:hover": { opacity: 1 },
-                    }}
-                  />
-                  <BlockIcon
-                    onClick={() => handleOpenBlockModal(user)}
-                    sx={{
-                      fontSize: 20,
-                      color: user.status === "blocked" ? "#ef4444" : COLORS.textMuted,
-                      cursor: "pointer",
-                      opacity: 0.5,
-                      "&:hover": { opacity: 1 },
-                    }}
-                  />
+                    sx={{ display: "flex", justifyContent: "center", gap: 2 }}
+                  >
+                    <Box
+                      component="img"
+                      src={editIcon}
+                      onClick={() => handleOpenEditModal(user)}
+                      sx={{
+                        width: 20,
+                        height: 20,
+                        cursor: "pointer",
+                        opacity: 0.5,
+                        "&:hover": { opacity: 1 },
+                      }}
+                    />
+                    <BlockIcon
+                      onClick={() => handleOpenBlockModal(user)}
+                      sx={{
+                        fontSize: 20,
+                        color:
+                          user.status === "blocked"
+                            ? "#ef4444"
+                            : COLORS.textMuted,
+                        cursor: "pointer",
+                        opacity: 0.5,
+                        "&:hover": { opacity: 1 },
+                      }}
+                    />
+                  </Box>
                 </Box>
-              </Box>
-            ))
+              ))
             )}
           </Box>
         </Box>
@@ -930,7 +961,9 @@ const UserManagement = () => {
               type="text"
               placeholder="e.g. John Smith"
               value={inviteName}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInviteName(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setInviteName(e.target.value)
+              }
               sx={{
                 width: "100%",
                 padding: "12px 14px",
@@ -941,11 +974,12 @@ const UserManagement = () => {
                 fontSize: "14px",
                 outline: "none",
                 boxSizing: "border-box",
-                "&:-webkit-autofill, &:-webkit-autofill:hover, &:-webkit-autofill:focus": {
-                  WebkitBoxShadow: `0 0 0 1000px ${COLORS.bgPrimary} inset !important`,
-                  WebkitTextFillColor: `${COLORS.textPrimary} !important`,
-                  caretColor: COLORS.textPrimary,
-                },
+                "&:-webkit-autofill, &:-webkit-autofill:hover, &:-webkit-autofill:focus":
+                  {
+                    WebkitBoxShadow: `0 0 0 1000px ${COLORS.bgPrimary} inset !important`,
+                    WebkitTextFillColor: `${COLORS.textPrimary} !important`,
+                    caretColor: COLORS.textPrimary,
+                  },
               }}
             />
           </Box>
@@ -967,7 +1001,9 @@ const UserManagement = () => {
               type="email"
               placeholder="e.g. john.smith@company.com"
               value={inviteEmail}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInviteEmail(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setInviteEmail(e.target.value)
+              }
               sx={{
                 width: "100%",
                 padding: "12px 14px",
@@ -978,11 +1014,12 @@ const UserManagement = () => {
                 fontSize: "14px",
                 outline: "none",
                 boxSizing: "border-box",
-                "&:-webkit-autofill, &:-webkit-autofill:hover, &:-webkit-autofill:focus": {
-                  WebkitBoxShadow: `0 0 0 1000px ${COLORS.bgPrimary} inset !important`,
-                  WebkitTextFillColor: `${COLORS.textPrimary} !important`,
-                  caretColor: COLORS.textPrimary,
-                },
+                "&:-webkit-autofill, &:-webkit-autofill:hover, &:-webkit-autofill:focus":
+                  {
+                    WebkitBoxShadow: `0 0 0 1000px ${COLORS.bgPrimary} inset !important`,
+                    WebkitTextFillColor: `${COLORS.textPrimary} !important`,
+                    caretColor: COLORS.textPrimary,
+                  },
               }}
             />
           </Box>
@@ -1158,7 +1195,9 @@ const UserManagement = () => {
                   textAlign: "center",
                 }}
               >
-                <FolderIcon sx={{ fontSize: 40, color: COLORS.textMuted, mb: 1 }} />
+                <FolderIcon
+                  sx={{ fontSize: 40, color: COLORS.textMuted, mb: 1 }}
+                />
                 <Typography
                   sx={{
                     color: COLORS.textSecondary,
@@ -1287,7 +1326,11 @@ const UserManagement = () => {
               },
             }}
           >
-            {inviteLoading ? <CircularProgress size={20} sx={{ color: COLORS.white }} /> : "Send Invite"}
+            {inviteLoading ? (
+              <CircularProgress size={20} sx={{ color: COLORS.white }} />
+            ) : (
+              "Send Invite"
+            )}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1374,7 +1417,9 @@ const UserManagement = () => {
               type="text"
               placeholder="e.g. John Smith"
               value={editName}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditName(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setEditName(e.target.value)
+              }
               sx={{
                 width: "100%",
                 padding: "12px 14px",
@@ -1385,11 +1430,12 @@ const UserManagement = () => {
                 fontSize: "14px",
                 outline: "none",
                 boxSizing: "border-box",
-                "&:-webkit-autofill, &:-webkit-autofill:hover, &:-webkit-autofill:focus": {
-                  WebkitBoxShadow: `0 0 0 1000px ${COLORS.bgPrimary} inset !important`,
-                  WebkitTextFillColor: `${COLORS.textPrimary} !important`,
-                  caretColor: COLORS.textPrimary,
-                },
+                "&:-webkit-autofill, &:-webkit-autofill:hover, &:-webkit-autofill:focus":
+                  {
+                    WebkitBoxShadow: `0 0 0 1000px ${COLORS.bgPrimary} inset !important`,
+                    WebkitTextFillColor: `${COLORS.textPrimary} !important`,
+                    caretColor: COLORS.textPrimary,
+                  },
               }}
             />
           </Box>
@@ -1411,7 +1457,9 @@ const UserManagement = () => {
               type="email"
               placeholder="e.g. john.smith@company.com"
               value={editEmail}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditEmail(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setEditEmail(e.target.value)
+              }
               sx={{
                 width: "100%",
                 padding: "12px 14px",
@@ -1422,11 +1470,12 @@ const UserManagement = () => {
                 fontSize: "14px",
                 outline: "none",
                 boxSizing: "border-box",
-                "&:-webkit-autofill, &:-webkit-autofill:hover, &:-webkit-autofill:focus": {
-                  WebkitBoxShadow: `0 0 0 1000px ${COLORS.bgPrimary} inset !important`,
-                  WebkitTextFillColor: `${COLORS.textPrimary} !important`,
-                  caretColor: COLORS.textPrimary,
-                },
+                "&:-webkit-autofill, &:-webkit-autofill:hover, &:-webkit-autofill:focus":
+                  {
+                    WebkitBoxShadow: `0 0 0 1000px ${COLORS.bgPrimary} inset !important`,
+                    WebkitTextFillColor: `${COLORS.textPrimary} !important`,
+                    caretColor: COLORS.textPrimary,
+                  },
               }}
             />
           </Box>
@@ -1723,7 +1772,11 @@ const UserManagement = () => {
               },
             }}
           >
-            {editLoading ? <CircularProgress size={20} sx={{ color: COLORS.white }} /> : "Save Changes"}
+            {editLoading ? (
+              <CircularProgress size={20} sx={{ color: COLORS.white }} />
+            ) : (
+              "Save Changes"
+            )}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1778,11 +1831,17 @@ const UserManagement = () => {
         </DialogTitle>
         <DialogContent sx={{ px: 3, py: 2 }}>
           <Typography sx={{ color: COLORS.textSecondary, fontSize: "14px" }}>
-            Are you sure you want to {userToBlock?.status === "blocked" ? "unblock" : "block"}{" "}
-            <strong style={{ color: COLORS.textPrimary }}>{userToBlock?.name}</strong>?
+            Are you sure you want to{" "}
+            {userToBlock?.status === "blocked" ? "unblock" : "block"}{" "}
+            <strong style={{ color: COLORS.textPrimary }}>
+              {userToBlock?.name}
+            </strong>
+            ?
           </Typography>
           {userToBlock?.status !== "blocked" && (
-            <Typography sx={{ color: COLORS.textMuted, fontSize: "13px", mt: 1 }}>
+            <Typography
+              sx={{ color: COLORS.textMuted, fontSize: "13px", mt: 1 }}
+            >
               This user will not be able to access the system until unblocked.
             </Typography>
           )}
@@ -1818,7 +1877,8 @@ const UserManagement = () => {
             disabled={blockLoading}
             sx={{
               color: COLORS.white,
-              bgcolor: userToBlock?.status === "blocked" ? COLORS.green : "#ef4444",
+              bgcolor:
+                userToBlock?.status === "blocked" ? COLORS.green : "#ef4444",
               borderRadius: "8px",
               textTransform: "none",
               px: 3,
@@ -1826,10 +1886,12 @@ const UserManagement = () => {
               fontSize: "14px",
               fontWeight: 500,
               "&:hover": {
-                bgcolor: userToBlock?.status === "blocked" ? "#16a34a" : "#dc2626",
+                bgcolor:
+                  userToBlock?.status === "blocked" ? "#16a34a" : "#dc2626",
               },
               "&.Mui-disabled": {
-                bgcolor: userToBlock?.status === "blocked" ? COLORS.green : "#ef4444",
+                bgcolor:
+                  userToBlock?.status === "blocked" ? COLORS.green : "#ef4444",
                 opacity: 0.7,
               },
             }}
@@ -1844,8 +1906,7 @@ const UserManagement = () => {
           </Button>
         </DialogActions>
       </Dialog>
-
-      </AdminLayout>
+    </AdminLayout>
   );
 };
 

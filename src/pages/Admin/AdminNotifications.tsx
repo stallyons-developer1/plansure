@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Box,
   Typography,
@@ -6,6 +7,7 @@ import {
   IconButton,
   Button,
   Checkbox,
+  CircularProgress,
 } from "@mui/material";
 import {
   CheckCircleOutlined as CheckIcon,
@@ -13,112 +15,105 @@ import {
 } from "@mui/icons-material";
 import AdminLayout from "../../layouts/AdminLayout";
 import { COLORS } from "../../constants/colors";
+import { notificationAPI } from "../../services/api";
 
 interface Notification {
-  id: number;
+  _id: string;
   title: string;
   message: string;
-  time: string;
-  date: string;
-  read: boolean;
-  type: "info" | "warning" | "success" | "error";
+  type: string;
+  isRead: boolean;
+  createdAt: string;
+  sender?: { name: string };
+  project?: { _id: string; name: string };
+  programme?: {
+    _id: string;
+    name: string;
+    project?: { _id: string; name: string };
+  };
 }
 
-const initialNotifications: Notification[] = [
-  {
-    id: 1,
-    title: "New project assigned",
-    message: "You have been assigned to Project Alpha. Please review the project details and start planning.",
-    time: "2 min ago",
-    date: "Today",
-    read: false,
-    type: "info",
-  },
-  {
-    id: 2,
-    title: "Action overdue",
-    message: "Action #1234 is overdue by 2 days. Please take immediate action to resolve this issue.",
-    time: "1 hour ago",
-    date: "Today",
-    read: false,
-    type: "warning",
-  },
-  {
-    id: 3,
-    title: "Weekly report ready",
-    message: "Your weekly governance report is ready for review. Click to view the detailed analysis.",
-    time: "3 hours ago",
-    date: "Today",
-    read: false,
-    type: "success",
-  },
-  {
-    id: 4,
-    title: "RAG status changed",
-    message: "Project Beta status changed from Green to Amber. Review the constraints that caused this change.",
-    time: "5 hours ago",
-    date: "Today",
-    read: true,
-    type: "warning",
-  },
-  {
-    id: 5,
-    title: "New user registered",
-    message: "A new planner user 'john.doe@company.com' has registered and is awaiting approval.",
-    time: "Yesterday",
-    date: "Yesterday",
-    read: true,
-    type: "info",
-  },
-  {
-    id: 6,
-    title: "System maintenance scheduled",
-    message: "System maintenance is scheduled for this weekend. Please save your work before Saturday 10 PM.",
-    time: "2 days ago",
-    date: "Apr 20, 2026",
-    read: true,
-    type: "info",
-  },
-  {
-    id: 7,
-    title: "Export completed",
-    message: "Your requested data export has been completed. Download link is available for the next 24 hours.",
-    time: "3 days ago",
-    date: "Apr 19, 2026",
-    read: true,
-    type: "success",
-  },
-];
-
 const AdminNotifications = () => {
-  const [notifications, setNotifications] = useState(initialNotifications);
-  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  const fetchNotifications = useCallback(async () => {
+    try {
+      const response = await notificationAPI.getAll(100, false);
+      if (response.success) {
+        setNotifications(response.notifications || []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch notifications:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  const handleMarkAsRead = (id: number) => {
-    setNotifications(
-      notifications.map((n) => (n.id === id ? { ...n, read: true } : n))
-    );
+  useEffect(() => {
+    fetchNotifications();
+  }, [fetchNotifications]);
+
+  const unreadCount = notifications.filter((n) => !n.isRead).length;
+
+  const handleMarkAsRead = async (id: string) => {
+    try {
+      await notificationAPI.markAsRead(id);
+      setNotifications(
+        notifications.map((n) => (n._id === id ? { ...n, isRead: true } : n)),
+      );
+    } catch (error) {
+      console.error("Failed to mark as read:", error);
+    }
   };
 
-  const handleMarkAllRead = () => {
-    setNotifications(notifications.map((n) => ({ ...n, read: true })));
+  const handleNotificationClick = async (notification: Notification) => {
+    if (!notification.isRead) {
+      await handleMarkAsRead(notification._id);
+    }
+
+    const projectId =
+      notification.project?._id || notification.programme?.project?._id;
+
+    if (projectId) {
+      navigate(`/admin/projects/${projectId}?tab=actions&t=${Date.now()}`);
+    }
   };
 
-  const handleDelete = (id: number) => {
-    setNotifications(notifications.filter((n) => n.id !== id));
-    setSelectedIds(selectedIds.filter((selectedId) => selectedId !== id));
+  const handleMarkAllRead = async () => {
+    try {
+      await notificationAPI.markAllAsRead();
+      setNotifications(notifications.map((n) => ({ ...n, isRead: true })));
+    } catch (error) {
+      console.error("Failed to mark all as read:", error);
+    }
   };
 
-  const handleDeleteSelected = () => {
-    setNotifications(
-      notifications.filter((n) => !selectedIds.includes(n.id))
-    );
-    setSelectedIds([]);
+  const handleDelete = async (id: string) => {
+    try {
+      await notificationAPI.delete(id);
+      setNotifications(notifications.filter((n) => n._id !== id));
+      setSelectedIds(selectedIds.filter((selectedId) => selectedId !== id));
+    } catch (error) {
+      console.error("Failed to delete notification:", error);
+    }
   };
 
-  const handleToggleSelect = (id: number) => {
+  const handleDeleteSelected = async () => {
+    try {
+      await Promise.all(selectedIds.map((id) => notificationAPI.delete(id)));
+      setNotifications(
+        notifications.filter((n) => !selectedIds.includes(n._id)),
+      );
+      setSelectedIds([]);
+    } catch (error) {
+      console.error("Failed to delete notifications:", error);
+    }
+  };
+
+  const handleToggleSelect = (id: string) => {
     if (selectedIds.includes(id)) {
       setSelectedIds(selectedIds.filter((selectedId) => selectedId !== id));
     } else {
@@ -130,105 +125,155 @@ const AdminNotifications = () => {
     if (selectedIds.length === notifications.length) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(notifications.map((n) => n.id));
+      setSelectedIds(notifications.map((n) => n._id));
     }
   };
 
-  const getTypeColor = (type: Notification["type"]) => {
+  const getTypeColor = (type: string) => {
     switch (type) {
-      case "warning":
+      case "action_assigned":
+        return COLORS.blue;
+      case "action_reassigned":
         return COLORS.amber;
-      case "success":
+      case "action_completed":
         return COLORS.green;
-      case "error":
-        return COLORS.red;
       default:
         return COLORS.blue;
     }
   };
 
+  const formatTimeAgo = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return "Just now";
+    if (diffMins < 60) return `${diffMins} min ago`;
+    if (diffHours < 24)
+      return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`;
+    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`;
+    return date.toLocaleDateString();
+  };
+
+  const getDateGroup = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffDays = Math.floor((now.getTime() - date.getTime()) / 86400000);
+
+    if (diffDays === 0) return "Today";
+    if (diffDays === 1) return "Yesterday";
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
+
   const groupedNotifications = notifications.reduce(
     (acc, notification) => {
-      const date = notification.date;
+      const date = getDateGroup(notification.createdAt);
       if (!acc[date]) {
         acc[date] = [];
       }
       acc[date].push(notification);
       return acc;
     },
-    {} as Record<string, Notification[]>
+    {} as Record<string, Notification[]>,
   );
+
+  if (loading) {
+    return (
+      <AdminLayout title="Notifications" subtitle="Loading...">
+        <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
+          <CircularProgress sx={{ color: COLORS.blue }} />
+        </Box>
+      </AdminLayout>
+    );
+  }
 
   return (
     <AdminLayout
       title="Notifications"
-      subtitle={`${unreadCount} unread notifications`}
+      subtitle={`${unreadCount} unread notification${unreadCount !== 1 ? "s" : ""}`}
     >
       <Box sx={{ maxWidth: 900, mx: "auto" }}>
         {/* Actions Bar */}
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            mb: 3,
-          }}
-        >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-            <Checkbox
-              checked={selectedIds.length === notifications.length && notifications.length > 0}
-              indeterminate={selectedIds.length > 0 && selectedIds.length < notifications.length}
-              onChange={handleSelectAll}
-              sx={{
-                color: COLORS.border,
-                "&.Mui-checked, &.MuiCheckbox-indeterminate": {
-                  color: COLORS.blue,
-                },
-              }}
-            />
-            <Typography sx={{ color: COLORS.textSecondary, fontSize: "14px" }}>
-              {selectedIds.length > 0
-                ? `${selectedIds.length} selected`
-                : "Select all"}
-            </Typography>
-          </Box>
-          <Box sx={{ display: "flex", gap: 1 }}>
-            {selectedIds.length > 0 && (
-              <Button
-                startIcon={<DeleteIcon />}
-                onClick={handleDeleteSelected}
+        {notifications.length > 0 && (
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              mb: 3,
+            }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+              <Checkbox
+                checked={
+                  selectedIds.length === notifications.length &&
+                  notifications.length > 0
+                }
+                indeterminate={
+                  selectedIds.length > 0 &&
+                  selectedIds.length < notifications.length
+                }
+                onChange={handleSelectAll}
                 sx={{
-                  color: COLORS.red,
+                  color: COLORS.border,
+                  "&.Mui-checked, &.MuiCheckbox-indeterminate": {
+                    color: COLORS.blue,
+                  },
+                }}
+              />
+              <Typography
+                sx={{ color: COLORS.textSecondary, fontSize: "14px" }}
+              >
+                {selectedIds.length > 0
+                  ? `${selectedIds.length} selected`
+                  : "Select all"}
+              </Typography>
+            </Box>
+            <Box sx={{ display: "flex", gap: 1 }}>
+              {selectedIds.length > 0 && (
+                <Button
+                  startIcon={<DeleteIcon />}
+                  onClick={handleDeleteSelected}
+                  sx={{
+                    color: COLORS.red,
+                    textTransform: "none",
+                    fontSize: "13px",
+                    "&:hover": {
+                      bgcolor: "rgba(239, 68, 68, 0.1)",
+                    },
+                  }}
+                >
+                  Delete selected
+                </Button>
+              )}
+              <Button
+                startIcon={<CheckIcon />}
+                onClick={handleMarkAllRead}
+                disabled={unreadCount === 0}
+                sx={{
+                  color: COLORS.blue,
                   textTransform: "none",
                   fontSize: "13px",
                   "&:hover": {
-                    bgcolor: "rgba(239, 68, 68, 0.1)",
+                    bgcolor: "rgba(59, 130, 246, 0.1)",
+                  },
+                  "&.Mui-disabled": {
+                    color: COLORS.textMuted,
                   },
                 }}
               >
-                Delete selected
+                Mark all read
               </Button>
-            )}
-            <Button
-              startIcon={<CheckIcon />}
-              onClick={handleMarkAllRead}
-              disabled={unreadCount === 0}
-              sx={{
-                color: COLORS.blue,
-                textTransform: "none",
-                fontSize: "13px",
-                "&:hover": {
-                  bgcolor: "rgba(59, 130, 246, 0.1)",
-                },
-                "&.Mui-disabled": {
-                  color: COLORS.textMuted,
-                },
-              }}
-            >
-              Mark all read
-            </Button>
+            </Box>
           </Box>
-        </Box>
+        )}
 
         {/* Notifications List */}
         {Object.entries(groupedNotifications).map(([date, items]) => (
@@ -256,7 +301,7 @@ const AdminNotifications = () => {
             >
               {items.map((notification, index) => (
                 <Box
-                  key={notification.id}
+                  key={notification._id}
                   sx={{
                     p: 2,
                     display: "flex",
@@ -266,7 +311,7 @@ const AdminNotifications = () => {
                       index < items.length - 1
                         ? `1px solid ${COLORS.border}`
                         : "none",
-                    bgcolor: notification.read
+                    bgcolor: notification.isRead
                       ? "transparent"
                       : "rgba(59, 130, 246, 0.05)",
                     cursor: "pointer",
@@ -274,13 +319,13 @@ const AdminNotifications = () => {
                       bgcolor: COLORS.bgTertiary,
                     },
                   }}
-                  onClick={() => handleMarkAsRead(notification.id)}
+                  onClick={() => handleNotificationClick(notification)}
                 >
                   <Checkbox
-                    checked={selectedIds.includes(notification.id)}
+                    checked={selectedIds.includes(notification._id)}
                     onChange={(e) => {
                       e.stopPropagation();
-                      handleToggleSelect(notification.id);
+                      handleToggleSelect(notification._id);
                     }}
                     onClick={(e) => e.stopPropagation()}
                     sx={{
@@ -313,13 +358,15 @@ const AdminNotifications = () => {
                       <Typography
                         sx={{
                           color: COLORS.textPrimary,
-                          fontWeight: notification.read ? 400 : 600,
+                          fontWeight: notification.isRead ? 400 : 600,
                           fontSize: "14px",
                         }}
                       >
                         {notification.title}
                       </Typography>
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                      >
                         <Typography
                           sx={{
                             color: COLORS.textMuted,
@@ -327,9 +374,9 @@ const AdminNotifications = () => {
                             whiteSpace: "nowrap",
                           }}
                         >
-                          {notification.time}
+                          {formatTimeAgo(notification.createdAt)}
                         </Typography>
-                        {!notification.read && (
+                        {!notification.isRead && (
                           <Box
                             sx={{
                               width: 8,
@@ -356,7 +403,7 @@ const AdminNotifications = () => {
                     size="small"
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleDelete(notification.id);
+                      handleDelete(notification._id);
                     }}
                     sx={{
                       color: COLORS.textMuted,

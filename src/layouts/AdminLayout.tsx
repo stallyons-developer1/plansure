@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   Box,
@@ -31,6 +31,8 @@ import {
 } from "@mui/icons-material";
 import { useAuth } from "../context/AuthContext";
 import { COLORS } from "../constants/colors";
+import { notificationAPI } from "../services/api";
+import { usePushNotifications } from "../hooks/usePushNotifications";
 import logo from "../assets/logo.png";
 import projectsIcon from "../assets/sidebar/projects.png";
 import activitiesIcon from "../assets/sidebar/activitiesClipboard.png";
@@ -42,43 +44,28 @@ import exportIcon from "../assets/sidebar/export.png";
 
 const DRAWER_WIDTH = 240;
 
+interface Notification {
+  _id: string;
+  title: string;
+  message: string;
+  type: string;
+  isRead: boolean;
+  createdAt: string;
+  sender?: { name: string };
+  project?: { _id: string; name: string };
+  programme?: {
+    _id: string;
+    name: string;
+    project?: { _id: string; name: string };
+  };
+}
+
 interface AdminLayoutProps {
   children: React.ReactNode;
   title: string;
   subtitle?: string;
   headerAction?: React.ReactNode;
 }
-
-const sampleNotifications = [
-  {
-    id: 1,
-    title: "New project assigned",
-    message: "You have been assigned to Project Alpha",
-    time: "2 min ago",
-    read: false,
-  },
-  {
-    id: 2,
-    title: "Action overdue",
-    message: "Action #1234 is overdue by 2 days",
-    time: "1 hour ago",
-    read: false,
-  },
-  {
-    id: 3,
-    title: "Weekly report ready",
-    message: "Your weekly governance report is ready",
-    time: "3 hours ago",
-    read: true,
-  },
-  {
-    id: 4,
-    title: "RAG status changed",
-    message: "Project Beta status changed to Amber",
-    time: "Yesterday",
-    read: true,
-  },
-];
 
 const AdminLayout = ({
   children,
@@ -89,29 +76,96 @@ const AdminLayout = ({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [logoutModalOpen, setLogoutModalOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const [notificationAnchor, setNotificationAnchor] = useState<HTMLElement | null>(null);
-  const [notifications, setNotifications] = useState(sampleNotifications);
+  const [notificationAnchor, setNotificationAnchor] =
+    useState<HTMLElement | null>(null);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  usePushNotifications();
+
+  const fetchNotifications = useCallback(async () => {
+    try {
+      const response = await notificationAPI.getAll(20, false);
+      if (response.success) {
+        setNotifications(response.notifications || []);
+        setUnreadCount(response.unreadCount || 0);
+      }
+    } catch (error) {
+      console.error("Failed to fetch notifications:", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 5000);
+    return () => clearInterval(interval);
+  }, [fetchNotifications]);
 
   const handleNotificationClick = (event: React.MouseEvent<HTMLElement>) => {
     setNotificationAnchor(event.currentTarget);
+    fetchNotifications();
   };
 
   const handleNotificationClose = () => {
     setNotificationAnchor(null);
   };
 
-  const handleMarkAllRead = () => {
-    setNotifications(notifications.map((n) => ({ ...n, read: true })));
+  const handleMarkAllRead = async () => {
+    try {
+      await notificationAPI.markAllAsRead();
+      setNotifications(notifications.map((n) => ({ ...n, isRead: true })));
+      setUnreadCount(0);
+    } catch (error) {
+      console.error("Failed to mark all as read:", error);
+    }
   };
 
   const handleViewAll = () => {
     handleNotificationClose();
     navigate("/admin/notifications");
+  };
+
+  const handleNotificationItemClick = async (notification: Notification) => {
+    if (!notification.isRead) {
+      try {
+        await notificationAPI.markAsRead(notification._id);
+        setNotifications(
+          notifications.map((n) =>
+            n._id === notification._id ? { ...n, isRead: true } : n,
+          ),
+        );
+        setUnreadCount((prev) => Math.max(0, prev - 1));
+      } catch (error) {
+        console.error("Failed to mark as read:", error);
+      }
+    }
+
+    const projectId =
+      notification.project?._id || notification.programme?.project?._id;
+
+    if (projectId) {
+      handleNotificationClose();
+      navigate(`/admin/projects/${projectId}?tab=actions&t=${Date.now()}`);
+    }
+  };
+
+  const formatTimeAgo = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return "Just now";
+    if (diffMins < 60) return `${diffMins} min ago`;
+    if (diffHours < 24)
+      return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`;
+    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`;
+    return date.toLocaleDateString();
   };
 
   const handleLogoutClick = () => {
@@ -120,7 +174,6 @@ const AdminLayout = ({
 
   const handleLogoutConfirm = async () => {
     setIsLoggingOut(true);
-    // Show loader for 2 seconds
     await new Promise((resolve) => setTimeout(resolve, 2000));
     try {
       await logout();
@@ -362,7 +415,9 @@ const AdminLayout = ({
                   fontSize: "0.875rem",
                 }}
               >
-                {user?.name?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || "A"}
+                {user?.name?.charAt(0).toUpperCase() ||
+                  user?.email?.charAt(0).toUpperCase() ||
+                  "A"}
               </Avatar>
               <Box>
                 <Typography
@@ -592,107 +647,122 @@ const AdminLayout = ({
                 )}
               </Box>
               <Box sx={{ maxHeight: 300, overflowY: "auto" }}>
-                {notifications.map((notification) => (
-                  <Box
-                    key={notification.id}
+                {notifications.length === 0 ? (
+                  <Box sx={{ p: 3, textAlign: "center" }}>
+                    <Typography
+                      sx={{ color: COLORS.textMuted, fontSize: "14px" }}
+                    >
+                      No notifications
+                    </Typography>
+                  </Box>
+                ) : (
+                  notifications.map((notification) => (
+                    <Box
+                      key={notification._id}
+                      onClick={() => handleNotificationItemClick(notification)}
+                      sx={{
+                        p: 2,
+                        borderBottom: `1px solid ${COLORS.border}`,
+                        cursor: "pointer",
+                        bgcolor: notification.isRead
+                          ? "transparent"
+                          : "rgba(59, 130, 246, 0.05)",
+                        "&:hover": {
+                          bgcolor: COLORS.bgTertiary,
+                        },
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "flex-start",
+                          mb: 0.5,
+                        }}
+                      >
+                        <Typography
+                          sx={{
+                            color: COLORS.textPrimary,
+                            fontWeight: notification.isRead ? 400 : 600,
+                            fontSize: "14px",
+                          }}
+                        >
+                          {notification.title}
+                        </Typography>
+                        {!notification.isRead && (
+                          <Box
+                            sx={{
+                              width: 8,
+                              height: 8,
+                              borderRadius: "50%",
+                              bgcolor: COLORS.blue,
+                              flexShrink: 0,
+                              mt: 0.5,
+                            }}
+                          />
+                        )}
+                      </Box>
+                      <Typography
+                        sx={{
+                          color: COLORS.textMuted,
+                          fontSize: "13px",
+                          mb: 0.5,
+                        }}
+                      >
+                        {notification.message}
+                      </Typography>
+                      <Typography
+                        sx={{
+                          color: COLORS.textMuted,
+                          fontSize: "12px",
+                        }}
+                      >
+                        {formatTimeAgo(notification.createdAt)}
+                      </Typography>
+                    </Box>
+                  ))
+                )}
+              </Box>
+              {notifications.length > 0 && (
+                <Box
+                  sx={{
+                    p: 2,
+                    display: "flex",
+                    justifyContent: "space-between",
+                    borderTop: `1px solid ${COLORS.border}`,
+                  }}
+                >
+                  <Button
+                    onClick={handleMarkAllRead}
                     sx={{
-                      p: 2,
-                      borderBottom: `1px solid ${COLORS.border}`,
-                      cursor: "pointer",
-                      bgcolor: notification.read ? "transparent" : "rgba(59, 130, 246, 0.05)",
+                      color: COLORS.textSecondary,
+                      textTransform: "none",
+                      fontSize: "13px",
                       "&:hover": {
-                        bgcolor: COLORS.bgTertiary,
+                        bgcolor: "transparent",
+                        color: COLORS.textPrimary,
                       },
                     }}
                   >
-                    <Box
-                      sx={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "flex-start",
-                        mb: 0.5,
-                      }}
-                    >
-                      <Typography
-                        sx={{
-                          color: COLORS.textPrimary,
-                          fontWeight: notification.read ? 400 : 600,
-                          fontSize: "14px",
-                        }}
-                      >
-                        {notification.title}
-                      </Typography>
-                      {!notification.read && (
-                        <Box
-                          sx={{
-                            width: 8,
-                            height: 8,
-                            borderRadius: "50%",
-                            bgcolor: COLORS.blue,
-                            flexShrink: 0,
-                            mt: 0.5,
-                          }}
-                        />
-                      )}
-                    </Box>
-                    <Typography
-                      sx={{
-                        color: COLORS.textMuted,
-                        fontSize: "13px",
-                        mb: 0.5,
-                      }}
-                    >
-                      {notification.message}
-                    </Typography>
-                    <Typography
-                      sx={{
-                        color: COLORS.textMuted,
-                        fontSize: "12px",
-                      }}
-                    >
-                      {notification.time}
-                    </Typography>
-                  </Box>
-                ))}
-              </Box>
-              <Box
-                sx={{
-                  p: 2,
-                  display: "flex",
-                  justifyContent: "space-between",
-                  borderTop: `1px solid ${COLORS.border}`,
-                }}
-              >
-                <Button
-                  onClick={handleMarkAllRead}
-                  sx={{
-                    color: COLORS.textSecondary,
-                    textTransform: "none",
-                    fontSize: "13px",
-                    "&:hover": {
-                      bgcolor: "transparent",
-                      color: COLORS.textPrimary,
-                    },
-                  }}
-                >
-                  Mark all read
-                </Button>
-                <Button
-                  onClick={handleViewAll}
-                  sx={{
-                    color: COLORS.blue,
-                    textTransform: "none",
-                    fontSize: "13px",
-                    fontWeight: 500,
-                    "&:hover": {
-                      bgcolor: "transparent",
-                      color: COLORS.blueHover,
-                    },
-                  }}
-                >
-                  View all
-                </Button>
-              </Box>
+                    Mark all read
+                  </Button>
+                  <Button
+                    onClick={handleViewAll}
+                    sx={{
+                      color: COLORS.blue,
+                      textTransform: "none",
+                      fontSize: "13px",
+                      fontWeight: 500,
+                      "&:hover": {
+                        bgcolor: "transparent",
+                        color: COLORS.blueHover,
+                      },
+                    }}
+                  >
+                    View all
+                  </Button>
+                </Box>
+              )}
             </Popover>
           </Box>
         </Box>

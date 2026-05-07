@@ -26,7 +26,7 @@ import viewIcon from "../../assets/Frame.png";
 import lockIcon from "../../assets/lock.png";
 import uploadIcon from "../../assets/sidebar/upload.png";
 import { useState, useRef, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import PlannerLayout from "../../layouts/PlannerLayout";
 import { COLORS } from "../../constants/colors";
 import ProjectHeader from "../../components/ProjectHeader";
@@ -55,7 +55,6 @@ interface ProjectData {
   team?: { user: { name: string; email: string }; role: string }[];
 }
 
-// Default values for dashboard display (will be dynamic later)
 const defaultDashboardData = {
   week: "Week 1",
   weekDates: "Current Week",
@@ -83,16 +82,24 @@ const steps = [
   "Closed",
 ];
 
-// Parse date string (handles DD-Mon-YY format like "09-Jun-22 A")
 const parseDate = (dateStr: string): Date | null => {
   if (!dateStr) return null;
 
   const months: { [key: string]: number } = {
-    Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
-    Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11,
+    Jan: 0,
+    Feb: 1,
+    Mar: 2,
+    Apr: 3,
+    May: 4,
+    Jun: 5,
+    Jul: 6,
+    Aug: 7,
+    Sep: 8,
+    Oct: 9,
+    Nov: 10,
+    Dec: 11,
   };
 
-  // Remove suffixes like " A" or "*"
   const cleanDate = dateStr.replace(/\s*[A*]$/, "").trim();
   const match = cleanDate.match(/(\d{2})-([A-Za-z]{3})-(\d{2})/);
 
@@ -104,12 +111,10 @@ const parseDate = (dateStr: string): Date | null => {
     return new Date(year, month, day);
   }
 
-  // Fallback to standard Date parsing
   const date = new Date(dateStr);
   return isNaN(date.getTime()) ? null : date;
 };
 
-// Calculate RAG zone color from dates
 const getRAGColor = (startDate: string, endDate: string): string => {
   if (!startDate || !endDate) return "green";
 
@@ -128,7 +133,6 @@ const getRAGColor = (startDate: string, endDate: string): string => {
   return "red";
 };
 
-// Sort priority: Green (1) -> Amber (2) -> Red (3)
 const getRAGPriority = (color: string): number => {
   if (color === "green") return 1;
   if (color === "amber") return 2;
@@ -151,10 +155,21 @@ interface ActionItem {
 const PlannerProjectWorkspace = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const [project, setProject] = useState<ProjectData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState(1); // Default to Programme Upload tab
+  const [activeTab, setActiveTab] = useState(() => {
+    const params = new URLSearchParams(location.search);
+    const tabParam = params.get("tab");
+    if (tabParam === "actions") return 3;
+    if (tabParam === "dashboard") return 0;
+    if (tabParam === "upload") return 1;
+    if (tabParam === "activities") return 2;
+    if (tabParam === "weekly") return 4;
+    if (tabParam === "governance") return 5;
+    return 1;
+  });
   const [currentStep, setCurrentStep] = useState(1);
   const [ragFilter, setRagFilter] = useState("all");
   const [activitiesPage, setActivitiesPage] = useState(1);
@@ -181,7 +196,6 @@ const PlannerProjectWorkspace = () => {
   const [isWeekClosed, setIsWeekClosed] = useState(false);
   const [savedOverrideReason, setSavedOverrideReason] = useState("");
 
-  // Programme upload states
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [isLoadingProgramme, setIsLoadingProgramme] = useState(true);
@@ -197,7 +211,6 @@ const PlannerProjectWorkspace = () => {
     };
   } | null>(null);
 
-  // Lookahead data states
   const [lookaheadData, setLookaheadData] = useState<{
     activities: Array<{
       activityId: string;
@@ -253,7 +266,30 @@ const PlannerProjectWorkspace = () => {
     Array<{ _id: string; name: string; email: string; role: string }>
   >([]);
 
-  // Scroll to selected action when switching to Actions tab
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [assigningActivity, setAssigningActivity] = useState<{
+    activityId: string;
+    activityName: string;
+  } | null>(null);
+  const [assignTitle, setAssignTitle] = useState("");
+  const [assignAssignee, setAssignAssignee] = useState("");
+  const [assignDueDate, setAssignDueDate] = useState("");
+  const [assignPriority, setAssignPriority] = useState("Medium");
+  const [assignType, setAssignType] = useState("Required");
+  const [assignLoading, setAssignLoading] = useState(false);
+  const [assignError, setAssignError] = useState("");
+
+  const [reassignModalOpen, setReassignModalOpen] = useState(false);
+  const [reassigningAction, setReassigningAction] = useState<{
+    _id: string;
+    title: string;
+    currentAssignee?: string;
+    currentAssigneeName?: string;
+  } | null>(null);
+  const [reassignAssignee, setReassignAssignee] = useState("");
+  const [reassignLoading, setReassignLoading] = useState(false);
+  const [reassignError, setReassignError] = useState("");
+
   useEffect(() => {
     if (activeTab === 3 && selectedActionId) {
       setTimeout(() => {
@@ -267,7 +303,17 @@ const PlannerProjectWorkspace = () => {
     }
   }, [activeTab, selectedActionId]);
 
-  // Weekly control data state
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tabParam = params.get("tab");
+    if (tabParam === "actions") setActiveTab(3);
+    else if (tabParam === "dashboard") setActiveTab(0);
+    else if (tabParam === "upload") setActiveTab(1);
+    else if (tabParam === "activities") setActiveTab(2);
+    else if (tabParam === "weekly") setActiveTab(4);
+    else if (tabParam === "governance") setActiveTab(5);
+  }, [location.search]);
+
   const [weeklyControlData, setWeeklyControlData] = useState<{
     stats: {
       cycleStatus: string;
@@ -320,7 +366,6 @@ const PlannerProjectWorkspace = () => {
   } | null>(null);
   const [, setIsLoadingWeeklyControl] = useState(false);
 
-  // Fetch project on mount
   useEffect(() => {
     const fetchProject = async () => {
       if (!projectId) return;
@@ -339,16 +384,16 @@ const PlannerProjectWorkspace = () => {
     fetchProject();
   }, [projectId]);
 
-  // Fetch users for assignee dropdown
   useEffect(() => {
     const fetchUsers = async () => {
       try {
         const response = await userAPI.getAll({ status: "active" });
         if (response.success) {
-          // Filter out admins, only keep active planners and users
           const activeUsers = (response.users || []).filter(
-            (user: { role: string; status: string }) =>
-              user.role !== "admin" && user.status === "active",
+            (u: { _id: string; role: string; status: string }) =>
+              u.role === "planner" &&
+              u.status === "active" &&
+              u._id !== user?.id,
           );
           setUsers(activeUsers);
         }
@@ -359,7 +404,6 @@ const PlannerProjectWorkspace = () => {
     fetchUsers();
   }, []);
 
-  // Fetch existing programme for this project
   useEffect(() => {
     const fetchProgramme = async () => {
       if (!projectId) return;
@@ -390,7 +434,6 @@ const PlannerProjectWorkspace = () => {
             },
           });
 
-          // Set lookahead data directly from programme data
           setLookaheadData({
             activities: activities.map(
               (a: {
@@ -467,7 +510,6 @@ const PlannerProjectWorkspace = () => {
             ],
           });
 
-          // Fetch weekly control data
           await fetchWeeklyControlData(programme._id);
         }
       } catch (error) {
@@ -479,7 +521,6 @@ const PlannerProjectWorkspace = () => {
     fetchProgramme();
   }, [projectId]);
 
-  // Fetch actions for this project's programme
   useEffect(() => {
     const fetchProjectActions = async () => {
       if (!uploadedProgramme?._id) return;
@@ -497,7 +538,6 @@ const PlannerProjectWorkspace = () => {
     fetchProjectActions();
   }, [uploadedProgramme?._id]);
 
-  // Helper function to get actions count for an activity
   const getActionsForActivity = (activityId: string) => {
     return projectActions.filter(
       (action) => action.linkedActivity?.activityId === activityId,
@@ -560,7 +600,6 @@ const PlannerProjectWorkspace = () => {
 
     setEditSaveLoading(true);
     try {
-      // Get activity name from lookahead data
       const selectedActivity = lookaheadData?.activities?.find(
         (a) => a.activityId === editingAction.linkedActivity,
       );
@@ -582,7 +621,6 @@ const PlannerProjectWorkspace = () => {
       });
 
       if (response.success) {
-        // Refresh project actions
         const actionsRes = await actionAPI.getAll({
           programmeId: uploadedProgramme?._id,
         });
@@ -625,7 +663,6 @@ const PlannerProjectWorkspace = () => {
     try {
       const response = await actionAPI.complete(actionToComplete._id);
       if (response.success) {
-        // Refresh project actions
         if (projectId) {
           const actionsRes = await actionAPI.getAll({
             programmeId: uploadedProgramme?._id,
@@ -641,6 +678,164 @@ const PlannerProjectWorkspace = () => {
       alert("Failed to complete action. Please try again.");
     } finally {
       setCompleteLoading(false);
+    }
+  };
+
+  const handleOpenAssignModal = (activity: {
+    activityId: string;
+    activityName: string;
+  }) => {
+    setAssigningActivity(activity);
+    setAssignTitle("");
+    setAssignAssignee("");
+    setAssignDueDate("");
+    setAssignPriority("Medium");
+    setAssignType("Required");
+    setAssignError("");
+    setAssignModalOpen(true);
+  };
+
+  const handleCloseAssignModal = () => {
+    setAssignModalOpen(false);
+    setAssigningActivity(null);
+    setAssignTitle("");
+    setAssignAssignee("");
+    setAssignDueDate("");
+    setAssignError("");
+  };
+
+  const handleAssignSave = async () => {
+    if (!assigningActivity || !uploadedProgramme?._id) return;
+
+    if (!assignTitle.trim()) {
+      setAssignError("Action title is required");
+      return;
+    }
+    if (!assignAssignee) {
+      setAssignError("Please select an assignee");
+      return;
+    }
+    if (!assignDueDate) {
+      setAssignError("Due date is required");
+      return;
+    }
+
+    setAssignLoading(true);
+    setAssignError("");
+
+    try {
+      const response = await actionAPI.create({
+        programmeId: uploadedProgramme._id,
+        linkedActivity: {
+          activityId: assigningActivity.activityId,
+          activityName: assigningActivity.activityName,
+        },
+        title: assignTitle,
+        assignee: assignAssignee,
+        dueDate: assignDueDate,
+        priority: assignPriority,
+        type: assignType,
+      });
+
+      if (response.success) {
+        const actionsRes = await actionAPI.getAll({
+          programmeId: uploadedProgramme._id,
+        });
+        if (actionsRes.success) {
+          setProjectActions(actionsRes.actions || []);
+        }
+        const lookaheadRes = await programmeAPI.getLookahead(
+          uploadedProgramme._id,
+        );
+        if (lookaheadRes.activities) {
+          setLookaheadData({
+            activities: lookaheadRes.activities,
+            summary: lookaheadRes.summary,
+            weekZones: lookaheadRes.weekZones,
+          });
+        }
+        handleCloseAssignModal();
+      }
+    } catch (error: unknown) {
+      const err = error as {
+        response?: { data?: { message?: string } };
+        message?: string;
+      };
+      const errorMessage =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Failed to create action. Please try again.";
+      setAssignError(errorMessage);
+    } finally {
+      setAssignLoading(false);
+    }
+  };
+
+  const handleOpenReassign = (action: {
+    _id: string;
+    title: string;
+    assignee?: { _id?: string; name?: string };
+  }) => {
+    setReassigningAction({
+      _id: action._id,
+      title: action.title,
+      currentAssignee: action.assignee?._id,
+      currentAssigneeName: action.assignee?.name,
+    });
+    setReassignAssignee(action.assignee?._id || "");
+    setReassignError("");
+    setReassignModalOpen(true);
+  };
+
+  const handleCloseReassign = () => {
+    setReassignModalOpen(false);
+    setReassigningAction(null);
+    setReassignAssignee("");
+    setReassignError("");
+  };
+
+  const handleReassignSave = async () => {
+    if (!reassigningAction || !reassignAssignee) {
+      setReassignError("Please select a new assignee");
+      return;
+    }
+
+    if (reassignAssignee === reassigningAction.currentAssignee) {
+      setReassignError("Please select a different assignee");
+      return;
+    }
+
+    setReassignLoading(true);
+    setReassignError("");
+
+    try {
+      const response = await actionAPI.update(reassigningAction._id, {
+        assignee: reassignAssignee,
+      });
+
+      if (response.success) {
+        if (uploadedProgramme?._id) {
+          const actionsRes = await actionAPI.getAll({
+            programmeId: uploadedProgramme._id,
+          });
+          if (actionsRes.success) {
+            setProjectActions(actionsRes.actions || []);
+          }
+        }
+        handleCloseReassign();
+      }
+    } catch (error: unknown) {
+      const err = error as {
+        response?: { data?: { message?: string } };
+        message?: string;
+      };
+      const errorMessage =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Failed to reassign action. Please try again.";
+      setReassignError(errorMessage);
+    } finally {
+      setReassignLoading(false);
     }
   };
 
@@ -718,7 +913,6 @@ const PlannerProjectWorkspace = () => {
     setUploadError("");
 
     try {
-      // Use file name without extension as programme name
       const programmeName = uploadedFile.name.replace(/\.pdf$/i, "");
       const response = await programmeAPI.upload(
         uploadedFile,
@@ -728,7 +922,6 @@ const PlannerProjectWorkspace = () => {
 
       if (response.success) {
         const programme = response.programme;
-        // Upload response returns activities directly, not in extractedData
         const activities =
           programme.activities || programme.extractedData?.activities || [];
         const summary = programme.summary ||
@@ -742,9 +935,8 @@ const PlannerProjectWorkspace = () => {
           };
 
         setUploadedProgramme(programme);
-        setUploadedFile(null); // Clear the file after successful upload
+        setUploadedFile(null);
 
-        // Set lookahead data directly from programme response
         setLookaheadData({
           activities: activities.map(
             (a: {
@@ -821,7 +1013,6 @@ const PlannerProjectWorkspace = () => {
           ],
         });
 
-        // Fetch weekly control data
         await fetchWeeklyControlData(programme._id);
       }
     } catch (error: unknown) {
@@ -873,7 +1064,6 @@ const PlannerProjectWorkspace = () => {
     }
   };
 
-  // Loading state
   if (isLoading) {
     return (
       <PlannerLayout
@@ -894,7 +1084,6 @@ const PlannerProjectWorkspace = () => {
     );
   }
 
-  // Project not found
   if (!project) {
     return (
       <PlannerLayout
@@ -933,7 +1122,6 @@ const PlannerProjectWorkspace = () => {
     );
   }
 
-  // Get planner from team if available
   const planner =
     project.team?.find((t) => t.role === "Planner")?.user?.name ||
     project.createdBy?.name ||
@@ -971,7 +1159,7 @@ const PlannerProjectWorkspace = () => {
             onChange={(_, newValue) => {
               setActiveTab(newValue);
               if (newValue !== 3) {
-                setSelectedActionId(null); // Clear selection when leaving Actions tab
+                setSelectedActionId(null);
               }
             }}
             variant="scrollable"
@@ -1084,7 +1272,6 @@ const PlannerProjectWorkspace = () => {
             />
 
             {isLoadingProgramme ? (
-              // Loading skeleton
               <Box
                 sx={{
                   bgcolor: COLORS.bgSecondary,
@@ -1093,7 +1280,9 @@ const PlannerProjectWorkspace = () => {
                   p: 4,
                 }}
               >
-                <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}>
+                <Box
+                  sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3 }}
+                >
                   <Skeleton
                     variant="circular"
                     width={48}
@@ -1144,7 +1333,6 @@ const PlannerProjectWorkspace = () => {
                 />
               </Box>
             ) : uploadedProgramme ? (
-              // Success state - programme uploaded
               <Box
                 sx={{
                   bgcolor: COLORS.bgSecondary,
@@ -1810,7 +1998,7 @@ const PlannerProjectWorkspace = () => {
                     sx={{
                       display: "grid",
                       gridTemplateColumns:
-                        "4px 100px 1fr 95px 95px 70px 95px 60px 75px 120px",
+                        "4px 100px 1fr 95px 95px 70px 95px 60px 60px 75px 120px",
                       bgcolor: COLORS.bgTertiary,
                       borderBottom: `1px solid ${COLORS.border}`,
                       px: 2,
@@ -1827,6 +2015,7 @@ const PlannerProjectWorkspace = () => {
                       "Duration",
                       "RAG Zone",
                       "Actions",
+                      "Assignee",
                       "Status",
                       "Owner",
                     ].map((header, idx) => (
@@ -1837,7 +2026,7 @@ const PlannerProjectWorkspace = () => {
                           fontWeight: 600,
                           color: COLORS.textSecondary,
                           textTransform: "uppercase",
-                          textAlign: [2, 3, 4, 5, 8].includes(idx)
+                          textAlign: [2, 3, 4, 5, 7, 8, 9].includes(idx)
                             ? "center"
                             : "left",
                         }}
@@ -1866,7 +2055,9 @@ const PlannerProjectWorkspace = () => {
                         .sort((a, b) => {
                           const colorA = getRAGColor(a.startDate, a.finishDate);
                           const colorB = getRAGColor(b.startDate, b.finishDate);
-                          return getRAGPriority(colorA) - getRAGPriority(colorB);
+                          return (
+                            getRAGPriority(colorA) - getRAGPriority(colorB)
+                          );
                         });
                       const startIndex =
                         (activitiesPage - 1) * activitiesPerPage;
@@ -1914,7 +2105,6 @@ const PlannerProjectWorkspace = () => {
                                 };
                             }
                           };
-                          // Left indicator based on activityStatus
                           const getIndicatorColor = (status: string) => {
                             switch (status) {
                               case "Ready":
@@ -1929,7 +2119,6 @@ const PlannerProjectWorkspace = () => {
                                 return COLORS.textMuted;
                             }
                           };
-                          // Calculate RAG zone from start and end date
                           const calculateRagZone = (
                             startDate: string,
                             endDate: string,
@@ -1982,11 +2171,9 @@ const PlannerProjectWorkspace = () => {
                             .toUpperCase()
                             .slice(0, 2);
 
-                          // Format date as YYYY-MM-DD
                           const formatDate = (dateStr: string) => {
                             if (!dateStr) return "-";
 
-                            // Handle DD-Mon-YY format (e.g., "24-Nov-21 A")
                             const months: { [key: string]: number } = {
                               Jan: 0,
                               Feb: 1,
@@ -2002,7 +2189,6 @@ const PlannerProjectWorkspace = () => {
                               Dec: 11,
                             };
 
-                            // Remove suffixes like " A" or "*"
                             const cleanDate = dateStr
                               .replace(/\s*[A*]$/, "")
                               .trim();
@@ -2018,7 +2204,6 @@ const PlannerProjectWorkspace = () => {
                               return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
                             }
 
-                            // Fallback to standard Date parsing
                             const date = new Date(dateStr);
                             if (isNaN(date.getTime())) return "-";
                             const year = date.getFullYear();
@@ -2042,7 +2227,7 @@ const PlannerProjectWorkspace = () => {
                                 sx={{
                                   display: "grid",
                                   gridTemplateColumns:
-                                    "4px 100px 1fr 95px 95px 70px 95px 60px 75px 120px",
+                                    "4px 100px 1fr 95px 95px 70px 95px 60px 60px 75px 120px",
                                   px: 2,
                                   py: 1.5,
                                   borderBottom: isExpanded
@@ -2238,8 +2423,112 @@ const PlannerProjectWorkspace = () => {
                                     </Typography>
                                   );
                                 })()}
+                                <Box
+                                  sx={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                  }}
+                                >
+                                  {(() => {
+                                    if (actionsForThisActivity.length > 0) {
+                                      const latestAction =
+                                        actionsForThisActivity[0];
+                                      const assigneeName =
+                                        latestAction.assignee?.name ||
+                                        "Assigned";
+                                      const assigneeInitials = assigneeName
+                                        .split(" ")
+                                        .map((n) => n[0])
+                                        .join("")
+                                        .toUpperCase()
+                                        .slice(0, 2);
+                                      return (
+                                        <Box
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setExpandedActivityId(
+                                              isExpanded
+                                                ? null
+                                                : activity.activityId,
+                                            );
+                                          }}
+                                          sx={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: 0.5,
+                                            cursor: "pointer",
+                                            px: 1,
+                                            py: 0.5,
+                                            borderRadius: "6px",
+                                            "&:hover": {
+                                              bgcolor: COLORS.bgTertiary,
+                                            },
+                                          }}
+                                        >
+                                          <Avatar
+                                            sx={{
+                                              width: 20,
+                                              height: 20,
+                                              fontSize: "9px",
+                                              fontWeight: 600,
+                                              bgcolor: COLORS.green,
+                                            }}
+                                          >
+                                            {assigneeInitials}
+                                          </Avatar>
+                                          <Typography
+                                            sx={{
+                                              fontSize: "10px",
+                                              color: COLORS.textPrimary,
+                                              overflow: "hidden",
+                                              textOverflow: "ellipsis",
+                                              whiteSpace: "nowrap",
+                                              maxWidth: "60px",
+                                            }}
+                                          >
+                                            {assigneeName.split(" ")[0]}
+                                          </Typography>
+                                        </Box>
+                                      );
+                                    }
+                                    return (
+                                      <Button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleOpenAssignModal({
+                                            activityId: activity.activityId,
+                                            activityName: activity.activityName,
+                                          });
+                                        }}
+                                        sx={{
+                                          fontSize: "10px",
+                                          fontWeight: 500,
+                                          color: COLORS.blue,
+                                          textTransform: "none",
+                                          bgcolor: COLORS.blueBgLight,
+                                          border: `1px solid ${COLORS.blue}30`,
+                                          borderRadius: "6px",
+                                          px: 1.5,
+                                          py: 0.3,
+                                          minWidth: "auto",
+                                          "&:hover": {
+                                            bgcolor: COLORS.blueBgMedium,
+                                          },
+                                        }}
+                                      >
+                                        Assign
+                                      </Button>
+                                    );
+                                  })()}
+                                </Box>
                                 {/* Status */}
-                                <Box sx={{ display: "flex", justifyContent: "center" }}>
+                                <Box
+                                  sx={{
+                                    display: "flex",
+                                    justifyContent: "center",
+                                  }}
+                                >
                                   <Box
                                     sx={{
                                       display: "inline-flex",
@@ -2345,8 +2634,8 @@ const PlannerProjectWorkspace = () => {
                                                   setSelectedActionId(
                                                     action._id,
                                                   );
-                                                  setActiveTab(3); // Switch to Actions tab
-                                                  setExpandedActivityId(null); // Close expanded section
+                                                  setActiveTab(3);
+                                                  setExpandedActivityId(null);
                                                 }}
                                                 sx={{
                                                   display: "flex",
@@ -2396,7 +2685,7 @@ const PlannerProjectWorkspace = () => {
                                         </Box>
                                       </Box>
 
-                                      {/* Dependencies */}
+                                      {/* Reassign */}
                                       <Box>
                                         <Typography
                                           sx={{
@@ -2408,16 +2697,78 @@ const PlannerProjectWorkspace = () => {
                                             mb: 1.5,
                                           }}
                                         >
-                                          Dependencies
+                                          Reassign
                                         </Typography>
-                                        <Typography
-                                          sx={{
-                                            fontSize: "12px",
-                                            color: COLORS.textSecondary,
-                                          }}
-                                        >
-                                          -
-                                        </Typography>
+                                        {actionsForThisActivity.length > 0 ? (
+                                          <Box
+                                            sx={{
+                                              display: "flex",
+                                              flexDirection: "column",
+                                              gap: 1,
+                                            }}
+                                          >
+                                            {actionsForThisActivity.map(
+                                              (action) => (
+                                                <Box
+                                                  key={action._id}
+                                                  sx={{
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    gap: 1,
+                                                  }}
+                                                >
+                                                  <Button
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      handleOpenReassign(
+                                                        action,
+                                                      );
+                                                    }}
+                                                    disabled={
+                                                      action.status ===
+                                                      "Completed"
+                                                    }
+                                                    sx={{
+                                                      fontSize: "10px",
+                                                      fontWeight: 500,
+                                                      color: COLORS.amber,
+                                                      textTransform: "none",
+                                                      bgcolor:
+                                                        "rgba(245, 158, 11, 0.15)",
+                                                      border: `1px solid ${COLORS.amber}30`,
+                                                      borderRadius: "6px",
+                                                      px: 1.5,
+                                                      py: 0.3,
+                                                      minWidth: "auto",
+                                                      "&:hover": {
+                                                        bgcolor:
+                                                          "rgba(245, 158, 11, 0.25)",
+                                                      },
+                                                      "&.Mui-disabled": {
+                                                        color: COLORS.textMuted,
+                                                        bgcolor:
+                                                          COLORS.bgTertiary,
+                                                        borderColor:
+                                                          COLORS.border,
+                                                      },
+                                                    }}
+                                                  >
+                                                    Reassign
+                                                  </Button>
+                                                </Box>
+                                              ),
+                                            )}
+                                          </Box>
+                                        ) : (
+                                          <Typography
+                                            sx={{
+                                              fontSize: "12px",
+                                              color: COLORS.textSecondary,
+                                            }}
+                                          >
+                                            -
+                                          </Typography>
+                                        )}
                                       </Box>
 
                                       {/* Notes */}
@@ -2625,9 +2976,7 @@ const PlannerProjectWorkspace = () => {
                 })()}
             </>
 
-            {/* Activities Summary */}
             {(() => {
-              // Calculate status counts based on activityStatus
               const activities = lookaheadData?.activities || [];
               let readyCount = 0;
               let atRiskCount = 0;
@@ -2649,7 +2998,7 @@ const PlannerProjectWorkspace = () => {
                     completeCount++;
                     break;
                   default:
-                    readyCount++; // Default to Ready
+                    readyCount++;
                 }
               });
 
@@ -3165,32 +3514,92 @@ const PlannerProjectWorkspace = () => {
                           <Box
                             component="img"
                             src={viewIcon}
-                            onClick={() =>
-                              action.status !== "Completed"
-                                ? handleOpenCompleteConfirm({
-                                    _id: action._id,
-                                    title: action.title,
-                                  })
-                                : null
+                            onClick={() => {
+                              const assigneeId = String(
+                                (action.assignee as unknown as { _id?: string })
+                                  ?._id || "",
+                              );
+                              const userId = String(user?.id || "");
+                              const isAssignee =
+                                assigneeId === userId && assigneeId !== "";
+
+                              if (action.status !== "Completed" && isAssignee) {
+                                handleOpenCompleteConfirm({
+                                  _id: action._id,
+                                  title: action.title,
+                                });
+                              }
+                            }}
+                            title={
+                              action.status === "Completed"
+                                ? "Already completed"
+                                : String(
+                                      (
+                                        action.assignee as unknown as {
+                                          _id?: string;
+                                        }
+                                      )?._id || "",
+                                    ) !== String(user?.id || "")
+                                  ? "Only the assignee can complete this action"
+                                  : "Mark as complete"
                             }
                             sx={{
                               width: 16,
                               height: 16,
                               cursor:
-                                action.status === "Completed"
-                                  ? "default"
+                                action.status === "Completed" ||
+                                String(
+                                  (
+                                    action.assignee as unknown as {
+                                      _id?: string;
+                                    }
+                                  )?._id || "",
+                                ) !== String(user?.id || "")
+                                  ? "not-allowed"
                                   : "pointer",
-                              opacity: action.status === "Completed" ? 1 : 0.7,
+                              opacity:
+                                action.status === "Completed"
+                                  ? 1
+                                  : String(
+                                        (
+                                          action.assignee as unknown as {
+                                            _id?: string;
+                                          }
+                                        )?._id || "",
+                                      ) !== String(user?.id || "")
+                                    ? 0.3
+                                    : 0.7,
                               filter:
                                 action.status === "Completed"
                                   ? "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(5323%) hue-rotate(107deg) brightness(92%) contrast(88%)"
                                   : "none",
                               "&:hover": {
-                                opacity: 1,
+                                opacity:
+                                  action.status === "Completed" ||
+                                  String(
+                                    (
+                                      action.assignee as unknown as {
+                                        _id?: string;
+                                      }
+                                    )?._id || "",
+                                  ) !== String(user?.id || "")
+                                    ? action.status === "Completed"
+                                      ? 1
+                                      : 0.3
+                                    : 1,
                                 filter:
-                                  action.status !== "Completed"
+                                  action.status !== "Completed" &&
+                                  String(
+                                    (
+                                      action.assignee as unknown as {
+                                        _id?: string;
+                                      }
+                                    )?._id || "",
+                                  ) === String(user?.id || "")
                                     ? "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(5323%) hue-rotate(107deg) brightness(92%) contrast(88%)"
-                                    : "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(5323%) hue-rotate(107deg) brightness(92%) contrast(88%)",
+                                    : action.status === "Completed"
+                                      ? "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(5323%) hue-rotate(107deg) brightness(92%) contrast(88%)"
+                                      : "none",
                               },
                             }}
                           />
@@ -3578,7 +3987,7 @@ const PlannerProjectWorkspace = () => {
                     actionsData.overdue,
                     1,
                   );
-                  const yAxisMax = Math.ceil(maxValue / 2) * 2; // Round up to nearest even number
+                  const yAxisMax = Math.ceil(maxValue / 2) * 2;
                   const yAxisSteps = [
                     yAxisMax,
                     Math.round((yAxisMax * 5) / 6),
@@ -5128,6 +5537,641 @@ const PlannerProjectWorkspace = () => {
                 <CircularProgress size={20} sx={{ color: COLORS.white }} />
               ) : (
                 "Yes, Complete"
+              )}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog
+          open={assignModalOpen}
+          onClose={handleCloseAssignModal}
+          maxWidth="sm"
+          fullWidth
+          slotProps={{
+            backdrop: {
+              sx: {
+                bgcolor: "rgba(0, 0, 0, 0.8)",
+              },
+            },
+            paper: {
+              sx: {
+                bgcolor: COLORS.bgSecondary,
+                border: `1px solid ${COLORS.border}`,
+                borderRadius: "12px",
+                backgroundImage: "none",
+                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
+                maxWidth: 500,
+              },
+            },
+          }}
+        >
+          <DialogTitle
+            sx={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              pb: 1,
+              pt: 2,
+              borderBottom: `1px solid ${COLORS.border}`,
+            }}
+          >
+            <Box>
+              <Typography
+                sx={{
+                  color: COLORS.textPrimary,
+                  fontSize: "18px",
+                  fontWeight: 600,
+                }}
+              >
+                Assign Activity
+              </Typography>
+              <Typography
+                sx={{
+                  color: COLORS.textSecondary,
+                  fontSize: "12px",
+                  fontWeight: 400,
+                }}
+              >
+                {assigningActivity?.activityId}
+              </Typography>
+            </Box>
+            <IconButton
+              onClick={handleCloseAssignModal}
+              sx={{ color: COLORS.textMuted, p: 0.5 }}
+            >
+              <CloseIcon sx={{ fontSize: 20 }} />
+            </IconButton>
+          </DialogTitle>
+
+          <DialogContent sx={{ px: 3, py: 2 }}>
+            {assignError && (
+              <Box
+                sx={{
+                  bgcolor: "rgba(239, 68, 68, 0.15)",
+                  border: `1px solid ${COLORS.red}`,
+                  borderRadius: "8px",
+                  px: 2,
+                  py: 1.5,
+                  mb: 2,
+                }}
+              >
+                <Typography
+                  sx={{
+                    color: COLORS.red,
+                    fontSize: "13px",
+                    fontWeight: 500,
+                  }}
+                >
+                  {assignError}
+                </Typography>
+              </Box>
+            )}
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 0 }}>
+              {/* Activity Name (Read-only) */}
+              <Box>
+                <Typography
+                  sx={{
+                    color: COLORS.textSecondary,
+                    fontSize: "12px",
+                    fontWeight: 500,
+                    mb: 0.5,
+                  }}
+                >
+                  Activity Name
+                </Typography>
+                <Box
+                  sx={{
+                    bgcolor: COLORS.bgTertiary,
+                    border: `1px solid ${COLORS.border}`,
+                    borderRadius: "8px",
+                    px: 1.5,
+                    py: 1,
+                    mb: 2,
+                  }}
+                >
+                  <Typography
+                    sx={{
+                      color: COLORS.textMuted,
+                      fontSize: "13px",
+                    }}
+                  >
+                    {assigningActivity?.activityName || "-"}
+                  </Typography>
+                </Box>
+              </Box>
+
+              {/* Action Title */}
+              <Box>
+                <Typography
+                  sx={{
+                    color: COLORS.textSecondary,
+                    fontSize: "12px",
+                    fontWeight: 500,
+                    mb: 0.5,
+                  }}
+                >
+                  Action Title <span style={{ color: COLORS.red }}>*</span>
+                </Typography>
+                <TextField
+                  fullWidth
+                  value={assignTitle}
+                  onChange={(e) => setAssignTitle(e.target.value)}
+                  placeholder="Enter action title"
+                  sx={{
+                    mb: 2,
+                    "& .MuiOutlinedInput-root": {
+                      bgcolor: COLORS.bgPrimary,
+                      borderRadius: "8px",
+                      "& fieldset": {
+                        borderColor: COLORS.border,
+                      },
+                      "&:hover fieldset": {
+                        borderColor: COLORS.blue,
+                      },
+                      "&.Mui-focused fieldset": {
+                        borderColor: COLORS.blue,
+                      },
+                    },
+                    "& .MuiInputBase-input": {
+                      color: COLORS.textPrimary,
+                      fontSize: "13px",
+                      py: 1,
+                    },
+                  }}
+                />
+              </Box>
+
+              {/* Type and Priority Row */}
+              <Box
+                sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}
+              >
+                <Box>
+                  <Typography
+                    sx={{
+                      color: COLORS.textSecondary,
+                      fontSize: "12px",
+                      fontWeight: 500,
+                      mb: 0.5,
+                    }}
+                  >
+                    Type
+                  </Typography>
+                  <Select
+                    fullWidth
+                    value={assignType}
+                    onChange={(e) =>
+                      setAssignType(e.target.value as "Required" | "Optional")
+                    }
+                    sx={{
+                      mb: 2,
+                      bgcolor: COLORS.bgPrimary,
+                      borderRadius: "8px",
+                      "& .MuiOutlinedInput-notchedOutline": {
+                        borderColor: COLORS.border,
+                      },
+                      "&:hover .MuiOutlinedInput-notchedOutline": {
+                        borderColor: COLORS.blue,
+                      },
+                      "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                        borderColor: COLORS.blue,
+                      },
+                      "& .MuiSelect-select": {
+                        color: COLORS.textPrimary,
+                        fontSize: "13px",
+                        py: 1,
+                      },
+                    }}
+                  >
+                    <MenuItem value="Required">Required</MenuItem>
+                    <MenuItem value="Optional">Optional</MenuItem>
+                  </Select>
+                </Box>
+                <Box>
+                  <Typography
+                    sx={{
+                      color: COLORS.textSecondary,
+                      fontSize: "12px",
+                      fontWeight: 500,
+                      mb: 0.5,
+                    }}
+                  >
+                    Priority
+                  </Typography>
+                  <Select
+                    fullWidth
+                    value={assignPriority}
+                    onChange={(e) =>
+                      setAssignPriority(
+                        e.target.value as "Low" | "Medium" | "High",
+                      )
+                    }
+                    sx={{
+                      mb: 2,
+                      bgcolor: COLORS.bgPrimary,
+                      borderRadius: "8px",
+                      "& .MuiOutlinedInput-notchedOutline": {
+                        borderColor: COLORS.border,
+                      },
+                      "&:hover .MuiOutlinedInput-notchedOutline": {
+                        borderColor: COLORS.blue,
+                      },
+                      "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                        borderColor: COLORS.blue,
+                      },
+                      "& .MuiSelect-select": {
+                        color: COLORS.textPrimary,
+                        fontSize: "13px",
+                        py: 1,
+                      },
+                    }}
+                  >
+                    <MenuItem value="Low">Low</MenuItem>
+                    <MenuItem value="Medium">Medium</MenuItem>
+                    <MenuItem value="High">High</MenuItem>
+                  </Select>
+                </Box>
+              </Box>
+
+              {/* Assignee and Due Date Row */}
+              <Box
+                sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}
+              >
+                <Box>
+                  <Typography
+                    sx={{
+                      color: COLORS.textSecondary,
+                      fontSize: "12px",
+                      fontWeight: 500,
+                      mb: 0.5,
+                    }}
+                  >
+                    Assignee <span style={{ color: COLORS.red }}>*</span>
+                  </Typography>
+                  <Select
+                    fullWidth
+                    value={assignAssignee}
+                    onChange={(e) => setAssignAssignee(e.target.value)}
+                    displayEmpty
+                    sx={{
+                      mb: 2,
+                      bgcolor: COLORS.bgPrimary,
+                      borderRadius: "8px",
+                      "& .MuiOutlinedInput-notchedOutline": {
+                        borderColor: COLORS.border,
+                      },
+                      "&:hover .MuiOutlinedInput-notchedOutline": {
+                        borderColor: COLORS.blue,
+                      },
+                      "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                        borderColor: COLORS.blue,
+                      },
+                      "& .MuiSelect-select": {
+                        color: assignAssignee
+                          ? COLORS.textPrimary
+                          : COLORS.textMuted,
+                        fontSize: "13px",
+                        py: 1,
+                      },
+                    }}
+                  >
+                    <MenuItem value="" disabled>
+                      Select assignee
+                    </MenuItem>
+                    {users.map(
+                      (u: { _id: string; name: string; email: string }) => (
+                        <MenuItem key={u._id} value={u._id}>
+                          {u.name}
+                        </MenuItem>
+                      ),
+                    )}
+                  </Select>
+                </Box>
+                <Box>
+                  <Typography
+                    sx={{
+                      color: COLORS.textSecondary,
+                      fontSize: "12px",
+                      fontWeight: 500,
+                      mb: 0.5,
+                    }}
+                  >
+                    Due Date <span style={{ color: COLORS.red }}>*</span>
+                  </Typography>
+                  <TextField
+                    fullWidth
+                    type="date"
+                    value={assignDueDate}
+                    onChange={(e) => setAssignDueDate(e.target.value)}
+                    sx={{
+                      mb: 2,
+                      "& .MuiOutlinedInput-root": {
+                        bgcolor: COLORS.bgPrimary,
+                        borderRadius: "8px",
+                        "& fieldset": {
+                          borderColor: COLORS.border,
+                        },
+                        "&:hover fieldset": {
+                          borderColor: COLORS.blue,
+                        },
+                        "&.Mui-focused fieldset": {
+                          borderColor: COLORS.blue,
+                        },
+                      },
+                      "& .MuiInputBase-input": {
+                        color: COLORS.textPrimary,
+                        fontSize: "13px",
+                        py: 1,
+                        "&::-webkit-calendar-picker-indicator": {
+                          filter: "invert(1)",
+                          cursor: "pointer",
+                          opacity: 0.7,
+                        },
+                      },
+                    }}
+                  />
+                </Box>
+              </Box>
+            </Box>
+          </DialogContent>
+
+          <DialogActions
+            sx={{
+              px: 3,
+              py: 2,
+              borderTop: `1px solid ${COLORS.border}`,
+              gap: 1.5,
+            }}
+          >
+            <Button
+              onClick={handleCloseAssignModal}
+              sx={{
+                color: COLORS.textSecondary,
+                bgcolor: COLORS.bgTertiary,
+                border: `1px solid ${COLORS.border}`,
+                borderRadius: "8px",
+                px: 3,
+                py: 1,
+                fontWeight: 500,
+                textTransform: "none",
+                "&:hover": {
+                  bgcolor: COLORS.bgPrimary,
+                },
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAssignSave}
+              disabled={assignLoading}
+              sx={{
+                color: COLORS.white,
+                bgcolor: COLORS.blue,
+                borderRadius: "8px",
+                px: 3,
+                py: 1,
+                fontWeight: 500,
+                textTransform: "none",
+                "&:hover": {
+                  bgcolor: COLORS.blueHover,
+                },
+                "&.Mui-disabled": {
+                  bgcolor: COLORS.bgTertiary,
+                  color: COLORS.textMuted,
+                },
+              }}
+            >
+              {assignLoading ? (
+                <CircularProgress size={20} sx={{ color: COLORS.white }} />
+              ) : (
+                "Assign"
+              )}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Reassign Modal */}
+        <Dialog
+          open={reassignModalOpen}
+          onClose={handleCloseReassign}
+          maxWidth="sm"
+          fullWidth
+          slotProps={{
+            backdrop: {
+              sx: {
+                bgcolor: "rgba(0, 0, 0, 0.8)",
+              },
+            },
+            paper: {
+              sx: {
+                bgcolor: COLORS.bgSecondary,
+                border: `1px solid ${COLORS.border}`,
+                borderRadius: "12px",
+                backgroundImage: "none",
+                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
+                maxWidth: 500,
+              },
+            },
+          }}
+        >
+          <DialogTitle
+            sx={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              pb: 1,
+              pt: 2,
+              borderBottom: `1px solid ${COLORS.border}`,
+            }}
+          >
+            <Box>
+              <Typography
+                sx={{
+                  color: COLORS.textPrimary,
+                  fontSize: "18px",
+                  fontWeight: 600,
+                }}
+              >
+                Reassign Action
+              </Typography>
+              <Typography
+                sx={{
+                  color: COLORS.textSecondary,
+                  fontSize: "12px",
+                  fontWeight: 400,
+                }}
+              >
+                {reassigningAction?.title}
+              </Typography>
+            </Box>
+            <IconButton
+              onClick={handleCloseReassign}
+              sx={{ color: COLORS.textMuted, p: 0.5 }}
+            >
+              <CloseIcon sx={{ fontSize: 20 }} />
+            </IconButton>
+          </DialogTitle>
+
+          <DialogContent sx={{ px: 3, py: 2 }}>
+            {reassignError && (
+              <Box
+                sx={{
+                  bgcolor: "rgba(239, 68, 68, 0.15)",
+                  border: `1px solid ${COLORS.red}`,
+                  borderRadius: "8px",
+                  px: 2,
+                  py: 1.5,
+                  mb: 2,
+                }}
+              >
+                <Typography
+                  sx={{
+                    color: COLORS.red,
+                    fontSize: "13px",
+                    fontWeight: 500,
+                  }}
+                >
+                  {reassignError}
+                </Typography>
+              </Box>
+            )}
+
+            {/* Current Assignee */}
+            <Box sx={{ mb: 2 }}>
+              <Typography
+                sx={{
+                  color: COLORS.textSecondary,
+                  fontSize: "12px",
+                  fontWeight: 500,
+                  mb: 0.5,
+                }}
+              >
+                Current Assignee
+              </Typography>
+              <Box
+                sx={{
+                  bgcolor: COLORS.bgTertiary,
+                  border: `1px solid ${COLORS.border}`,
+                  borderRadius: "8px",
+                  px: 1.5,
+                  py: 1,
+                }}
+              >
+                <Typography
+                  sx={{
+                    color: COLORS.textMuted,
+                    fontSize: "13px",
+                  }}
+                >
+                  {reassigningAction?.currentAssigneeName || "Unassigned"}
+                </Typography>
+              </Box>
+            </Box>
+
+            {/* New Assignee */}
+            <Box>
+              <Typography
+                sx={{
+                  color: COLORS.textSecondary,
+                  fontSize: "12px",
+                  fontWeight: 500,
+                  mb: 0.5,
+                }}
+              >
+                Reassign To <span style={{ color: COLORS.red }}>*</span>
+              </Typography>
+              <Select
+                fullWidth
+                value={reassignAssignee}
+                onChange={(e) => setReassignAssignee(e.target.value)}
+                displayEmpty
+                sx={{
+                  bgcolor: COLORS.bgPrimary,
+                  borderRadius: "8px",
+                  "& .MuiOutlinedInput-notchedOutline": {
+                    borderColor: COLORS.border,
+                  },
+                  "&:hover .MuiOutlinedInput-notchedOutline": {
+                    borderColor: COLORS.blue,
+                  },
+                  "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                    borderColor: COLORS.blue,
+                  },
+                  "& .MuiSelect-select": {
+                    color: reassignAssignee
+                      ? COLORS.textPrimary
+                      : COLORS.textMuted,
+                    fontSize: "13px",
+                    py: 1,
+                  },
+                }}
+              >
+                <MenuItem value="" disabled>
+                  Select new assignee
+                </MenuItem>
+                {users
+                  .filter(
+                    (u: { _id: string }) =>
+                      u._id !== reassigningAction?.currentAssignee,
+                  )
+                  .map((u: { _id: string; name: string; email: string }) => (
+                    <MenuItem key={u._id} value={u._id}>
+                      {u.name}
+                    </MenuItem>
+                  ))}
+              </Select>
+            </Box>
+          </DialogContent>
+
+          <DialogActions
+            sx={{
+              px: 3,
+              py: 2,
+              borderTop: `1px solid ${COLORS.border}`,
+              gap: 1.5,
+            }}
+          >
+            <Button
+              onClick={handleCloseReassign}
+              sx={{
+                color: COLORS.textSecondary,
+                bgcolor: COLORS.bgTertiary,
+                border: `1px solid ${COLORS.border}`,
+                borderRadius: "8px",
+                px: 3,
+                py: 1,
+                fontWeight: 500,
+                textTransform: "none",
+                "&:hover": {
+                  bgcolor: COLORS.bgPrimary,
+                },
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleReassignSave}
+              disabled={reassignLoading}
+              sx={{
+                color: COLORS.white,
+                bgcolor: COLORS.amber,
+                borderRadius: "8px",
+                px: 3,
+                py: 1,
+                fontWeight: 500,
+                textTransform: "none",
+                "&:hover": {
+                  bgcolor: "#d97706",
+                },
+                "&.Mui-disabled": {
+                  bgcolor: COLORS.bgTertiary,
+                  color: COLORS.textMuted,
+                },
+              }}
+            >
+              {reassignLoading ? (
+                <CircularProgress size={20} sx={{ color: COLORS.white }} />
+              ) : (
+                "Reassign"
               )}
             </Button>
           </DialogActions>

@@ -144,7 +144,6 @@ const AdminWeeklyDashboard = () => {
     fetchData();
   }, []);
 
-  // Calculate RAG percentages
   const ragTotal =
     (data?.ragDistribution?.green || 0) +
     (data?.ragDistribution?.amber || 0) +
@@ -162,7 +161,6 @@ const AdminWeeklyDashboard = () => {
       ? Math.round(((data?.ragDistribution?.red || 0) / ragTotal) * 100)
       : 0;
 
-  // Determine weekly RAG status
   const getWeeklyRag = () => {
     if (ragTotal === 0)
       return {
@@ -190,7 +188,6 @@ const AdminWeeklyDashboard = () => {
   };
   const weeklyRag = getWeeklyRag();
 
-  // Get cycle status color
   const getCycleStatusColor = (status: string) => {
     switch (status) {
       case "Draft":

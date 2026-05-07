@@ -14,7 +14,6 @@ import PlannerActions from "./pages/Planner/PlannerActions";
 import PlannerExports from "./pages/Planner/PlannerExports";
 import PlannerWeeklyDashboard from "./pages/Planner/PlannerWeeklyDashboard";
 import PlannerGovernanceDashboard from "./pages/Planner/PlannerGovernanceDashboard";
-// Admin imports
 import AdminDashboard from "./pages/Admin/AdminDashboard";
 import AdminProjects from "./pages/Admin/AdminProjects";
 import AdminProjectWorkspace from "./pages/Admin/AdminProjectWorkspace";
@@ -29,7 +28,6 @@ import AuditLogs from "./pages/Admin/AuditLogs";
 import AdminNotifications from "./pages/Admin/AdminNotifications";
 import PlannerNotifications from "./pages/Planner/PlannerNotifications";
 
-
 const ProtectedRoute = ({
   children,
   allowedRoles,
@@ -39,14 +37,11 @@ const ProtectedRoute = ({
 }) => {
   const { isAuthenticated, user, logout } = useAuth();
 
-  // Not logged in - redirect to login
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
 
-  // Logged in but wrong role - logout and redirect to login
   if (allowedRoles && user && !allowedRoles.includes(user.role)) {
-    // Call logout (async) but don't await - we're redirecting anyway
     void logout();
     return <Navigate to="/login" replace />;
   }

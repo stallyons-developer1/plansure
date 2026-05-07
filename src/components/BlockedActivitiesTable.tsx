@@ -56,10 +56,21 @@ const BlockedActivitiesTable = ({
   const formatDate = (dateString: string) => {
     if (!dateString) return "-";
 
-    // Handle DD-Mon-YY format (e.g., "24-Nov-21 A")
-    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const monthNames = [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
+    ];
 
-    // Remove suffixes like " A" or "*"
     const cleanDate = dateString.replace(/\s*[A*]$/, "").trim();
     const match = cleanDate.match(/(\d{2})-([A-Za-z]{3})-(\d{2})/);
 
@@ -67,7 +78,6 @@ const BlockedActivitiesTable = ({
       return `${match[1]} ${match[2]}`;
     }
 
-    // Fallback to standard Date parsing
     const date = new Date(dateString);
     if (isNaN(date.getTime())) return "-";
     return `${String(date.getDate()).padStart(2, "0")} ${monthNames[date.getMonth()]}`;
@@ -207,7 +217,8 @@ const BlockedActivitiesTable = ({
                           activity.rag === "Red"
                             ? `${COLORS.red}25`
                             : `${COLORS.amber}25`,
-                        color: activity.rag === "Red" ? COLORS.red : COLORS.amber,
+                        color:
+                          activity.rag === "Red" ? COLORS.red : COLORS.amber,
                         px: 1.5,
                         py: 0.5,
                         borderRadius: "20px",
@@ -223,7 +234,8 @@ const BlockedActivitiesTable = ({
                           width: 8,
                           height: 8,
                           borderRadius: "50%",
-                          bgcolor: activity.rag === "Red" ? COLORS.red : COLORS.amber,
+                          bgcolor:
+                            activity.rag === "Red" ? COLORS.red : COLORS.amber,
                         }}
                       />
                       {activity.rag}
@@ -271,7 +283,9 @@ const BlockedActivitiesTable = ({
                             ? `1px solid ${COLORS.red}40`
                             : "none",
                         color:
-                          activity.status === "Overdue" ? COLORS.red : COLORS.amber,
+                          activity.status === "Overdue"
+                            ? COLORS.red
+                            : COLORS.amber,
                         px: 2,
                         py: 0.5,
                         borderRadius: "20px",
