@@ -15,6 +15,8 @@ import {
   IconButton,
   CircularProgress,
   Skeleton,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 import {
   Close as CloseIcon,
@@ -260,7 +262,12 @@ const AdminProjectWorkspace = () => {
       canClose: boolean;
       closedAt: string | null;
       closeType: string | null;
-      stats: { totalActivities: number; green: number; amber: number; red: number };
+      stats: {
+        totalActivities: number;
+        green: number;
+        amber: number;
+        red: number;
+      };
     }>;
   } | null>(null);
   const [closingWeek, setClosingWeek] = useState<number | null>(null);
@@ -299,6 +306,8 @@ const AdminProjectWorkspace = () => {
   const [assignError, setAssignError] = useState("");
 
   const [reassignModalOpen, setReassignModalOpen] = useState(false);
+  const [toastOpen, setToastOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
   const [reassigningAction, setReassigningAction] = useState<{
     _id: string;
     title: string;
@@ -442,9 +451,10 @@ const AdminProjectWorkspace = () => {
       activityId: string;
       activityName: string;
       ragStatus: string;
+      activityStatus?: string;
       owner: string;
       blocker: string;
-      linkedAction: { actionId: string; status: string } | null;
+      linkedAction: { actionId: string; title?: string; status: string } | null;
     }>;
     weeklyPlanPreview: Array<{
       activityId: string;
@@ -456,6 +466,8 @@ const AdminProjectWorkspace = () => {
       ragStatus: string;
       owner: string;
       activityStatus: string;
+      actionsCount?: number;
+      openActionsCount?: number;
     }>;
     plannerToDo: Array<{
       activityId: string;
@@ -463,15 +475,20 @@ const AdminProjectWorkspace = () => {
       ragStatus: string;
       owner: string;
       todoItem: string;
+      actionId?: string;
+      actionStatus?: string;
       priority: string;
       dueDate: string;
     }>;
     weekInfo?: {
       weekNumber: number;
+      weekNumberEnd?: number;
       currentWeekNumber: number;
       dateRange: string;
       totalActivities: number;
     } | null;
+    isProjectEnded?: boolean;
+    projectEndDate?: string | null;
   } | null>(null);
   const [, setIsLoadingWeeklyControl] = useState(false);
 
@@ -691,28 +708,50 @@ const AdminProjectWorkspace = () => {
   useEffect(() => {
     if (uploadedProgramme?._id && weeksStatus) {
       // Get the next closable week number, or current week
-      const closableWeek = weeksStatus.weeks.find(w => w.canClose);
-      const weekNumber = closableWeek?.weekNumber || weeksStatus.currentWeekNumber;
+      const closableWeek = weeksStatus.weeks.find((w) => w.canClose);
+      const weekNumber =
+        closableWeek?.weekNumber || weeksStatus.currentWeekNumber;
       fetchWeeklyControlData(uploadedProgramme._id, weekNumber);
     }
   }, [weeksStatus?.closedWeeksCount, uploadedProgramme?._id]);
 
-  const handleCloseSpecificWeek = async (weekNumber: number, closeType: string = "Normal Close") => {
+  const handleCloseSpecificWeek = async (
+    weekNumber: number,
+    closeType: string = "Normal Close",
+  ) => {
     if (!uploadedProgramme?._id) return;
     setClosingWeek(weekNumber);
     try {
-      const response = await programmeAPI.closeWeek(
+      // Close 2 weeks at once since we display 2 weeks together
+      const response1 = await programmeAPI.closeWeek(
         uploadedProgramme._id,
         weekNumber,
         closeType,
-        closeType === "PM Override" ? overrideReason : undefined
+        closeType === "PM Override" ? overrideReason : undefined,
       );
-      if (response.success) {
+
+      let response2 = { success: false, isFullyClosed: false };
+      if (response1.success && !response1.isFullyClosed) {
+        // Close the second week
+        response2 = await programmeAPI.closeWeek(
+          uploadedProgramme._id,
+          weekNumber + 1,
+          closeType,
+          closeType === "PM Override" ? overrideReason : undefined,
+        );
+      }
+
+      if (response1.success) {
         await fetchWeeksStatus();
+        // Reset cycle stage to draft for next week
+        setCycleStage("draft");
+        setCurrentStep(1);
         // Update programme status if fully closed
-        if (response.isFullyClosed) {
+        if (response1.isFullyClosed || response2.isFullyClosed) {
           setIsWeekClosed(true);
-          setUploadedProgramme(prev => prev ? { ...prev, cycleStatus: "Closed", isLocked: true } : null);
+          setUploadedProgramme((prev) =>
+            prev ? { ...prev, cycleStatus: "Closed", isLocked: true } : null,
+          );
         }
       }
     } catch (error) {
@@ -830,19 +869,43 @@ const AdminProjectWorkspace = () => {
         overrideReason,
       );
       if (response.success) {
-        setCurrentStep(5);
         setSavedOverrideReason(overrideReason);
-        setIsWeekClosed(true);
         setShowOverrideForm(false);
         setOverrideReason("");
-        setUploadedProgramme({
-          ...uploadedProgramme,
-          cycleStatus: "Closed",
-          isLocked: true,
-        });
+
+        // Refresh weeks status and weekly control data to show next weeks
+        await fetchWeeksStatus();
+        await fetchWeeklyControlData(uploadedProgramme._id);
+
+        // Reset cycle stage to draft for next weeks
+        setCycleStage("draft");
+        setCurrentStep(1);
+
+        // Get updated programme state
+        const updatedProgramme = await programmeAPI.getById(uploadedProgramme._id);
+        if (updatedProgramme.programme) {
+          const prog = updatedProgramme.programme;
+          if (prog.isLocked) {
+            // All weeks done - programme fully closed
+            setIsWeekClosed(true);
+            setUploadedProgramme({
+              ...uploadedProgramme,
+              cycleStatus: "Closed",
+              isLocked: true,
+            });
+          } else {
+            // More weeks remaining - update with new state
+            setIsWeekClosed(false);
+            setUploadedProgramme({
+              ...uploadedProgramme,
+              cycleStatus: prog.cycleStatus || "Uploaded",
+              isLocked: false,
+            });
+          }
+        }
       }
     } catch (error) {
-      console.error("Failed to close week with override:", error);
+      console.error("Failed to close weeks with override:", error);
     }
   };
 
@@ -974,13 +1037,18 @@ const AdminProjectWorkspace = () => {
       });
 
       if (response.success) {
+        // Close modal first for better UX
+        handleAssignClose();
+
+        // Then refresh all data
         const actionsRes = await actionAPI.getAll({
           programmeId: uploadedProgramme._id,
         });
         if (actionsRes.success) {
           setProjectActions(actionsRes.actions || []);
         }
-        handleAssignClose();
+        // Refresh weekly control data to update all tabs
+        await fetchWeeklyControlData(uploadedProgramme._id);
       }
     } catch (error: unknown) {
       console.error("Failed to create action:", error);
@@ -1092,6 +1160,10 @@ const AdminProjectWorkspace = () => {
             setProjectActions(actionsRes.actions || []);
           }
         }
+        // Refresh weekly control data to remove completed activity from blocked/risk list
+        if (uploadedProgramme?._id) {
+          await fetchWeeklyControlData(uploadedProgramme._id);
+        }
         handleCloseCompleteConfirm();
       }
     } catch (error) {
@@ -1133,10 +1205,16 @@ const AdminProjectWorkspace = () => {
     if (file) handleFileSelect(file);
   };
 
-  const fetchWeeklyControlData = async (programmeId: string, weekNumber?: number) => {
+  const fetchWeeklyControlData = async (
+    programmeId: string,
+    weekNumber?: number,
+  ) => {
     setIsLoadingWeeklyControl(true);
     try {
-      const response = await programmeAPI.getWeeklyControl(programmeId, weekNumber);
+      const response = await programmeAPI.getWeeklyControl(
+        programmeId,
+        weekNumber,
+      );
       setWeeklyControlData({
         stats: response.stats || {
           cycleStatus: "Draft",
@@ -1162,6 +1240,8 @@ const AdminProjectWorkspace = () => {
         weeklyPlanPreview: response.weeklyPlanPreview || [],
         plannerToDo: response.plannerToDo || [],
         weekInfo: response.weekInfo || null,
+        isProjectEnded: response.isProjectEnded || false,
+        projectEndDate: response.projectEndDate || null,
       });
     } catch (error) {
       console.error("Failed to fetch weekly control data:", error);
@@ -1505,8 +1585,16 @@ const AdminProjectWorkspace = () => {
           }}
           projectName={project.name}
           phase={project.phase}
-          week={weeksStatus ? `Week ${weeksStatus.currentWeekNumber}` : defaultDashboardData.week}
-          weekDates={weeksStatus ? `${weeksStatus.closedWeeksCount}/${weeksStatus.totalWeeks} closed` : defaultDashboardData.weekDates}
+          week={
+            weeksStatus
+              ? `Week ${weeksStatus.currentWeekNumber}`
+              : defaultDashboardData.week
+          }
+          weekDates={
+            weeksStatus
+              ? `${weeksStatus.closedWeeksCount}/${weeksStatus.totalWeeks} closed`
+              : defaultDashboardData.weekDates
+          }
           planner={planner}
           currentStep={currentStep}
           steps={steps}
@@ -3048,51 +3136,85 @@ const AdminProjectWorkspace = () => {
                                         </Box>
                                       );
                                     }
+                                    // Only allow assignment for Ready activities in Week 1-2/In Progress, or any Overdue activities
+                                    const isReady =
+                                      activity.activityStatus === "Ready";
+                                    const isOverdue =
+                                      ragZone.zone === "Overdue";
+                                    const isAssignable =
+                                      ragZone.zone === "Weeks 1-2" ||
+                                      ragZone.zone === "In Progress";
+                                    const canAssign =
+                                      ((isReady && isAssignable) ||
+                                        isOverdue) &&
+                                      !uploadedProgramme?.isLocked &&
+                                      !weeklyControlData?.isProjectEnded;
+
                                     return (
                                       <Button
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          const startDateFormatted =
-                                            toDateInputFormat(
-                                              activity.startDate,
-                                            );
-                                          setAssigningActivity({
-                                            activityId: activity.activityId,
-                                            activityName: activity.activityName,
-                                            startDate: startDateFormatted,
-                                            finishDate: toDateInputFormat(
-                                              activity.finishDate,
-                                            ),
-                                          });
-                                          setAssignFormData({
-                                            title: "",
-                                            description: "",
-                                            type: "Required",
-                                            priority: "Medium",
-                                            assignee: "",
-                                            dueDate: startDateFormatted,
-                                          });
-                                          setAssignModalOpen(true);
+                                          if (canAssign) {
+                                            const startDateFormatted =
+                                              toDateInputFormat(
+                                                activity.startDate,
+                                              );
+                                            setAssigningActivity({
+                                              activityId: activity.activityId,
+                                              activityName:
+                                                activity.activityName,
+                                              startDate: startDateFormatted,
+                                              finishDate: toDateInputFormat(
+                                                activity.finishDate,
+                                              ),
+                                            });
+                                            setAssignFormData({
+                                              title: "",
+                                              description: "",
+                                              type: "Required",
+                                              priority: "Medium",
+                                              assignee: "",
+                                              dueDate: startDateFormatted,
+                                            });
+                                            setAssignModalOpen(true);
+                                          }
                                         }}
-                                        disabled={uploadedProgramme?.isLocked}
+                                        disabled={!canAssign}
+                                        title={
+                                          weeklyControlData?.isProjectEnded
+                                            ? "Project has ended - read only"
+                                            : uploadedProgramme?.isLocked
+                                              ? "Programme is locked"
+                                              : !canAssign
+                                                ? "Only Ready (Week 1-2/In Progress) or Overdue activities can be assigned"
+                                                : "Assign action"
+                                        }
                                         sx={{
                                           fontSize: "10px",
                                           fontWeight: 500,
-                                          color: COLORS.blue,
+                                          color: canAssign
+                                            ? COLORS.blue
+                                            : COLORS.textMuted,
                                           textTransform: "none",
-                                          bgcolor: COLORS.blueBgLight,
-                                          border: `1px solid ${COLORS.blue}30`,
+                                          bgcolor: canAssign
+                                            ? COLORS.blueBgLight
+                                            : "transparent",
+                                          border: `1px solid ${canAssign ? COLORS.blue : COLORS.textMuted}30`,
                                           borderRadius: "6px",
                                           px: 1.5,
                                           py: 0.3,
                                           minWidth: "auto",
+                                          cursor: canAssign
+                                            ? "pointer"
+                                            : "not-allowed",
+                                          opacity: canAssign ? 1 : 0.5,
                                           "&:hover": {
-                                            bgcolor: COLORS.blueBgMedium,
+                                            bgcolor: canAssign
+                                              ? COLORS.blueBgMedium
+                                              : "transparent",
                                           },
                                           "&.Mui-disabled": {
                                             color: COLORS.textMuted,
-                                            bgcolor: COLORS.bgTertiary,
-                                            borderColor: COLORS.border,
                                           },
                                         }}
                                       >
@@ -4045,8 +4167,15 @@ const AdminProjectWorkspace = () => {
                           <Box
                             component="img"
                             src={editIcon}
-                            onClick={() =>
-                              action.status !== "Completed" &&
+                            onClick={() => {
+                              if (cycleStage !== "execution") {
+                                setToastMessage(
+                                  "Execution has not started yet. Please start execution first.",
+                                );
+                                setToastOpen(true);
+                                return;
+                              }
+                              if (action.status === "Completed") return;
                               handleEditClick(
                                 {
                                   id: action._id.slice(-6).toUpperCase(),
@@ -4082,7 +4211,12 @@ const AdminProjectWorkspace = () => {
                                 },
                                 index,
                                 action._id,
-                              )
+                              );
+                            }}
+                            title={
+                              action.status === "Completed"
+                                ? "Cannot edit completed action"
+                                : "Edit action"
                             }
                             sx={{
                               width: 16,
@@ -4103,6 +4237,13 @@ const AdminProjectWorkspace = () => {
                             component="img"
                             src={viewIcon}
                             onClick={() => {
+                              if (cycleStage !== "execution") {
+                                setToastMessage(
+                                  "Execution has not started yet. Please start execution first.",
+                                );
+                                setToastOpen(true);
+                                return;
+                              }
                               const assigneeId = String(
                                 (action.assignee as unknown as { _id?: string })
                                   ?._id || "",
@@ -4282,7 +4423,7 @@ const AdminProjectWorkspace = () => {
                 }}
               >
                 <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                  <Box
+                  {/* <Box
                     sx={{
                       width: 48,
                       height: 48,
@@ -4293,25 +4434,49 @@ const AdminProjectWorkspace = () => {
                       justifyContent: "center",
                     }}
                   >
-                    <Typography sx={{ color: "#fff", fontSize: "16px", fontWeight: 700 }}>
-                      W{weeklyControlData.weekInfo.weekNumber}
+                    <Typography
+                      sx={{ color: "#fff", fontSize: "16px", fontWeight: 700 }}
+                    >
+                      W{weeklyControlData.weekInfo.weekNumber}-{weeklyControlData.weekInfo.weekNumberEnd || weeklyControlData.weekInfo.weekNumber + 1}
                     </Typography>
-                  </Box>
+                  </Box> */}
                   <Box>
-                    <Typography sx={{ color: COLORS.textPrimary, fontSize: "16px", fontWeight: 600 }}>
-                      Week {weeklyControlData.weekInfo.weekNumber} Data
+                    <Typography
+                      sx={{
+                        color: COLORS.textPrimary,
+                        fontSize: "16px",
+                        fontWeight: 600,
+                      }}
+                    >
+                      Weeks {weeklyControlData.weekInfo.weekNumber}-
+                      {weeklyControlData.weekInfo.weekNumberEnd ||
+                        weeklyControlData.weekInfo.weekNumber + 1}{" "}
+                      Data
                     </Typography>
-                    <Typography sx={{ color: COLORS.textSecondary, fontSize: "12px" }}>
-                      {weeklyControlData.weekInfo.dateRange} • {weeklyControlData.weekInfo.totalActivities} activities this week
+                    <Typography
+                      sx={{ color: COLORS.textSecondary, fontSize: "12px" }}
+                    >
+                      {weeklyControlData.weekInfo.dateRange} •{" "}
+                      {weeklyControlData.weekInfo.totalActivities} activities
+                      these weeks
                     </Typography>
                   </Box>
                 </Box>
                 <Box sx={{ textAlign: "right" }}>
-                  <Typography sx={{ color: COLORS.textSecondary, fontSize: "11px" }}>
+                  <Typography
+                    sx={{ color: COLORS.textSecondary, fontSize: "11px" }}
+                  >
                     Progress
                   </Typography>
-                  <Typography sx={{ color: COLORS.green, fontSize: "14px", fontWeight: 600 }}>
-                    {weeksStatus?.closedWeeksCount || 0}/{weeksStatus?.totalWeeks || 0} weeks closed
+                  <Typography
+                    sx={{
+                      color: COLORS.green,
+                      fontSize: "14px",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {weeksStatus?.closedWeeksCount || 0}/
+                    {weeksStatus?.totalWeeks || 0} weeks closed
                   </Typography>
                 </Box>
               </Box>
@@ -4574,6 +4739,21 @@ const AdminProjectWorkspace = () => {
                       const center = 90;
                       let currentAngle = -90;
 
+                      // If only one segment (100%), draw a full circle
+                      if (data.length === 1) {
+                        return (
+                          <circle
+                            key={0}
+                            cx={center}
+                            cy={center}
+                            r={radius}
+                            fill="none"
+                            stroke={data[0].color}
+                            strokeWidth={strokeWidth}
+                          />
+                        );
+                      }
+
                       return data.map((segment, i) => {
                         const sweepAngle = (segment.value / total) * 360;
                         const startAngle = currentAngle;
@@ -4628,6 +4808,34 @@ const AdminProjectWorkspace = () => {
                     closed: 0,
                     overdue: 0,
                   };
+                  const totalActions =
+                    actionsData.open +
+                    actionsData.inProgress +
+                    actionsData.closed +
+                    actionsData.overdue;
+
+                  // Show empty state message if no actions
+                  if (totalActions === 0) {
+                    return (
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          height: 200,
+                          color: COLORS.textMuted,
+                          fontSize: "13px",
+                          textAlign: "center",
+                          px: 2,
+                        }}
+                      >
+                        No actions assigned for this week yet.
+                        <br />
+                        Assign actions to activities to track progress.
+                      </Box>
+                    );
+                  }
+
                   const maxValue = Math.max(
                     actionsData.open,
                     actionsData.inProgress,
@@ -4635,16 +4843,15 @@ const AdminProjectWorkspace = () => {
                     actionsData.overdue,
                     1,
                   );
-                  const yAxisMax = Math.ceil(maxValue / 2) * 2;
-                  const yAxisSteps = [
-                    yAxisMax,
-                    Math.round((yAxisMax * 5) / 6),
-                    Math.round((yAxisMax * 4) / 6),
-                    Math.round((yAxisMax * 3) / 6),
-                    Math.round((yAxisMax * 2) / 6),
-                    Math.round((yAxisMax * 1) / 6),
-                    0,
-                  ];
+                  // Calculate nice Y-axis steps with unique integer values
+                  const yAxisMax = Math.max(Math.ceil(maxValue * 1.2), 4); // At least 4 for nice steps
+                  const stepCount = Math.min(yAxisMax, 5); // Max 5 steps
+                  const stepSize = Math.ceil(yAxisMax / stepCount);
+                  const actualMax = stepSize * stepCount;
+                  const yAxisSteps: number[] = [];
+                  for (let i = stepCount; i >= 0; i--) {
+                    yAxisSteps.push(i * stepSize);
+                  }
                   return (
                     <Box sx={{ display: "flex", height: 200 }}>
                       <Box
@@ -4657,9 +4864,9 @@ const AdminProjectWorkspace = () => {
                           pb: 2,
                         }}
                       >
-                        {yAxisSteps.map((val) => (
+                        {yAxisSteps.map((val, idx) => (
                           <Typography
-                            key={val}
+                            key={idx}
                             sx={{
                               color: COLORS.textMuted,
                               fontSize: "10px",
@@ -4686,14 +4893,14 @@ const AdminProjectWorkspace = () => {
                             borderLeft: `1px solid ${COLORS.border}`,
                           }}
                         >
-                          {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+                          {yAxisSteps.map((_, i) => (
                             <Box
                               key={i}
                               sx={{
                                 position: "absolute",
                                 left: 0,
                                 right: 0,
-                                top: `${(i / 6) * 100}%`,
+                                top: `${(i / (yAxisSteps.length - 1)) * 100}%`,
                                 borderTop: `1px solid ${COLORS.border}`,
                                 opacity: 0.3,
                               }}
@@ -4704,8 +4911,7 @@ const AdminProjectWorkspace = () => {
                               display: "flex",
                               height: "100%",
                               alignItems: "flex-end",
-                              justifyContent: "space-around",
-                              px: 2,
+                              justifyContent: "space-evenly",
                             }}
                           >
                             {[
@@ -4736,7 +4942,7 @@ const AdminProjectWorkspace = () => {
                                   width: 60,
                                   height:
                                     bar.value > 0
-                                      ? `${(bar.value / yAxisMax) * 100}%`
+                                      ? `${(bar.value / actualMax) * 100}%`
                                       : 0,
                                   bgcolor: bar.color,
                                   borderRadius: "4px 4px 0 0",
@@ -4749,13 +4955,13 @@ const AdminProjectWorkspace = () => {
                         <Box
                           sx={{
                             display: "flex",
-                            justifyContent: "space-around",
+                            justifyContent: "space-evenly",
                             pt: 1,
                             borderTop: `1px solid ${COLORS.border}`,
                           }}
                         >
                           {[
-                            "In Lookahead",
+                            "Open",
                             "Ready",
                             "Completed",
                             "Overdue",
@@ -4784,23 +4990,36 @@ const AdminProjectWorkspace = () => {
               <BlockedActivitiesTable
                 activities={
                   weeklyControlData?.blockedRiskActivities.map((a) => ({
-                    id: a.activityId,
-                    name: a.activityName,
-                    rag:
-                      a.ragStatus === "Red"
-                        ? ("Red" as const)
-                        : ("Amber" as const),
-                    owner: a.owner || "",
+                    activityId: a.activityId,
+                    activityName: a.activityName,
+                    ragStatus: a.ragStatus,
+                    activityStatus: a.activityStatus || "At Risk",
+                    owner: a.owner || "-",
                     blocker: a.blocker || "",
-                    linkedAction: a.linkedAction?.actionId || "",
-                    status:
-                      a.linkedAction?.status === "Overdue"
-                        ? ("Overdue" as const)
-                        : ("Open" as const),
+                    linkedAction: a.linkedAction || null,
                   })) || []
                 }
                 weeklyPlanPreview={weeklyControlData?.weeklyPlanPreview || []}
                 plannerToDo={weeklyControlData?.plannerToDo || []}
+                onAssignClick={(activity) => {
+                  setAssigningActivity({
+                    activityId: activity.activityId,
+                    activityName: activity.activityName,
+                    startDate: "",
+                    finishDate: "",
+                  });
+                  setAssignFormData({
+                    title: "",
+                    description: "",
+                    type: "Required",
+                    priority: "Medium",
+                    assignee: "",
+                    dueDate: "",
+                  });
+                  setAssignModalOpen(true);
+                }}
+                onActionClick={() => setActiveTab(3)}
+                isProjectEnded={weeklyControlData?.isProjectEnded}
               />
             </Box>
 
@@ -4962,7 +5181,13 @@ const AdminProjectWorkspace = () => {
                           mb: 2,
                         }}
                       >
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                        <Box
+                          sx={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 1.5,
+                          }}
+                        >
                           <Typography
                             sx={{ color: COLORS.green, fontSize: "18px" }}
                           >
@@ -4976,20 +5201,36 @@ const AdminProjectWorkspace = () => {
                                 fontWeight: 500,
                               }}
                             >
-                              Week {weeksStatus?.weeks.find(w => w.canClose)?.weekNumber || 1} ready for close-out
+                              Week{" "}
+                              {weeksStatus?.weeks.find((w) => w.canClose)
+                                ?.weekNumber || 1}{" "}
+                              ready for close-out
                             </Typography>
-                            <Typography sx={{ color: COLORS.textSecondary, fontSize: "11px" }}>
-                              {weeksStatus?.closedWeeksCount || 0}/{weeksStatus?.totalWeeks || 0} weeks completed ({weeksStatus?.progress || 0}%)
+                            <Typography
+                              sx={{
+                                color: COLORS.textSecondary,
+                                fontSize: "11px",
+                              }}
+                            >
+                              {weeksStatus?.closedWeeksCount || 0}/
+                              {weeksStatus?.totalWeeks || 0} weeks completed (
+                              {weeksStatus?.progress || 0}%)
                             </Typography>
                           </Box>
                         </Box>
                       </Box>
                       <Button
                         onClick={() => {
-                          const weekToClose = weeksStatus?.weeks.find(w => w.canClose)?.weekNumber;
+                          const weekToClose = weeksStatus?.weeks.find(
+                            (w) => w.canClose,
+                          )?.weekNumber;
                           if (weekToClose) handleCloseSpecificWeek(weekToClose);
                         }}
-                        disabled={closingWeek !== null || !weeksStatus?.weeks.find(w => w.canClose)}
+                        disabled={
+                          closingWeek !== null ||
+                          !weeksStatus?.weeks.find((w) => w.canClose) ||
+                          weeklyControlData?.isProjectEnded
+                        }
                         sx={{
                           bgcolor: COLORS.green,
                           color: "#fff",
@@ -5000,12 +5241,18 @@ const AdminProjectWorkspace = () => {
                           fontSize: "13px",
                           fontWeight: 500,
                           "&:hover": { bgcolor: "#16a34a" },
+                          "&.Mui-disabled": {
+                            bgcolor: "#3a3a3a",
+                            color: "#666",
+                          },
                         }}
                       >
                         {closingWeek !== null ? (
                           <CircularProgress size={18} sx={{ color: "#fff" }} />
+                        ) : weeklyControlData?.isProjectEnded ? (
+                          "Project Ended"
                         ) : (
-                          `Close Week ${weeksStatus?.weeks.find(w => w.canClose)?.weekNumber || 1}`
+                          `Close Weeks ${weeksStatus?.weeks.find((w) => w.canClose)?.weekNumber || 1}-${(weeksStatus?.weeks.find((w) => w.canClose)?.weekNumber || 1) + 1}`
                         )}
                       </Button>
                     </>
@@ -5116,7 +5363,7 @@ const AdminProjectWorkspace = () => {
                               mb: 1,
                             }}
                           >
-                            PM Override — Force Close Week
+                            PM Override — Force Close Weeks
                           </Typography>
                           <Typography
                             sx={{
@@ -5126,7 +5373,7 @@ const AdminProjectWorkspace = () => {
                             }}
                           >
                             Enter a mandatory reason (min 10 characters) to
-                            close this week despite incomplete actions.
+                            close these weeks despite incomplete actions.
                           </Typography>
                           <TextField
                             fullWidth
@@ -5156,7 +5403,7 @@ const AdminProjectWorkspace = () => {
                           />
                           <Button
                             onClick={handleOverrideClose}
-                            disabled={overrideReason.length < 10}
+                            disabled={overrideReason.length < 10 || weeklyControlData?.isProjectEnded}
                             sx={{
                               bgcolor: COLORS.amber,
                               color: "#fff",
@@ -5173,7 +5420,7 @@ const AdminProjectWorkspace = () => {
                               },
                             }}
                           >
-                            Force Close Week
+                            {weeklyControlData?.isProjectEnded ? "Project Ended" : "Force Close Weeks"}
                           </Button>
                         </Box>
                       )}
@@ -5183,6 +5430,8 @@ const AdminProjectWorkspace = () => {
               ) : (
                 <Button
                   onClick={handleCycleAction}
+                  disabled={weeklyControlData?.isProjectEnded}
+                  title={weeklyControlData?.isProjectEnded ? "Project has ended - read only" : ""}
                   sx={{
                     bgcolor: COLORS.blue,
                     color: "#fff",
@@ -5193,189 +5442,277 @@ const AdminProjectWorkspace = () => {
                     fontSize: "13px",
                     fontWeight: 500,
                     "&:hover": { bgcolor: COLORS.blueHover },
+                    "&.Mui-disabled": {
+                      bgcolor: "#3a3a3a",
+                      color: "#666",
+                    },
                   }}
                 >
-                  {getCycleButtonText()}
+                  {weeklyControlData?.isProjectEnded ? "Project Ended" : getCycleButtonText()}
                 </Button>
               )}
             </Box>
 
-          {/* Week Progress Section */}
-          {weeksStatus && !weeksStatus.isFullyClosed && (
-            <Box
-              sx={{
-                bgcolor: COLORS.bgSecondary,
-                border: `1px solid ${COLORS.border}`,
-                borderRadius: "12px",
-                p: 3,
-                mt: 3,
-              }}
-            >
-              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
-                <Typography
-                  sx={{
-                    color: COLORS.textPrimary,
-                    fontSize: "14px",
-                    fontWeight: 600,
-                  }}
-                >
-                  Week Progress
-                </Typography>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                  <Typography sx={{ color: COLORS.textSecondary, fontSize: "12px" }}>
-                    Overall:
-                  </Typography>
-                  <Typography sx={{ color: COLORS.green, fontSize: "12px", fontWeight: 600 }}>
-                    {weeksStatus.closedWeeksCount}/{weeksStatus.totalWeeks} weeks ({weeksStatus.progress}%)
-                  </Typography>
-                </Box>
-              </Box>
-
-              {/* Current Week Info */}
-              {weeksStatus.weeks.filter(w => w.canClose).slice(0, 1).map((week) => (
+            {/* {weeksStatus && !weeksStatus.isFullyClosed && (
+              <Box
+                sx={{
+                  bgcolor: COLORS.bgSecondary,
+                  border: `1px solid ${COLORS.border}`,
+                  borderRadius: "12px",
+                  p: 3,
+                  mt: 3,
+                }}
+              >
                 <Box
-                  key={week.weekNumber}
                   sx={{
-                    bgcolor: "rgba(59, 130, 246, 0.1)",
-                    border: `1px solid ${COLORS.blue}`,
-                    borderRadius: "8px",
-                    p: 2,
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center",
+                    mb: 2,
                   }}
                 >
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                    <Box
-                      sx={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: "50%",
-                        bgcolor: COLORS.blue,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <Typography sx={{ color: "#fff", fontSize: "13px", fontWeight: 600 }}>
-                        W{week.weekNumber}
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography sx={{ color: COLORS.textPrimary, fontSize: "14px", fontWeight: 600 }}>
-                        Week {week.weekNumber}
-                        <Box component="span" sx={{ color: COLORS.blue, ml: 1, fontSize: "12px", fontWeight: 400 }}>
-                          (Ready to Close)
-                        </Box>
-                      </Typography>
-                      <Typography sx={{ color: COLORS.textSecondary, fontSize: "12px" }}>
-                        {week.stats.totalActivities} activities •
-                        <Box component="span" sx={{ color: COLORS.green }}> {week.stats.green} green</Box>
-                        {week.stats.amber > 0 && <Box component="span" sx={{ color: COLORS.amber }}> • {week.stats.amber} amber</Box>}
-                        {week.stats.red > 0 && <Box component="span" sx={{ color: COLORS.red }}> • {week.stats.red} red</Box>}
-                      </Typography>
-                    </Box>
-                  </Box>
-                  <Button
-                    onClick={() => handleCloseSpecificWeek(week.weekNumber)}
-                    disabled={closingWeek === week.weekNumber}
+                  <Typography
                     sx={{
-                      bgcolor: COLORS.green,
-                      color: "#fff",
-                      textTransform: "none",
-                      px: 3,
-                      py: 1,
-                      borderRadius: "8px",
-                      fontSize: "13px",
-                      fontWeight: 500,
-                      "&:hover": { bgcolor: "#16a34a" },
+                      color: COLORS.textPrimary,
+                      fontSize: "14px",
+                      fontWeight: 600,
                     }}
                   >
-                    {closingWeek === week.weekNumber ? (
-                      <CircularProgress size={18} sx={{ color: "#fff" }} />
-                    ) : (
-                      `Close Week ${week.weekNumber}`
-                    )}
-                  </Button>
-                </Box>
-              ))}
-
-              {/* Show message if no weeks can be closed yet */}
-              {weeksStatus.weeks.filter(w => w.canClose).length === 0 && (
-                <Box
-                  sx={{
-                    bgcolor: COLORS.bgTertiary,
-                    border: `1px solid ${COLORS.border}`,
-                    borderRadius: "8px",
-                    p: 2,
-                    textAlign: "center",
-                  }}
-                >
-                  <Typography sx={{ color: COLORS.textSecondary, fontSize: "13px" }}>
-                    No weeks available to close yet. Complete activities to enable week closure.
+                    Week Progress
                   </Typography>
-                </Box>
-              )}
-
-              {/* Closed weeks summary */}
-              {weeksStatus.closedWeeksCount > 0 && (
-                <Box sx={{ mt: 2 }}>
-                  <Typography sx={{ color: COLORS.textSecondary, fontSize: "12px", mb: 1 }}>
-                    Closed Weeks:
-                  </Typography>
-                  <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-                    {weeksStatus.weeks.filter(w => w.isClosed).map((week) => (
-                      <Box
-                        key={week.weekNumber}
-                        sx={{
-                          bgcolor: `${COLORS.green}20`,
-                          color: COLORS.green,
-                          px: 1.5,
-                          py: 0.5,
-                          borderRadius: "4px",
-                          fontSize: "11px",
-                          fontWeight: 600,
-                        }}
-                      >
-                        Week {week.weekNumber} ✓
-                      </Box>
-                    ))}
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <Typography
+                      sx={{ color: COLORS.textSecondary, fontSize: "12px" }}
+                    >
+                      Overall:
+                    </Typography>
+                    <Typography
+                      sx={{
+                        color: COLORS.green,
+                        fontSize: "12px",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {weeksStatus.closedWeeksCount}/{weeksStatus.totalWeeks}{" "}
+                      weeks ({weeksStatus.progress}%)
+                    </Typography>
                   </Box>
                 </Box>
-              )}
-            </Box>
-          )}
 
-          {/* All weeks closed message */}
-          {weeksStatus?.isFullyClosed && (
-            <Box
-              sx={{
-                bgcolor: "rgba(34, 197, 94, 0.1)",
-                border: `1px solid ${COLORS.green}`,
-                borderRadius: "12px",
-                p: 3,
-                mt: 3,
-                display: "flex",
-                alignItems: "center",
-                gap: 2,
-              }}
-            >
-              <Box
-                component="img"
-                src={lockIcon}
-                sx={{ width: 24, height: 24, filter: "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(535%) hue-rotate(93deg)" }}
-              />
-              <Box>
-                <Typography sx={{ color: COLORS.green, fontSize: "14px", fontWeight: 600 }}>
-                  All {weeksStatus.totalWeeks} weeks completed!
-                </Typography>
-                <Typography sx={{ color: COLORS.textSecondary, fontSize: "12px" }}>
-                  Programme is fully closed. View history in Closure & Export tab.
-                </Typography>
+                {weeksStatus.weeks
+                  .filter((w) => w.canClose)
+                  .slice(0, 1)
+                  .map((week) => (
+                    <Box
+                      key={week.weekNumber}
+                      sx={{
+                        bgcolor: "rgba(59, 130, 246, 0.1)",
+                        border: `1px solid ${COLORS.blue}`,
+                        borderRadius: "8px",
+                        p: 2,
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 2 }}
+                      >
+                        <Box
+                          sx={{
+                            width: 40,
+                            height: 40,
+                            borderRadius: "50%",
+                            bgcolor: COLORS.blue,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <Typography
+                            sx={{
+                              color: "#fff",
+                              fontSize: "13px",
+                              fontWeight: 600,
+                            }}
+                          >
+                            W{week.weekNumber}
+                          </Typography>
+                        </Box>
+                        <Box>
+                          <Typography
+                            sx={{
+                              color: COLORS.textPrimary,
+                              fontSize: "14px",
+                              fontWeight: 600,
+                            }}
+                          >
+                            Week {week.weekNumber}
+                            <Box
+                              component="span"
+                              sx={{
+                                color: COLORS.blue,
+                                ml: 1,
+                                fontSize: "12px",
+                                fontWeight: 400,
+                              }}
+                            >
+                              (Ready to Close)
+                            </Box>
+                          </Typography>
+                          <Typography
+                            sx={{
+                              color: COLORS.textSecondary,
+                              fontSize: "12px",
+                            }}
+                          >
+                            {week.stats.totalActivities} activities •
+                            <Box component="span" sx={{ color: COLORS.green }}>
+                              {" "}
+                              {week.stats.green} green
+                            </Box>
+                            {week.stats.amber > 0 && (
+                              <Box
+                                component="span"
+                                sx={{ color: COLORS.amber }}
+                              >
+                                {" "}
+                                • {week.stats.amber} amber
+                              </Box>
+                            )}
+                            {week.stats.red > 0 && (
+                              <Box component="span" sx={{ color: COLORS.red }}>
+                                {" "}
+                                • {week.stats.red} red
+                              </Box>
+                            )}
+                          </Typography>
+                        </Box>
+                      </Box>
+                      <Button
+                        onClick={() => handleCloseSpecificWeek(week.weekNumber)}
+                        disabled={closingWeek === week.weekNumber}
+                        sx={{
+                          bgcolor: COLORS.green,
+                          color: "#fff",
+                          textTransform: "none",
+                          px: 3,
+                          py: 1,
+                          borderRadius: "8px",
+                          fontSize: "13px",
+                          fontWeight: 500,
+                          "&:hover": { bgcolor: "#16a34a" },
+                        }}
+                      >
+                        {closingWeek === week.weekNumber ? (
+                          <CircularProgress size={18} sx={{ color: "#fff" }} />
+                        ) : (
+                          `Close Weeks ${week.weekNumber}-${week.weekNumber + 1}`
+                        )}
+                      </Button>
+                    </Box>
+                  ))}
+
+                {weeksStatus.weeks.filter((w) => w.canClose).length === 0 && (
+                  <Box
+                    sx={{
+                      bgcolor: COLORS.bgTertiary,
+                      border: `1px solid ${COLORS.border}`,
+                      borderRadius: "8px",
+                      p: 2,
+                      textAlign: "center",
+                    }}
+                  >
+                    <Typography
+                      sx={{ color: COLORS.textSecondary, fontSize: "13px" }}
+                    >
+                      No weeks available to close yet. Complete activities to
+                      enable week closure.
+                    </Typography>
+                  </Box>
+                )}
+
+                {weeksStatus.closedWeeksCount > 0 && (
+                  <Box sx={{ mt: 2 }}>
+                    <Typography
+                      sx={{
+                        color: COLORS.textSecondary,
+                        fontSize: "12px",
+                        mb: 1,
+                      }}
+                    >
+                      Closed Weeks:
+                    </Typography>
+                    <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                      {weeksStatus.weeks
+                        .filter((w) => w.isClosed)
+                        .map((week) => (
+                          <Box
+                            key={week.weekNumber}
+                            sx={{
+                              bgcolor: `${COLORS.green}20`,
+                              color: COLORS.green,
+                              px: 1.5,
+                              py: 0.5,
+                              borderRadius: "4px",
+                              fontSize: "11px",
+                              fontWeight: 600,
+                            }}
+                          >
+                            Week {week.weekNumber} ✓
+                          </Box>
+                        ))}
+                    </Box>
+                  </Box>
+                )}
               </Box>
-            </Box>
-          )}
-        </>)}
+            )} */}
+
+            {/* All weeks closed message */}
+            {weeksStatus?.isFullyClosed && (
+              <Box
+                sx={{
+                  bgcolor: "rgba(34, 197, 94, 0.1)",
+                  border: `1px solid ${COLORS.green}`,
+                  borderRadius: "12px",
+                  p: 3,
+                  mt: 3,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 2,
+                }}
+              >
+                <Box
+                  component="img"
+                  src={lockIcon}
+                  sx={{
+                    width: 24,
+                    height: 24,
+                    filter:
+                      "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(535%) hue-rotate(93deg)",
+                  }}
+                />
+                <Box>
+                  <Typography
+                    sx={{
+                      color: COLORS.green,
+                      fontSize: "14px",
+                      fontWeight: 600,
+                    }}
+                  >
+                    All {weeksStatus.totalWeeks} weeks completed!
+                  </Typography>
+                  <Typography
+                    sx={{ color: COLORS.textSecondary, fontSize: "12px" }}
+                  >
+                    Programme is fully closed. View history in Closure & Export
+                    tab.
+                  </Typography>
+                </Box>
+              </Box>
+            )}
+          </>
+        )}
 
         {activeTab === 5 && (
           <Box>
@@ -5787,7 +6124,7 @@ const AdminProjectWorkspace = () => {
                   </Box>
                 )}
 
-                <Box
+                {/* <Box
                   sx={{
                     bgcolor: COLORS.bgSecondary,
                     border: `1px solid ${COLORS.border}`,
@@ -5795,7 +6132,14 @@ const AdminProjectWorkspace = () => {
                     p: 3,
                   }}
                 >
-                  <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      mb: 2,
+                    }}
+                  >
                     <Typography
                       sx={{
                         color: COLORS.textPrimary,
@@ -5806,12 +6150,24 @@ const AdminProjectWorkspace = () => {
                       Week-by-Week Closure
                     </Typography>
                     {weeksStatus && (
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                        <Typography sx={{ color: COLORS.textSecondary, fontSize: "12px" }}>
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                      >
+                        <Typography
+                          sx={{ color: COLORS.textSecondary, fontSize: "12px" }}
+                        >
                           Progress:
                         </Typography>
-                        <Typography sx={{ color: COLORS.green, fontSize: "12px", fontWeight: 600 }}>
-                          {weeksStatus.closedWeeksCount}/{weeksStatus.totalWeeks} weeks ({weeksStatus.progress}%)
+                        <Typography
+                          sx={{
+                            color: COLORS.green,
+                            fontSize: "12px",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {weeksStatus.closedWeeksCount}/
+                          {weeksStatus.totalWeeks} weeks ({weeksStatus.progress}
+                          %)
                         </Typography>
                       </Box>
                     )}
@@ -5826,19 +6182,38 @@ const AdminProjectWorkspace = () => {
                         p: 2,
                       }}
                     >
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 1.5 }}
+                      >
                         <Box
                           component="img"
                           src={lockIcon}
-                          sx={{ width: 20, height: 20, filter: "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(535%) hue-rotate(93deg)" }}
+                          sx={{
+                            width: 20,
+                            height: 20,
+                            filter:
+                              "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(535%) hue-rotate(93deg)",
+                          }}
                         />
-                        <Typography sx={{ color: COLORS.green, fontSize: "13px", fontWeight: 500 }}>
+                        <Typography
+                          sx={{
+                            color: COLORS.green,
+                            fontSize: "13px",
+                            fontWeight: 500,
+                          }}
+                        >
                           All weeks completed! Programme is fully closed.
                         </Typography>
                       </Box>
                     </Box>
                   ) : weeksStatus ? (
-                    <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 1.5,
+                      }}
+                    >
                       {weeksStatus.weeks.map((week) => (
                         <Box
                           key={week.weekNumber}
@@ -5862,7 +6237,13 @@ const AdminProjectWorkspace = () => {
                             p: 1.5,
                           }}
                         >
-                          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                          <Box
+                            sx={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 2,
+                            }}
+                          >
                             <Box
                               sx={{
                                 width: 32,
@@ -5887,7 +6268,10 @@ const AdminProjectWorkspace = () => {
                             >
                               <Typography
                                 sx={{
-                                  color: week.isClosed || week.status === "current" ? "#fff" : COLORS.textSecondary,
+                                  color:
+                                    week.isClosed || week.status === "current"
+                                      ? "#fff"
+                                      : COLORS.textSecondary,
                                   fontSize: "11px",
                                   fontWeight: 600,
                                 }}
@@ -5896,23 +6280,69 @@ const AdminProjectWorkspace = () => {
                               </Typography>
                             </Box>
                             <Box>
-                              <Typography sx={{ color: COLORS.textPrimary, fontSize: "13px", fontWeight: 500 }}>
+                              <Typography
+                                sx={{
+                                  color: COLORS.textPrimary,
+                                  fontSize: "13px",
+                                  fontWeight: 500,
+                                }}
+                              >
                                 Week {week.weekNumber}
                                 {week.status === "current" && (
-                                  <Box component="span" sx={{ color: COLORS.blue, ml: 1, fontSize: "11px" }}>
+                                  <Box
+                                    component="span"
+                                    sx={{
+                                      color: COLORS.blue,
+                                      ml: 1,
+                                      fontSize: "11px",
+                                    }}
+                                  >
                                     (Current)
                                   </Box>
                                 )}
                               </Typography>
-                              <Typography sx={{ color: COLORS.textSecondary, fontSize: "11px" }}>
+                              <Typography
+                                sx={{
+                                  color: COLORS.textSecondary,
+                                  fontSize: "11px",
+                                }}
+                              >
                                 {week.stats.totalActivities} activities •
-                                <Box component="span" sx={{ color: COLORS.green }}> {week.stats.green} green</Box>
-                                {week.stats.amber > 0 && <Box component="span" sx={{ color: COLORS.amber }}> • {week.stats.amber} amber</Box>}
-                                {week.stats.red > 0 && <Box component="span" sx={{ color: COLORS.red }}> • {week.stats.red} red</Box>}
+                                <Box
+                                  component="span"
+                                  sx={{ color: COLORS.green }}
+                                >
+                                  {" "}
+                                  {week.stats.green} green
+                                </Box>
+                                {week.stats.amber > 0 && (
+                                  <Box
+                                    component="span"
+                                    sx={{ color: COLORS.amber }}
+                                  >
+                                    {" "}
+                                    • {week.stats.amber} amber
+                                  </Box>
+                                )}
+                                {week.stats.red > 0 && (
+                                  <Box
+                                    component="span"
+                                    sx={{ color: COLORS.red }}
+                                  >
+                                    {" "}
+                                    • {week.stats.red} red
+                                  </Box>
+                                )}
                               </Typography>
                             </Box>
                           </Box>
-                          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          <Box
+                            sx={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 1,
+                            }}
+                          >
                             {week.isClosed ? (
                               <Box
                                 sx={{
@@ -5929,7 +6359,9 @@ const AdminProjectWorkspace = () => {
                               </Box>
                             ) : week.canClose ? (
                               <Button
-                                onClick={() => handleCloseSpecificWeek(week.weekNumber)}
+                                onClick={() =>
+                                  handleCloseSpecificWeek(week.weekNumber)
+                                }
                                 disabled={closingWeek === week.weekNumber}
                                 size="small"
                                 sx={{
@@ -5946,9 +6378,12 @@ const AdminProjectWorkspace = () => {
                                 }}
                               >
                                 {closingWeek === week.weekNumber ? (
-                                  <CircularProgress size={14} sx={{ color: "#fff" }} />
+                                  <CircularProgress
+                                    size={14}
+                                    sx={{ color: "#fff" }}
+                                  />
                                 ) : (
-                                  "Close Week"
+                                  "Close Weeks"
                                 )}
                               </Button>
                             ) : (
@@ -5958,7 +6393,9 @@ const AdminProjectWorkspace = () => {
                                   fontSize: "11px",
                                 }}
                               >
-                                {week.status === "upcoming" ? "Upcoming" : "Close previous weeks first"}
+                                {week.status === "upcoming"
+                                  ? "Upcoming"
+                                  : "Close previous weeks first"}
                               </Box>
                             )}
                           </Box>
@@ -5966,11 +6403,13 @@ const AdminProjectWorkspace = () => {
                       ))}
                     </Box>
                   ) : (
-                    <Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
+                    <Box
+                      sx={{ display: "flex", justifyContent: "center", py: 3 }}
+                    >
                       <CircularProgress size={24} sx={{ color: COLORS.blue }} />
                     </Box>
                   )}
-                </Box>
+                </Box> */}
               </>
             )}
           </Box>
@@ -7555,6 +7994,29 @@ const AdminProjectWorkspace = () => {
             </Button>
           </DialogActions>
         </Dialog>
+
+        {/* Toast notification for execution not started */}
+        <Snackbar
+          open={toastOpen}
+          autoHideDuration={4000}
+          onClose={() => setToastOpen(false)}
+          anchorOrigin={{ vertical: "top", horizontal: "center" }}
+        >
+          <Alert
+            onClose={() => setToastOpen(false)}
+            severity="warning"
+            sx={{
+              bgcolor: COLORS.amber,
+              color: "#000",
+              fontWeight: 500,
+              "& .MuiAlert-icon": {
+                color: "#000",
+              },
+            }}
+          >
+            {toastMessage}
+          </Alert>
+        </Snackbar>
       </Box>
     </AdminLayout>
   );

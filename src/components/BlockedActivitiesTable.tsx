@@ -1,15 +1,19 @@
 import { useState } from "react";
-import { Box, Typography } from "@mui/material";
+import { Box, Typography, Button } from "@mui/material";
 import { COLORS } from "../constants/colors";
 
 interface BlockedActivity {
-  id: string;
-  name: string;
-  rag: "Red" | "Amber";
+  activityId: string;
+  activityName: string;
+  ragStatus: string;
+  activityStatus: string;
   owner: string;
   blocker: string;
-  linkedAction: string;
-  status: "Open" | "Overdue";
+  linkedAction: {
+    actionId: string;
+    title?: string;
+    status: string;
+  } | null;
 }
 
 interface WeeklyPlanActivity {
@@ -22,6 +26,8 @@ interface WeeklyPlanActivity {
   ragStatus: string;
   owner: string;
   activityStatus: string;
+  actionsCount?: number;
+  openActionsCount?: number;
 }
 
 interface PlannerToDoItem {
@@ -30,6 +36,8 @@ interface PlannerToDoItem {
   ragStatus: string;
   owner: string;
   todoItem: string;
+  actionId?: string;
+  actionStatus?: string;
   priority: string;
   dueDate: string;
 }
@@ -38,12 +46,18 @@ interface BlockedActivitiesTableProps {
   activities?: BlockedActivity[];
   weeklyPlanPreview?: WeeklyPlanActivity[];
   plannerToDo?: PlannerToDoItem[];
+  onAssignClick?: (activity: { activityId: string; activityName: string }) => void;
+  onActionClick?: () => void;
+  isProjectEnded?: boolean;
 }
 
 const BlockedActivitiesTable = ({
   activities = [],
   weeklyPlanPreview = [],
   plannerToDo = [],
+  onAssignClick,
+  onActionClick,
+  isProjectEnded = false,
 }: BlockedActivitiesTableProps) => {
   const [activeTab, setActiveTab] = useState(0);
 
@@ -126,14 +140,14 @@ const BlockedActivitiesTable = ({
           </Box>
         </Box>
 
-        {/* Blocked / Risk Activities Tab */}
+        {/* Blocked / Risk Activities Tab - Only At Risk or Blocked activities */}
         {activeTab === 0 && (
           <>
             <Box
               sx={{
                 display: "grid",
                 gridTemplateColumns:
-                  "90px minmax(180px, 1fr) 80px 90px minmax(160px, 1fr) 110px 90px",
+                  "90px minmax(180px, 1fr) 80px 100px minmax(140px, 1fr) 120px 90px",
                 gap: 2,
                 px: 3,
                 py: 1.5,
@@ -145,9 +159,9 @@ const BlockedActivitiesTable = ({
                 "ACTIVITY ID",
                 "ACTIVITY NAME",
                 "RAG",
-                "OWNER",
-                "BLOCKER",
-                "LINKED ACTION",
+                "ASSIGNEE",
+                "ISSUE/ACTION",
+                "ACTION ID",
                 "STATUS",
               ].map((header) => (
                 <Typography
@@ -178,7 +192,7 @@ const BlockedActivitiesTable = ({
                   sx={{
                     display: "grid",
                     gridTemplateColumns:
-                      "90px minmax(180px, 1fr) 80px 90px minmax(160px, 1fr) 110px 90px",
+                      "90px minmax(180px, 1fr) 80px 100px minmax(140px, 1fr) 120px 90px",
                     gap: 2,
                     px: 3,
                     py: 2,
@@ -198,7 +212,7 @@ const BlockedActivitiesTable = ({
                       textAlign: "center",
                     }}
                   >
-                    {activity.id}
+                    {activity.activityId}
                   </Typography>
                   <Typography
                     sx={{
@@ -208,17 +222,25 @@ const BlockedActivitiesTable = ({
                       textAlign: "center",
                     }}
                   >
-                    {activity.name}
+                    {activity.activityName}
                   </Typography>
                   <Box sx={{ display: "flex", justifyContent: "center" }}>
                     <Box
                       sx={{
-                        bgcolor:
-                          activity.rag === "Red"
-                            ? `${COLORS.red}25`
-                            : `${COLORS.amber}25`,
+                        bgcolor: "#2a2a3e",
+                        border: `1px solid ${
+                          activity.ragStatus === "Red"
+                            ? COLORS.red
+                            : activity.ragStatus === "Amber"
+                              ? COLORS.amber
+                              : COLORS.green
+                        }40`,
                         color:
-                          activity.rag === "Red" ? COLORS.red : COLORS.amber,
+                          activity.ragStatus === "Red"
+                            ? COLORS.red
+                            : activity.ragStatus === "Amber"
+                              ? COLORS.amber
+                              : COLORS.green,
                         px: 1.5,
                         py: 0.5,
                         borderRadius: "20px",
@@ -235,65 +257,126 @@ const BlockedActivitiesTable = ({
                           height: 8,
                           borderRadius: "50%",
                           bgcolor:
-                            activity.rag === "Red" ? COLORS.red : COLORS.amber,
+                            activity.ragStatus === "Red"
+                              ? COLORS.red
+                              : activity.ragStatus === "Amber"
+                                ? COLORS.amber
+                                : COLORS.green,
                         }}
                       />
-                      {activity.rag}
+                      {activity.ragStatus}
                     </Box>
                   </Box>
+                  {/* ASSIGNEE - show name or Assign button */}
+                  <Box sx={{ display: "flex", justifyContent: "center" }}>
+                    {activity.owner && activity.owner !== "-" ? (
+                      <Typography
+                        sx={{
+                          color: COLORS.textSecondary,
+                          fontSize: "13px",
+                          fontWeight: 400,
+                        }}
+                      >
+                        {activity.owner}
+                      </Typography>
+                    ) : (
+                      <Button
+                        onClick={() =>
+                          !isProjectEnded && onAssignClick?.({
+                            activityId: activity.activityId,
+                            activityName: activity.activityName,
+                          })
+                        }
+                        disabled={isProjectEnded}
+                        title={isProjectEnded ? "Project has ended - read only" : "Assign action"}
+                        sx={{
+                          fontSize: "11px",
+                          fontWeight: 500,
+                          color: isProjectEnded ? COLORS.textMuted : COLORS.blue,
+                          textTransform: "none",
+                          bgcolor: isProjectEnded ? "transparent" : COLORS.blueBgLight,
+                          border: `1px solid ${isProjectEnded ? COLORS.textMuted : COLORS.blue}50`,
+                          borderRadius: "6px",
+                          px: 1.5,
+                          py: 0.3,
+                          minWidth: "auto",
+                          cursor: isProjectEnded ? "not-allowed" : "pointer",
+                          opacity: isProjectEnded ? 0.5 : 1,
+                          "&:hover": {
+                            bgcolor: isProjectEnded ? "transparent" : COLORS.blueBgMedium,
+                          },
+                        }}
+                      >
+                        {isProjectEnded ? "Ended" : "Assign"}
+                      </Button>
+                    )}
+                  </Box>
+                  {/* ISSUE/ACTION */}
                   <Typography
                     sx={{
-                      color: COLORS.textSecondary,
-                      fontSize: "14px",
+                      color: COLORS.textPrimary,
+                      fontSize: "13px",
                       fontWeight: 400,
                       textAlign: "center",
                     }}
                   >
-                    {activity.owner}
+                    {activity.blocker || "-"}
                   </Typography>
-                  <Typography
-                    sx={{
-                      color: activity.rag === "Red" ? COLORS.red : COLORS.amber,
-                      fontSize: "14px",
-                      fontWeight: 400,
-                      textAlign: "center",
-                    }}
-                  >
-                    {activity.blocker}
-                  </Typography>
-                  <Typography
-                    sx={{
-                      color: COLORS.blue,
-                      fontSize: "10px",
-                      fontWeight: 400,
-                      textAlign: "center",
-                    }}
-                  >
-                    {activity.linkedAction}
-                  </Typography>
+                  {/* ACTION ID - clickable or dash */}
+                  <Box sx={{ display: "flex", justifyContent: "center" }}>
+                    {activity.linkedAction?.actionId ? (
+                      <Typography
+                        onClick={() => onActionClick?.()}
+                        sx={{
+                          color: COLORS.blue,
+                          fontSize: "11px",
+                          fontWeight: 500,
+                          cursor: "pointer",
+                          "&:hover": {
+                            textDecoration: "underline",
+                          },
+                        }}
+                      >
+                        {activity.linkedAction.actionId}
+                      </Typography>
+                    ) : (
+                      <Typography
+                        sx={{
+                          color: COLORS.textMuted,
+                          fontSize: "11px",
+                        }}
+                      >
+                        -
+                      </Typography>
+                    )}
+                  </Box>
                   <Box sx={{ display: "flex", justifyContent: "center" }}>
                     <Box
                       sx={{
                         bgcolor:
-                          activity.status === "Overdue"
+                          activity.activityStatus === "Blocked"
                             ? `${COLORS.red}20`
-                            : `${COLORS.amber}15`,
+                            : activity.linkedAction?.status === "Overdue"
+                              ? `${COLORS.red}20`
+                              : `${COLORS.amber}15`,
                         border:
-                          activity.status === "Overdue"
+                          activity.activityStatus === "Blocked" || activity.linkedAction?.status === "Overdue"
                             ? `1px solid ${COLORS.red}40`
                             : "none",
                         color:
-                          activity.status === "Overdue"
+                          activity.activityStatus === "Blocked" || activity.linkedAction?.status === "Overdue"
                             ? COLORS.red
                             : COLORS.amber,
-                        px: 2,
+                        px: 1.5,
                         py: 0.5,
                         borderRadius: "20px",
-                        fontSize: "12px",
+                        fontSize: "11px",
                         fontWeight: 500,
                       }}
                     >
-                      {activity.status}
+                      {activity.activityStatus === "Blocked"
+                        ? "Blocked"
+                        : activity.linkedAction?.status || "At Risk"}
                     </Box>
                   </Box>
                 </Box>
@@ -302,14 +385,14 @@ const BlockedActivitiesTable = ({
           </>
         )}
 
-        {/* Weekly Plan Preview Tab */}
+        {/* Weekly Plan Preview Tab - Activities with assigned actions */}
         {activeTab === 1 && (
           <>
             <Box
               sx={{
                 display: "grid",
                 gridTemplateColumns:
-                  "90px minmax(180px, 1fr) 100px 90px 90px 80px 80px 90px",
+                  "90px minmax(180px, 1fr) 90px 90px 80px 80px 90px 90px",
                 gap: 2,
                 px: 3,
                 py: 1.5,
@@ -320,10 +403,10 @@ const BlockedActivitiesTable = ({
               {[
                 "ACTIVITY ID",
                 "ACTIVITY NAME",
-                "WEEK ZONE",
                 "START",
                 "END",
                 "DURATION",
+                "ACTIONS",
                 "RAG",
                 "STATUS",
               ].map((header) => (
@@ -345,7 +428,7 @@ const BlockedActivitiesTable = ({
             {weeklyPlanPreview.length === 0 ? (
               <Box sx={{ p: 4, textAlign: "center" }}>
                 <Typography sx={{ color: COLORS.textMuted, fontSize: "14px" }}>
-                  No activities in weekly plan
+                  No activities with assigned actions for these weeks
                 </Typography>
               </Box>
             ) : (
@@ -355,7 +438,7 @@ const BlockedActivitiesTable = ({
                   sx={{
                     display: "grid",
                     gridTemplateColumns:
-                      "90px minmax(180px, 1fr) 100px 90px 90px 80px 80px 90px",
+                      "90px minmax(180px, 1fr) 90px 90px 80px 80px 90px 90px",
                     gap: 2,
                     px: 3,
                     py: 2,
@@ -389,16 +472,6 @@ const BlockedActivitiesTable = ({
                   </Typography>
                   <Typography
                     sx={{
-                      color: COLORS.blue,
-                      fontSize: "12px",
-                      fontWeight: 500,
-                      textAlign: "center",
-                    }}
-                  >
-                    {activity.weekZone || "-"}
-                  </Typography>
-                  <Typography
-                    sx={{
                       color: COLORS.textSecondary,
                       fontSize: "12px",
                       textAlign: "center",
@@ -427,17 +500,60 @@ const BlockedActivitiesTable = ({
                   <Box sx={{ display: "flex", justifyContent: "center" }}>
                     <Box
                       sx={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: "50%",
-                        bgcolor:
+                        bgcolor: (activity.openActionsCount || 0) > 0 ? `${COLORS.amber}20` : `${COLORS.green}20`,
+                        color: (activity.openActionsCount || 0) > 0 ? COLORS.amber : COLORS.green,
+                        px: 1.5,
+                        py: 0.5,
+                        borderRadius: "20px",
+                        fontSize: "11px",
+                        fontWeight: 500,
+                      }}
+                    >
+                      {activity.openActionsCount || 0}/{activity.actionsCount || 0}
+                    </Box>
+                  </Box>
+                  <Box sx={{ display: "flex", justifyContent: "center" }}>
+                    <Box
+                      sx={{
+                        bgcolor: "#2a2a3e",
+                        border: `1px solid ${
+                          activity.ragStatus === "Green"
+                            ? COLORS.green
+                            : activity.ragStatus === "Amber"
+                              ? COLORS.amber
+                              : COLORS.red
+                        }40`,
+                        color:
                           activity.ragStatus === "Green"
                             ? COLORS.green
                             : activity.ragStatus === "Amber"
                               ? COLORS.amber
                               : COLORS.red,
+                        px: 1.5,
+                        py: 0.5,
+                        borderRadius: "20px",
+                        fontSize: "12px",
+                        fontWeight: 500,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 0.75,
                       }}
-                    />
+                    >
+                      <Box
+                        sx={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: "50%",
+                          bgcolor:
+                            activity.ragStatus === "Green"
+                              ? COLORS.green
+                              : activity.ragStatus === "Amber"
+                                ? COLORS.amber
+                                : COLORS.red,
+                        }}
+                      />
+                      {activity.ragStatus}
+                    </Box>
                   </Box>
                   <Box sx={{ display: "flex", justifyContent: "center" }}>
                     <Box
@@ -474,14 +590,14 @@ const BlockedActivitiesTable = ({
           </>
         )}
 
-        {/* Planner To-Do Tab */}
+        {/* Planner To-Do Tab - Actual action details */}
         {activeTab === 2 && (
           <>
             <Box
               sx={{
                 display: "grid",
                 gridTemplateColumns:
-                  "90px minmax(180px, 1fr) 80px 90px minmax(150px, 1fr) 80px 90px",
+                  "80px minmax(160px, 1fr) 80px minmax(140px, 1fr) 90px 80px 80px 80px",
                 gap: 2,
                 px: 3,
                 py: 1.5,
@@ -490,13 +606,14 @@ const BlockedActivitiesTable = ({
               }}
             >
               {[
-                "ACTIVITY ID",
-                "ACTIVITY NAME",
-                "RAG",
-                "OWNER",
-                "TO-DO ITEM",
+                "ACTION ID",
+                "ACTION TITLE",
+                "ACTIVITY",
+                "ASSIGNEE",
+                "STATUS",
                 "PRIORITY",
                 "DUE DATE",
+                "RAG",
               ].map((header) => (
                 <Typography
                   key={header}
@@ -516,7 +633,7 @@ const BlockedActivitiesTable = ({
             {plannerToDo.length === 0 ? (
               <Box sx={{ p: 4, textAlign: "center" }}>
                 <Typography sx={{ color: COLORS.textMuted, fontSize: "14px" }}>
-                  No to-do items
+                  No open actions for these weeks
                 </Typography>
               </Box>
             ) : (
@@ -526,7 +643,7 @@ const BlockedActivitiesTable = ({
                   sx={{
                     display: "grid",
                     gridTemplateColumns:
-                      "90px minmax(180px, 1fr) 80px 90px minmax(150px, 1fr) 80px 90px",
+                      "80px minmax(160px, 1fr) 80px minmax(140px, 1fr) 90px 80px 80px 80px",
                     gap: 2,
                     px: 3,
                     py: 2,
@@ -539,34 +656,170 @@ const BlockedActivitiesTable = ({
                     "&:hover": { bgcolor: COLORS.bgTertiary },
                   }}
                 >
+                  {/* ACTION ID - clickable */}
+                  <Box sx={{ display: "flex", justifyContent: "center" }}>
+                    {item.actionId ? (
+                      <Typography
+                        onClick={() => onActionClick?.()}
+                        sx={{
+                          color: COLORS.blue,
+                          fontSize: "11px",
+                          fontWeight: 500,
+                          cursor: "pointer",
+                          "&:hover": {
+                            textDecoration: "underline",
+                          },
+                        }}
+                      >
+                        {item.actionId}
+                      </Typography>
+                    ) : (
+                      <Typography
+                        sx={{
+                          color: COLORS.textMuted,
+                          fontSize: "11px",
+                        }}
+                      >
+                        -
+                      </Typography>
+                    )}
+                  </Box>
+                  {/* ACTION TITLE */}
+                  <Typography
+                    sx={{
+                      color: COLORS.textPrimary,
+                      fontSize: "13px",
+                      fontWeight: 400,
+                      textAlign: "center",
+                    }}
+                  >
+                    {item.todoItem}
+                  </Typography>
+                  {/* ACTIVITY ID */}
                   <Typography
                     sx={{
                       color: COLORS.textMuted,
-                      fontSize: "12px",
+                      fontSize: "11px",
                       textAlign: "center",
                     }}
                   >
                     {item.activityId}
                   </Typography>
-                  <Typography
-                    sx={{
-                      color: COLORS.textPrimary,
-                      fontSize: "14px",
-                      fontWeight: 400,
-                      textAlign: "center",
-                    }}
-                  >
-                    {item.activityName}
-                  </Typography>
+                  {/* ASSIGNEE - show name or Assign button */}
+                  <Box sx={{ display: "flex", justifyContent: "center" }}>
+                    {item.owner && item.owner !== "-" ? (
+                      <Typography
+                        sx={{
+                          color: COLORS.textSecondary,
+                          fontSize: "13px",
+                          fontWeight: 400,
+                        }}
+                      >
+                        {item.owner}
+                      </Typography>
+                    ) : (
+                      <Button
+                        onClick={() =>
+                          !isProjectEnded && onAssignClick?.({
+                            activityId: item.activityId,
+                            activityName: item.activityName,
+                          })
+                        }
+                        disabled={isProjectEnded}
+                        title={isProjectEnded ? "Project has ended - read only" : "Assign action"}
+                        sx={{
+                          fontSize: "11px",
+                          fontWeight: 500,
+                          color: isProjectEnded ? COLORS.textMuted : COLORS.blue,
+                          textTransform: "none",
+                          bgcolor: isProjectEnded ? "transparent" : COLORS.blueBgLight,
+                          border: `1px solid ${isProjectEnded ? COLORS.textMuted : COLORS.blue}50`,
+                          borderRadius: "6px",
+                          px: 1.5,
+                          py: 0.3,
+                          minWidth: "auto",
+                          cursor: isProjectEnded ? "not-allowed" : "pointer",
+                          opacity: isProjectEnded ? 0.5 : 1,
+                          "&:hover": {
+                            bgcolor: isProjectEnded ? "transparent" : COLORS.blueBgMedium,
+                          },
+                        }}
+                      >
+                        {isProjectEnded ? "Ended" : "Assign"}
+                      </Button>
+                    )}
+                  </Box>
                   <Box sx={{ display: "flex", justifyContent: "center" }}>
                     <Box
                       sx={{
                         bgcolor:
+                          item.actionStatus === "Overdue"
+                            ? `${COLORS.red}20`
+                            : item.actionStatus === "In Progress"
+                              ? `${COLORS.blue}20`
+                              : `${COLORS.amber}20`,
+                        color:
+                          item.actionStatus === "Overdue"
+                            ? COLORS.red
+                            : item.actionStatus === "In Progress"
+                              ? COLORS.blue
+                              : COLORS.amber,
+                        px: 1.5,
+                        py: 0.5,
+                        borderRadius: "20px",
+                        fontSize: "10px",
+                        fontWeight: 500,
+                      }}
+                    >
+                      {item.actionStatus || "Open"}
+                    </Box>
+                  </Box>
+                  <Box sx={{ display: "flex", justifyContent: "center" }}>
+                    <Box
+                      sx={{
+                        bgcolor:
+                          item.priority === "High"
+                            ? `${COLORS.red}20`
+                            : item.priority === "Low"
+                              ? `${COLORS.green}20`
+                              : `${COLORS.amber}20`,
+                        color:
+                          item.priority === "High"
+                            ? COLORS.red
+                            : item.priority === "Low"
+                              ? COLORS.green
+                              : COLORS.amber,
+                        px: 1.5,
+                        py: 0.5,
+                        borderRadius: "20px",
+                        fontSize: "10px",
+                        fontWeight: 500,
+                      }}
+                    >
+                      {item.priority}
+                    </Box>
+                  </Box>
+                  <Typography
+                    sx={{
+                      color: item.actionStatus === "Overdue" ? COLORS.red : COLORS.textSecondary,
+                      fontSize: "12px",
+                      fontWeight: item.actionStatus === "Overdue" ? 500 : 400,
+                      textAlign: "center",
+                    }}
+                  >
+                    {item.dueDate}
+                  </Typography>
+                  <Box sx={{ display: "flex", justifyContent: "center" }}>
+                    <Box
+                      sx={{
+                        bgcolor: "#2a2a3e",
+                        border: `1px solid ${
                           item.ragStatus === "Red"
-                            ? `${COLORS.red}25`
+                            ? COLORS.red
                             : item.ragStatus === "Amber"
-                              ? `${COLORS.amber}25`
-                              : `${COLORS.green}25`,
+                              ? COLORS.amber
+                              : COLORS.green
+                        }40`,
                         color:
                           item.ragStatus === "Red"
                             ? COLORS.red
@@ -599,54 +852,6 @@ const BlockedActivitiesTable = ({
                       {item.ragStatus}
                     </Box>
                   </Box>
-                  <Typography
-                    sx={{
-                      color: COLORS.textSecondary,
-                      fontSize: "14px",
-                      fontWeight: 400,
-                      textAlign: "center",
-                    }}
-                  >
-                    {item.owner || "-"}
-                  </Typography>
-                  <Typography
-                    sx={{
-                      color: COLORS.textPrimary,
-                      fontSize: "14px",
-                      fontWeight: 400,
-                      textAlign: "center",
-                    }}
-                  >
-                    {item.todoItem}
-                  </Typography>
-                  <Box sx={{ display: "flex", justifyContent: "center" }}>
-                    <Box
-                      sx={{
-                        bgcolor:
-                          item.priority === "High"
-                            ? `${COLORS.red}20`
-                            : `${COLORS.amber}20`,
-                        color:
-                          item.priority === "High" ? COLORS.red : COLORS.amber,
-                        px: 1.5,
-                        py: 0.5,
-                        borderRadius: "20px",
-                        fontSize: "10px",
-                        fontWeight: 500,
-                      }}
-                    >
-                      {item.priority}
-                    </Box>
-                  </Box>
-                  <Typography
-                    sx={{
-                      color: COLORS.textSecondary,
-                      fontSize: "12px",
-                      textAlign: "center",
-                    }}
-                  >
-                    {formatDate(item.dueDate)}
-                  </Typography>
                 </Box>
               ))
             )}
