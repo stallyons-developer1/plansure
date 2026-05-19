@@ -24,6 +24,7 @@ import {
   PersonOutlined as UserIcon,
   BlockOutlined as BlockIcon,
   FolderOutlined as FolderIcon,
+  Send as SendIcon,
 } from "@mui/icons-material";
 import AdminLayout from "../../layouts/AdminLayout";
 import { COLORS } from "../../constants/colors";
@@ -106,6 +107,7 @@ const UserManagement = () => {
   const [blockModalOpen, setBlockModalOpen] = useState(false);
   const [userToBlock, setUserToBlock] = useState<User | null>(null);
   const [blockLoading, setBlockLoading] = useState(false);
+  const [resendingUserId, setResendingUserId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -244,6 +246,17 @@ const UserManagement = () => {
       console.error("Error blocking/unblocking user:", error);
     } finally {
       setBlockLoading(false);
+    }
+  };
+
+  const handleResendInvite = async (userId: string) => {
+    setResendingUserId(userId);
+    try {
+      await userAPI.resendInvite(userId);
+    } catch (error) {
+      console.error("Error resending invite:", error);
+    } finally {
+      setResendingUserId(null);
     }
   };
 
@@ -839,6 +852,23 @@ const UserManagement = () => {
                   <Box
                     sx={{ display: "flex", justifyContent: "center", gap: 2 }}
                   >
+                    {user.status === "pending" && (
+                      resendingUserId === user._id ? (
+                        <CircularProgress size={18} sx={{ color: COLORS.blue }} />
+                      ) : (
+                        <SendIcon
+                          onClick={() => handleResendInvite(user._id)}
+                          sx={{
+                            fontSize: 20,
+                            color: COLORS.blue,
+                            cursor: "pointer",
+                            opacity: 0.5,
+                            "&:hover": { opacity: 1 },
+                          }}
+                          titleAccess="Resend Invite"
+                        />
+                      )
+                    )}
                     <Box
                       component="img"
                       src={editIcon}

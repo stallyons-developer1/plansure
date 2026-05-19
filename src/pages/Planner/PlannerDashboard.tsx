@@ -1,36 +1,347 @@
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Box, Card, Typography, Button } from "@mui/material";
+import {
+  Box,
+  Card,
+  Typography,
+  Button,
+  CircularProgress,
+  FormControl,
+  Select,
+  MenuItem,
+} from "@mui/material";
+import type { SelectChangeEvent } from "@mui/material/Select";
 import {
   CalendarTodayOutlined as CalendarIcon,
-  GroupsOutlined as MeetingIcon,
-  FileDownloadOutlined as ExportIcon,
+  KeyboardArrowDown as ArrowDownIcon,
 } from "@mui/icons-material";
 import PlannerLayout from "../../layouts/PlannerLayout";
 import { COLORS } from "../../constants/colors";
 import { useAuth } from "../../context/AuthContext";
+import { dashboardAPI, projectAPI } from "../../services/api";
 import uploadIcon from "../../assets/sidebar/upload.png";
 import dashboardIcon from "../../assets/sidebar/dashboard.png";
-import activitiesIcon from "../../assets/sidebar/activitiesClipboard.png";
 import actionIcon from "../../assets/sidebar/action.png";
 import projectsIcon from "../../assets/sidebar/projects.png";
 import activitiesPngIcon from "../../assets/activities.png";
 import WeeklyReadinessSnapshot from "../../components/WeeklyReadinessSnapshot";
 import RecentActivity from "../../components/RecentActivity";
+import type { ActivityItem } from "../../components/RecentActivity";
 
 const blueFilter =
   "brightness(0) saturate(100%) invert(45%) sepia(98%) saturate(1752%) hue-rotate(199deg) brightness(101%) contrast(96%)";
 const greenFilter =
   "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(632%) hue-rotate(93deg) brightness(92%) contrast(87%)";
 
+interface DashboardStats {
+  projects: {
+    total: number;
+    byPhase: Record<string, number>;
+  };
+  cycle: {
+    current: string;
+    status: string;
+    dayInfo: {
+      currentDay: number;
+      totalDays: number;
+      daysRemaining: number;
+    } | null;
+    programmeId: string;
+    programmeName: string;
+  };
+  activities: {
+    total: number;
+    green: number;
+    amber: number;
+    red: number;
+  };
+  actions: {
+    open: number;
+    overdue: number;
+    pending: number;
+  };
+}
+
+interface RagDistribution {
+  total: number;
+  green: { count: number; percentage: number };
+  amber: { count: number; percentage: number };
+  red: { count: number; percentage: number };
+}
+
+interface Project {
+  _id: string;
+  name: string;
+  phase: string;
+  status: string;
+}
+
 const PlannerDashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const userName = user?.email?.split("@")[0] || "Planner";
 
+  const [_loading, setLoading] = useState(true);
+  const [projectsLoading, setProjectsLoading] = useState(true);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [ragDistribution, setRagDistribution] =
+    useState<RagDistribution | null>(null);
+  const [recentActivities, setRecentActivities] = useState<ActivityItem[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<string>("");
+
+  useEffect(() => {
+    const fetchProjects = async () => {
+      try {
+        setProjectsLoading(true);
+        const res = await projectAPI.getAll();
+        if (res.success) {
+          const projectsList = res.projects || [];
+          setProjects(projectsList);
+          // Select first project by default
+          if (projectsList.length > 0 && !selectedProjectId) {
+            setSelectedProjectId(projectsList[0]._id);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching projects:", error);
+      } finally {
+        setProjectsLoading(false);
+        setLoading(false);
+      }
+    };
+
+    fetchProjects();
+  }, []);
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      // Only fetch when a project is selected
+      if (!selectedProjectId) {
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const [statsRes, ragRes, activityRes] = await Promise.all([
+          dashboardAPI.getStats(selectedProjectId),
+          dashboardAPI.getRagDistribution(selectedProjectId),
+          dashboardAPI.getRecentActivity(6, selectedProjectId),
+        ]);
+
+        if (statsRes.success) {
+          setStats(statsRes.stats);
+        }
+        if (ragRes.success) {
+          setRagDistribution(ragRes.distribution);
+        }
+        if (activityRes.success) {
+          setRecentActivities(activityRes.activities || []);
+        }
+      } catch (error) {
+        console.error("Error fetching dashboard data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, [selectedProjectId]);
+
+  const handleProjectChange = (event: SelectChangeEvent<string>) => {
+    setSelectedProjectId(event.target.value);
+  };
+
+  const getSelectedProjectName = () => {
+    const project = projects.find((p) => p._id === selectedProjectId);
+    return project?.name || "Select Project";
+  };
+
+  const getCycleStatusColor = (status: string) => {
+    switch (status) {
+      case "Draft":
+        return COLORS.textSecondary;
+      case "In Review":
+        return COLORS.amber;
+      case "Approved":
+        return COLORS.green;
+      case "Uploaded":
+        return COLORS.green;
+      case "Closed":
+        return COLORS.blue;
+      default:
+        return COLORS.textSecondary;
+    }
+  };
+
+  const getPhaseBreakdown = () => {
+    if (!stats?.projects.byPhase) return "No active projects";
+    const phases = Object.entries(stats.projects.byPhase);
+    if (phases.length === 0) return "No active projects";
+    return phases
+      .map(([phase, count]) => `${count} ${phase.toLowerCase()}`)
+      .join(", ");
+  };
+
+  if (projectsLoading) {
+    return (
+      <PlannerLayout
+        title="Dashboard"
+        subtitle="Planner overview and quick actions"
+      >
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            height: "50vh",
+          }}
+        >
+          <CircularProgress sx={{ color: COLORS.blue }} />
+        </Box>
+      </PlannerLayout>
+    );
+  }
+
+  // Show empty state when no projects exist
+  if (projects.length === 0) {
+    return (
+      <PlannerLayout
+        title="Dashboard"
+        subtitle="Planner overview and quick actions"
+      >
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            height: "60vh",
+            textAlign: "center",
+          }}
+        >
+          <Box
+            component="img"
+            src={projectsIcon}
+            sx={{
+              width: 80,
+              height: 80,
+              opacity: 0.5,
+              mb: 3,
+              filter:
+                "brightness(0) saturate(100%) invert(50%) sepia(0%) saturate(0%) hue-rotate(0deg)",
+            }}
+          />
+          <Typography
+            sx={{
+              color: COLORS.textPrimary,
+              fontSize: "20px",
+              fontWeight: 600,
+              mb: 1,
+            }}
+          >
+            No Projects Available
+          </Typography>
+          <Typography
+            sx={{
+              color: COLORS.textSecondary,
+              fontSize: "14px",
+              mb: 3,
+              maxWidth: 400,
+            }}
+          >
+            Create a new project and upload a programme to see your dashboard
+            data
+          </Typography>
+          <Button
+            onClick={() =>
+              navigate("/planner/projects", {
+                state: { openCreateModal: true },
+              })
+            }
+            sx={{
+              bgcolor: COLORS.blue,
+              color: "#fff",
+              textTransform: "none",
+              px: 4,
+              py: 1.5,
+              borderRadius: "8px",
+              fontSize: "14px",
+              fontWeight: 500,
+              "&:hover": {
+                bgcolor: "#2563eb",
+              },
+            }}
+          >
+            Create Project
+          </Button>
+        </Box>
+      </PlannerLayout>
+    );
+  }
+
   return (
     <PlannerLayout
       title="Dashboard"
       subtitle="Planner overview and quick actions"
+      headerAction={
+        <FormControl size="small" sx={{ minWidth: 200 }}>
+          <Select
+            value={selectedProjectId}
+            onChange={handleProjectChange}
+            displayEmpty
+            IconComponent={ArrowDownIcon}
+            sx={{
+              bgcolor: COLORS.bgSecondary,
+              color: COLORS.textPrimary,
+              borderRadius: "8px",
+              border: `1px solid ${COLORS.border}`,
+              fontSize: "14px",
+              fontWeight: 500,
+              "& .MuiOutlinedInput-notchedOutline": {
+                border: "none",
+              },
+              "& .MuiSelect-icon": {
+                color: COLORS.textSecondary,
+              },
+              "&:hover": {
+                bgcolor: COLORS.bgTertiary,
+              },
+            }}
+            MenuProps={{
+              slotProps: {
+                paper: {
+                  sx: {
+                    bgcolor: COLORS.bgSecondary,
+                    border: `1px solid ${COLORS.border}`,
+                    borderRadius: "8px",
+                    mt: 1,
+                    "& .MuiMenuItem-root": {
+                      color: COLORS.textPrimary,
+                      fontSize: "14px",
+                      "&:hover": {
+                        bgcolor: COLORS.bgTertiary,
+                      },
+                      "&.Mui-selected": {
+                        bgcolor: COLORS.blueBgMedium,
+                        "&:hover": {
+                          bgcolor: COLORS.blueBgMedium,
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            }}
+          >
+            {projects.map((project) => (
+              <MenuItem key={project._id} value={project._id}>
+                {project.name}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      }
     >
       <Card
         sx={{
@@ -71,60 +382,82 @@ const PlannerDashboard = () => {
                 flexWrap: "wrap",
               }}
             >
-              <Typography
-                sx={{ color: COLORS.blue, fontWeight: 600, fontSize: "14px" }}
-              >
-                Crossrail Phase 2
-              </Typography>
+              {stats?.cycle.programmeName && (
+                <>
+                  <Typography
+                    sx={{
+                      color: COLORS.blue,
+                      fontWeight: 600,
+                      fontSize: "14px",
+                    }}
+                  >
+                    {stats.cycle.programmeName}
+                  </Typography>
+                  <Typography
+                    sx={{
+                      color: COLORS.textSecondary,
+                      fontWeight: 400,
+                      fontSize: "14px",
+                    }}
+                  >
+                    — {stats.cycle.current} cycle is currently
+                  </Typography>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 0.75,
+                      bgcolor: COLORS.bgTertiary,
+                      px: 1.5,
+                      py: 0.5,
+                      borderRadius: "20px",
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: "50%",
+                        bgcolor: getCycleStatusColor(stats.cycle.status),
+                      }}
+                    />
+                    <Typography
+                      sx={{
+                        color: getCycleStatusColor(stats.cycle.status),
+                        fontWeight: 600,
+                        fontSize: "12px",
+                      }}
+                    >
+                      {stats.cycle.status}
+                    </Typography>
+                  </Box>
+                </>
+              )}
+              {!stats?.cycle.programmeName && (
+                <Typography
+                  sx={{
+                    color: COLORS.textSecondary,
+                    fontWeight: 400,
+                    fontSize: "14px",
+                  }}
+                >
+                  No active programmes
+                </Typography>
+              )}
+            </Box>
+            {stats?.cycle.dayInfo && (
               <Typography
                 sx={{
                   color: COLORS.textSecondary,
+                  fontSize: "12px",
                   fontWeight: 400,
-                  fontSize: "14px",
                 }}
               >
-                — Week 47 cycle is currently
+                Day {stats.cycle.dayInfo.currentDay} of{" "}
+                {stats.cycle.dayInfo.totalDays} ·{" "}
+                {stats.cycle.dayInfo.daysRemaining} days remaining
               </Typography>
-              <Box
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 0.75,
-                  bgcolor: COLORS.bgTertiary,
-                  px: 1.5,
-                  py: 0.5,
-                  borderRadius: "20px",
-                }}
-              >
-                <Box
-                  sx={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: "50%",
-                    bgcolor: COLORS.amber,
-                  }}
-                />
-                <Typography
-                  sx={{
-                    color: COLORS.amber,
-                    fontWeight: 600,
-                    fontSize: "12px",
-                  }}
-                >
-                  In Progress
-                </Typography>
-              </Box>
-            </Box>
-            <Typography
-              sx={{
-                color: COLORS.textSecondary,
-                fontSize: "12px",
-                fontWeight: 400,
-              }}
-            >
-              Cycle opened Mon 24 Mar · Review meeting scheduled Thu 27 Mar
-              14:00
-            </Typography>
+            )}
           </Box>
 
           <Box
@@ -246,7 +579,7 @@ const PlannerDashboard = () => {
                   mb: 0.5,
                 }}
               >
-                3
+                {stats?.projects.total || 0}
               </Typography>
               <Typography
                 sx={{
@@ -255,7 +588,7 @@ const PlannerDashboard = () => {
                   fontWeight: 400,
                 }}
               >
-                2 in delivery, 1 pre-construction
+                {getPhaseBreakdown()}
               </Typography>
             </Box>
             <Box
@@ -318,7 +651,7 @@ const PlannerDashboard = () => {
                   mb: 0.5,
                 }}
               >
-                W47
+                {stats?.cycle.current || "N/A"}
               </Typography>
               <Typography
                 sx={{
@@ -327,7 +660,9 @@ const PlannerDashboard = () => {
                   fontWeight: 400,
                 }}
               >
-                Day 2 of 5 · 3 days remaining
+                {stats?.cycle.dayInfo
+                  ? `Day ${stats.cycle.dayInfo.currentDay} of ${stats.cycle.dayInfo.totalDays} · ${stats.cycle.dayInfo.daysRemaining} days remaining`
+                  : "No active cycle"}
               </Typography>
             </Box>
             <Box
@@ -380,7 +715,7 @@ const PlannerDashboard = () => {
                   mb: 0.5,
                 }}
               >
-                50
+                {stats?.activities.total || 0}
               </Typography>
               <Box
                 sx={{
@@ -398,7 +733,7 @@ const PlannerDashboard = () => {
                     fontWeight: 400,
                   }}
                 >
-                  24 on track
+                  {stats?.activities.green || 0} on track
                 </Typography>
                 <Typography
                   component="span"
@@ -414,7 +749,7 @@ const PlannerDashboard = () => {
                     fontWeight: 400,
                   }}
                 >
-                  18 at risk
+                  {stats?.activities.amber || 0} at risk
                 </Typography>
                 <Typography
                   component="span"
@@ -426,7 +761,7 @@ const PlannerDashboard = () => {
                   component="span"
                   sx={{ color: COLORS.red, fontSize: "12px", fontWeight: 400 }}
                 >
-                  8 critical
+                  {stats?.activities.red || 0} critical
                 </Typography>
               </Box>
             </Box>
@@ -490,7 +825,7 @@ const PlannerDashboard = () => {
                   mb: 0.5,
                 }}
               >
-                12
+                {stats?.actions.open || 0}
               </Typography>
               <Box
                 sx={{
@@ -504,7 +839,7 @@ const PlannerDashboard = () => {
                   component="span"
                   sx={{ color: COLORS.red, fontSize: "12px", fontWeight: 400 }}
                 >
-                  4 overdue
+                  {stats?.actions.overdue || 0} overdue
                 </Typography>
                 <Typography
                   component="span"
@@ -520,7 +855,7 @@ const PlannerDashboard = () => {
                     fontWeight: 400,
                   }}
                 >
-                  8 pending
+                  {stats?.actions.pending || 0} pending
                 </Typography>
               </Box>
             </Box>
@@ -557,11 +892,19 @@ const PlannerDashboard = () => {
           mb: 3,
         }}
       >
-        <WeeklyReadinessSnapshot />
-        <RecentActivity onViewAll={() => {}} />
+        <WeeklyReadinessSnapshot
+          weekLabel={stats?.cycle.current || "Current Week"}
+          totalActivities={ragDistribution?.total || 0}
+          distribution={ragDistribution || undefined}
+        />
+        <RecentActivity
+          activities={recentActivities}
+          projectName={getSelectedProjectName()}
+          onViewAll={() => {}}
+        />
       </Box>
 
-      <Box sx={{ mb: 3 }}>
+      {/* <Box sx={{ mb: 3 }}>
         <Typography
           sx={{
             color: COLORS.textPrimary,
@@ -584,6 +927,7 @@ const PlannerDashboard = () => {
           }}
         >
           <Card
+            onClick={() => navigate("/planner/programs-upload")}
             sx={{
               bgcolor: COLORS.bgSecondary,
               border: `1px solid ${COLORS.border}`,
@@ -682,6 +1026,7 @@ const PlannerDashboard = () => {
           </Card>
 
           <Card
+            onClick={() => navigate("/planner/projects")}
             sx={{
               bgcolor: COLORS.bgSecondary,
               border: `1px solid ${COLORS.border}`,
@@ -733,6 +1078,7 @@ const PlannerDashboard = () => {
           </Card>
 
           <Card
+            onClick={() => navigate("/planner/exports")}
             sx={{
               bgcolor: COLORS.bgSecondary,
               border: `1px solid ${COLORS.border}`,
@@ -780,7 +1126,7 @@ const PlannerDashboard = () => {
             </Typography>
           </Card>
         </Box>
-      </Box>
+      </Box> */}
     </PlannerLayout>
   );
 };

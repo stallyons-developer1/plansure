@@ -171,8 +171,9 @@ export const programmeAPI = {
     return response.data;
   },
 
-  getWeeklyControl: async (id: string) => {
-    const response = await api.get(`/programmes/${id}/weekly-control`);
+  getWeeklyControl: async (id: string, weekNumber?: number) => {
+    const params = weekNumber ? `?weekNumber=${weekNumber}` : "";
+    const response = await api.get(`/programmes/${id}/weekly-control${params}`);
     return response.data;
   },
 
@@ -256,6 +257,24 @@ export const programmeAPI = {
     const response = await api.get(
       `/programmes/project/${projectId}/activities?${params.toString()}`,
     );
+    return response.data;
+  },
+
+  getWeeksStatus: async (id: string) => {
+    const response = await api.get(`/programmes/${id}/weeks-status`);
+    return response.data;
+  },
+
+  closeWeek: async (id: string, weekNumber: number, closeType?: string, notes?: string) => {
+    const response = await api.post(`/programmes/${id}/close-week/${weekNumber}`, {
+      closeType: closeType || "Normal Close",
+      notes,
+    });
+    return response.data;
+  },
+
+  reopenWeek: async (id: string, weekNumber: number) => {
+    const response = await api.post(`/programmes/${id}/reopen-week/${weekNumber}`);
     return response.data;
   },
 };
@@ -394,25 +413,38 @@ export const actionAPI = {
 };
 
 export const dashboardAPI = {
-  getStats: async () => {
-    const response = await api.get("/dashboard/stats");
+  getStats: async (projectId?: string) => {
+    const params = projectId ? `?projectId=${projectId}` : "";
+    const response = await api.get(`/dashboard/stats${params}`);
     return response.data;
   },
 
-  getRagDistribution: async (programmeId?: string) => {
-    const params = programmeId ? `?programmeId=${programmeId}` : "";
-    const response = await api.get(`/dashboard/rag-distribution${params}`);
+  getRagDistribution: async (projectId?: string, programmeId?: string) => {
+    const params = new URLSearchParams();
+    if (projectId) params.append("projectId", projectId);
+    if (programmeId) params.append("programmeId", programmeId);
+    const queryString = params.toString() ? `?${params.toString()}` : "";
+    const response = await api.get(`/dashboard/rag-distribution${queryString}`);
     return response.data;
   },
 
-  getRecentActivity: async (limit: number = 10) => {
-    const response = await api.get(`/dashboard/recent-activity?limit=${limit}`);
+  getRecentActivity: async (limit: number = 10, projectId?: string) => {
+    const params = new URLSearchParams();
+    params.append("limit", limit.toString());
+    if (projectId) params.append("projectId", projectId);
+    const response = await api.get(`/dashboard/recent-activity?${params.toString()}`);
     return response.data;
   },
 
   getWeeklyDashboard: async (projectId?: string) => {
     const params = projectId ? `?projectId=${projectId}` : "";
     const response = await api.get(`/dashboard/weekly${params}`);
+    return response.data;
+  },
+
+  getGovernance: async (projectId?: string) => {
+    const params = projectId ? `?projectId=${projectId}` : "";
+    const response = await api.get(`/dashboard/governance${params}`);
     return response.data;
   },
 };
@@ -471,6 +503,45 @@ export const fcmAPI = {
 
   getStatus: async () => {
     const response = await api.get("/fcm/status");
+    return response.data;
+  },
+};
+
+export const exportAPI = {
+  getGatingStatus: async () => {
+    const response = await api.get("/exports/gating-status");
+    return response.data;
+  },
+
+  getHistory: async () => {
+    const response = await api.get("/exports/history");
+    return response.data;
+  },
+
+  generateWeeklyPlan: async () => {
+    const response = await api.post("/exports/weekly-plan", {}, {
+      responseType: "blob",
+    });
+    return response;
+  },
+
+  generatePlannerTodo: async () => {
+    const response = await api.post("/exports/planner-todo", {}, {
+      responseType: "blob",
+    });
+    return response;
+  },
+
+  download: async (id: string) => {
+    const response = await api.get(`/exports/download/${id}`, {
+      responseType: "blob",
+    });
+    return response;
+  },
+
+  // Keep old methods for backward compatibility
+  getProjects: async () => {
+    const response = await api.get("/exports/projects");
     return response.data;
   },
 };

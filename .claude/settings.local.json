@@ -6,7 +6,12 @@
       "Bash(npm run build:*)",
       "Bash(tree:*)",
       "Bash(curl:*)",
-      "WebFetch(domain:docs.google.com)"
+      "WebFetch(domain:docs.google.com)",
+      "Bash(node scripts/fixLookaheadDates.js:*)",
+      "Bash(ls:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push)"
     ]
   }
 }

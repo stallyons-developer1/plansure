@@ -25,7 +25,7 @@ import {
   CalendarToday as CalendarIcon,
 } from "@mui/icons-material";
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import AdminLayout from "../../layouts/AdminLayout";
 import { COLORS } from "../../constants/colors";
 import { projectAPI } from "../../services/api";
@@ -42,6 +42,9 @@ interface Project {
   startDate: string;
   endDate?: string;
   governanceScore?: number;
+  totalActivities?: number;
+  openActions?: number;
+  progress?: number;
   createdAt: string;
 }
 
@@ -141,10 +144,13 @@ const ProjectCard = ({
   project: Project;
   onViewDashboard: () => void;
 }) => {
-  const statusColor = project.status === "active" ? COLORS.green : COLORS.amber;
+  const statusColor = project.status.toLowerCase() === "active" ? COLORS.green : COLORS.amber;
   const governanceScore = project.governanceScore || 0;
-  const governanceColor = governanceScore >= 70 ? COLORS.green : COLORS.amber;
-  const governanceStatus = governanceScore >= 70 ? "green" : "amber";
+  const governanceColor = governanceScore >= 70 ? COLORS.green : governanceScore >= 50 ? COLORS.amber : COLORS.red;
+  const governanceStatus = governanceScore >= 70 ? "green" : governanceScore >= 50 ? "amber" : "red";
+  const totalActivities = project.totalActivities || 0;
+  const openActions = project.openActions || 0;
+  const progress = project.progress || 0;
 
   return (
     <Card
@@ -294,7 +300,7 @@ const ProjectCard = ({
                 fontWeight: 700,
               }}
             >
-              0
+              {totalActivities}
             </Typography>
             <Typography
               sx={{
@@ -326,7 +332,7 @@ const ProjectCard = ({
                 fontWeight: 700,
               }}
             >
-              0
+              {openActions}
             </Typography>
             <Typography
               sx={{
@@ -366,12 +372,12 @@ const ProjectCard = ({
               fontWeight: 400,
             }}
           >
-            0%
+            {progress}%
           </Typography>
         </Box>
         <LinearProgress
           variant="determinate"
-          value={0}
+          value={progress}
           sx={{
             height: 6,
             borderRadius: 3,
@@ -421,6 +427,7 @@ const ProjectCard = ({
 
 const AdminProjects = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -436,6 +443,15 @@ const AdminProjects = () => {
   useEffect(() => {
     fetchProjects();
   }, []);
+
+  // Check if navigated with openCreateModal state
+  useEffect(() => {
+    if (location.state?.openCreateModal) {
+      setNewProjectModalOpen(true);
+      // Clear the state to prevent modal reopening on refresh
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   const fetchProjects = async () => {
     setIsLoading(true);
