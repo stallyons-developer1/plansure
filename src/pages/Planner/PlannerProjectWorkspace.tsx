@@ -293,6 +293,9 @@ const PlannerProjectWorkspace = () => {
     _id: string;
     name: string;
     totalActivities: number;
+    cycleStatus: string;
+    isLocked: boolean;
+    overrideReason?: string;
     summary: {
       green: number;
       amber: number;
@@ -534,6 +537,9 @@ const PlannerProjectWorkspace = () => {
             name: programme.name,
             totalActivities:
               programme.extractedData?.totalActivities || activities.length,
+            cycleStatus: programme.cycleStatus || "Draft",
+            isLocked: programme.isLocked || false,
+            overrideReason: programme.overrideReason,
             summary: {
               green: summary.green || 0,
               amber: summary.amber || 0,
@@ -682,7 +688,12 @@ const PlannerProjectWorkspace = () => {
     setClosingWeek(weekNumber);
     try {
       // Close 2 weeks at once since we display 2 weeks together
-      console.log("[PM Override] Closing week", weekNumber, "closeType:", closeType);
+      console.log(
+        "[PM Override] Closing week",
+        weekNumber,
+        "closeType:",
+        closeType,
+      );
       const response1 = await programmeAPI.closeWeek(
         uploadedProgramme._id,
         weekNumber,
@@ -705,17 +716,29 @@ const PlannerProjectWorkspace = () => {
       }
 
       if (response1.success) {
-        console.log("[PM Override] response1 success, fetching updated weeks status...");
+        console.log(
+          "[PM Override] response1 success, fetching updated weeks status...",
+        );
         // Fetch updated weeks status
-        const updatedWeeksStatus = await programmeAPI.getWeeksStatus(uploadedProgramme._id);
+        const updatedWeeksStatus = await programmeAPI.getWeeksStatus(
+          uploadedProgramme._id,
+        );
         console.log("[PM Override] updatedWeeksStatus:", {
           closedWeeksCount: updatedWeeksStatus.closedWeeksCount,
           currentWeekNumber: updatedWeeksStatus.currentWeekNumber,
-          weeks: updatedWeeksStatus.weeks?.map((w: { weekNumber: number; canClose: boolean; isClosed: boolean }) => ({
-            weekNumber: w.weekNumber,
-            canClose: w.canClose,
-            isClosed: w.isClosed,
-          })).slice(0, 15), // Only log first 15 weeks for readability
+          weeks: updatedWeeksStatus.weeks
+            ?.map(
+              (w: {
+                weekNumber: number;
+                canClose: boolean;
+                isClosed: boolean;
+              }) => ({
+                weekNumber: w.weekNumber,
+                canClose: w.canClose,
+                isClosed: w.isClosed,
+              }),
+            )
+            .slice(0, 15), // Only log first 15 weeks for readability
         });
 
         if (updatedWeeksStatus.success) {
@@ -723,9 +746,18 @@ const PlannerProjectWorkspace = () => {
 
           // Explicitly fetch weekly control data for the NEXT closable week
           // (weekNumber + 2 because we just closed weekNumber and weekNumber+1)
-          const nextClosableWeek = updatedWeeksStatus.weeks.find((w: { canClose: boolean }) => w.canClose);
-          const nextWeekNumber = nextClosableWeek?.weekNumber || updatedWeeksStatus.currentWeekNumber;
-          console.log("[PM Override] Next closable week:", nextClosableWeek?.weekNumber, "Using weekNumber:", nextWeekNumber);
+          const nextClosableWeek = updatedWeeksStatus.weeks.find(
+            (w: { canClose: boolean }) => w.canClose,
+          );
+          const nextWeekNumber =
+            nextClosableWeek?.weekNumber ||
+            updatedWeeksStatus.currentWeekNumber;
+          console.log(
+            "[PM Override] Next closable week:",
+            nextClosableWeek?.weekNumber,
+            "Using weekNumber:",
+            nextWeekNumber,
+          );
           await fetchWeeklyControlData(uploadedProgramme._id, nextWeekNumber);
         }
 
@@ -751,24 +783,35 @@ const PlannerProjectWorkspace = () => {
   };
 
   // Check if an action is from a closed week (should be disabled after PM Override)
-  const isActionFromClosedWeek = (action: { createdAt?: string; status?: string }) => {
+  const isActionFromClosedWeek = (action: {
+    createdAt?: string;
+    status?: string;
+  }) => {
     if (!weeksStatus?.weeks || !action.createdAt) return false;
 
     // Actions that are completed or cancelled should not be disabled
-    if (action.status === 'Completed' || action.status === 'Cancelled') return false;
+    if (action.status === "Completed" || action.status === "Cancelled")
+      return false;
 
     const actionDate = new Date(action.createdAt);
 
     // Find the most recently closed week
-    const closedWeeks = weeksStatus.weeks.filter((w) => w.isClosed && w.closedAt);
+    const closedWeeks = weeksStatus.weeks.filter(
+      (w) => w.isClosed && w.closedAt,
+    );
     if (closedWeeks.length === 0) return false;
 
     // Find the most recent closure by closedAt date
-    const mostRecentClosure = closedWeeks.reduce((latest, week) => {
-      if (!latest) return week;
-      if (!week.closedAt || !latest.closedAt) return latest;
-      return new Date(week.closedAt) > new Date(latest.closedAt) ? week : latest;
-    }, null as typeof closedWeeks[0] | null);
+    const mostRecentClosure = closedWeeks.reduce(
+      (latest, week) => {
+        if (!latest) return week;
+        if (!week.closedAt || !latest.closedAt) return latest;
+        return new Date(week.closedAt) > new Date(latest.closedAt)
+          ? week
+          : latest;
+      },
+      null as (typeof closedWeeks)[0] | null,
+    );
 
     if (!mostRecentClosure?.closedAt) return false;
 
@@ -778,23 +821,80 @@ const PlannerProjectWorkspace = () => {
     return actionDate < closureDate;
   };
 
-  const handleCycleAction = () => {
-    if (cycleStage === "draft") {
-      setCycleStage("meetingOpen");
-      setCurrentStep(2);
-    } else if (cycleStage === "meetingOpen") {
-      setCycleStage("execution");
-      setCurrentStep(3);
+  const handleCycleAction = async () => {
+    if (!uploadedProgramme?._id) return;
+
+    try {
+      let nextStatus = "";
+      let nextStep = currentStep;
+
+      if (cycleStage === "draft") {
+        nextStatus = "Meeting Open";
+        nextStep = 2;
+      } else if (cycleStage === "meetingOpen") {
+        nextStatus = "Execution";
+        nextStep = 3;
+      }
+
+      if (nextStatus) {
+        const response = await programmeAPI.updateCycleStatus(
+          uploadedProgramme._id,
+          nextStatus,
+        );
+        if (response.success) {
+          if (cycleStage === "draft") {
+            setCycleStage("meetingOpen");
+          } else if (cycleStage === "meetingOpen") {
+            setCycleStage("execution");
+          }
+          setCurrentStep(nextStep);
+          setUploadedProgramme({
+            ...uploadedProgramme,
+            cycleStatus: nextStatus,
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Failed to update cycle status:", error);
+    }
+  };
+
+  const handleFinalClose = async () => {
+    if (!uploadedProgramme?._id) return;
+
+    try {
+      const response = await programmeAPI.updateCycleStatus(
+        uploadedProgramme._id,
+        "Closed",
+      );
+      if (response.success) {
+        setCurrentStep(5);
+        setIsWeekClosed(true);
+        setUploadedProgramme({
+          ...uploadedProgramme,
+          cycleStatus: "Closed",
+          isLocked: true,
+        });
+      }
+    } catch (error) {
+      console.error("Failed to close week:", error);
     }
   };
 
   const getCycleButtonText = () => {
-    if (cycleStage === "draft") return "Open Meeting";
-    if (cycleStage === "meetingOpen") return "Start Execution";
+    const status = weeklyControlData?.stats?.cycleStatus;
+    if (status === "Uploaded" || status === "Draft" || cycleStage === "draft")
+      return "Open Meeting";
+    if (status === "Meeting Open" || cycleStage === "meetingOpen")
+      return "Start Execution";
     return "In Execution";
   };
 
   const getCycleStatusText = () => {
+    // Use actual cycleStatus from weeklyControlData if available
+    if (weeklyControlData?.stats?.cycleStatus) {
+      return weeklyControlData.stats.cycleStatus;
+    }
     if (cycleStage === "draft") return "Draft";
     if (cycleStage === "meetingOpen") return "Meeting Open";
     return "Execution";
@@ -897,8 +997,11 @@ const PlannerProjectWorkspace = () => {
         // Refresh weekly control data to remove completed activity from blocked/risk list
         if (uploadedProgramme?._id) {
           // Use the SAME weekNumber that the useEffect uses to ensure consistent data
-          const closableWeek = weeksStatus?.weeks?.find((w: { canClose: boolean }) => w.canClose);
-          const weekNumber = closableWeek?.weekNumber || weeksStatus?.currentWeekNumber;
+          const closableWeek = weeksStatus?.weeks?.find(
+            (w: { canClose: boolean }) => w.canClose,
+          );
+          const weekNumber =
+            closableWeek?.weekNumber || weeksStatus?.currentWeekNumber;
           await fetchWeeklyControlData(uploadedProgramme._id, weekNumber);
         }
         handleCloseCompleteConfirm();
@@ -975,8 +1078,11 @@ const PlannerProjectWorkspace = () => {
         await new Promise((resolve) => setTimeout(resolve, 300));
 
         // Use the SAME weekNumber that the useEffect uses to ensure consistent data
-        const closableWeek = weeksStatus?.weeks?.find((w: { canClose: boolean }) => w.canClose);
-        const weekNumber = closableWeek?.weekNumber || weeksStatus?.currentWeekNumber;
+        const closableWeek = weeksStatus?.weeks?.find(
+          (w: { canClose: boolean }) => w.canClose,
+        );
+        const weekNumber =
+          closableWeek?.weekNumber || weeksStatus?.currentWeekNumber;
 
         // Fetch weekly control data FIRST (this updates all 3 tabs)
         await fetchWeeklyControlData(uploadedProgramme._id, weekNumber);
@@ -1172,9 +1278,29 @@ const PlannerProjectWorkspace = () => {
         cycleStatus,
       });
 
-      // Green activities ready = weeklyPlanPreview count (activities with green RAG and no open actions)
+      // Sync cycleStage and currentStep with actual cycle status from database
+      if (cycleStatus === "Uploaded" || cycleStatus === "Draft") {
+        setCycleStage("draft");
+        setCurrentStep(1);
+      } else if (cycleStatus === "Meeting Open") {
+        setCycleStage("meetingOpen");
+        setCurrentStep(2);
+      } else if (cycleStatus === "Execution") {
+        setCycleStage("execution");
+        setCurrentStep(3);
+      } else if (cycleStatus === "Close-Out Eligible") {
+        setCycleStage("execution");
+        setCurrentStep(4);
+      } else if (cycleStatus === "Closed") {
+        setCycleStage("execution");
+        setCurrentStep(5);
+      }
+
+      // Green activities ready = count of green RAG activities in current week
       const greenActivitiesReady =
-        weeklyControlData.weeklyPlanPreview?.length || 0;
+        weeklyControlData.ragDistribution?.green ||
+        weeklyControlData.stats?.green ||
+        0;
 
       // Outstanding actions = open + inProgress
       const outstandingActions =
@@ -1195,20 +1321,23 @@ const PlannerProjectWorkspace = () => {
         blockedActivities,
       });
 
-      // Update closure checklist based on real data
-      setClosureChecklist((prev) => ({
-        ...prev,
-        overdueAcknowledged:
-          overdueActions === 0 ? true : prev.overdueAcknowledged,
-        blockedAcknowledged:
-          blockedActivities === 0 ? true : prev.blockedAcknowledged,
-      }));
+      // Update closure checklist based on real data - auto-check all
+      setClosureChecklist({
+        // Planner review complete: checked when there are green activities ready
+        plannerReview: greenActivitiesReady > 0,
+        // To-do list generated: checked when no outstanding actions remain
+        todoGenerated: outstandingActions === 0,
+        // Overdue acknowledged: checked when no overdue actions
+        overdueAcknowledged: overdueActions === 0,
+        // Blocked acknowledged: checked when no blocked activities
+        blockedAcknowledged: blockedActivities === 0,
+      });
     }
   }, [weeklyControlData, uploadedProgramme]);
 
   // Handle export downloads
   const handleExportWeeklyPlan = async () => {
-    if (exportGatingStatus.isGated || !uploadedProgramme) return;
+    if (!uploadedProgramme) return;
 
     try {
       setIsExporting("weekly");
@@ -1235,7 +1364,7 @@ const PlannerProjectWorkspace = () => {
   };
 
   const handleExportPlannerTodo = async () => {
-    if (exportGatingStatus.isGated || !uploadedProgramme) return;
+    if (!uploadedProgramme) return;
 
     try {
       setIsExporting("todo");
@@ -1289,7 +1418,21 @@ const PlannerProjectWorkspace = () => {
             blocked: 0,
           };
 
-        setUploadedProgramme(programme);
+        setUploadedProgramme({
+          _id: programme._id,
+          name: programme.name,
+          totalActivities:
+            programme.extractedData?.totalActivities || activities.length,
+          cycleStatus: programme.cycleStatus || "Draft",
+          isLocked: programme.isLocked || false,
+          overrideReason: programme.overrideReason,
+          summary: {
+            green: summary.green || 0,
+            amber: summary.amber || 0,
+            red: summary.red || 0,
+            inLookahead: summary.inLookahead || activities.length,
+          },
+        });
         setUploadedFile(null);
 
         setLookaheadData({
@@ -1403,19 +1546,14 @@ const PlannerProjectWorkspace = () => {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  // Use weeklyControlData actionsByStatus which filters out actions from closed weeks
-  // Fall back to projectActions count if weeklyControlData is not available
+  // Calculate action stats from projectActions (same data source as the table)
   const actionStats = {
-    total: weeklyControlData?.actionsByStatus
-      ? (weeklyControlData.actionsByStatus.open || 0) +
-        (weeklyControlData.actionsByStatus.inProgress || 0) +
-        (weeklyControlData.actionsByStatus.closed || 0)
-      : projectActions.length,
-    open: weeklyControlData?.actionsByStatus?.open ?? projectActions.filter((a) => a.status === "Open").length,
-    inProgress: weeklyControlData?.actionsByStatus?.inProgress ?? projectActions.filter((a) => a.status === "In Progress").length,
-    closed: weeklyControlData?.actionsByStatus?.closed ?? projectActions.filter((a) => a.status === "Completed").length,
-    overdue: weeklyControlData?.actionsByStatus?.overdue ?? projectActions.filter(
-      (a) => new Date(a.dueDate) < new Date() && a.status !== "Completed",
+    total: projectActions.length,
+    open: projectActions.filter((a) => a.status === "Open").length,
+    inProgress: projectActions.filter((a) => a.status === "In Progress").length,
+    closed: projectActions.filter((a) => a.status === "Completed").length,
+    overdue: projectActions.filter(
+      (a) => a.dueDate && new Date(a.dueDate) < new Date() && a.status !== "Completed",
     ).length,
   };
 
@@ -2898,7 +3036,8 @@ const PlannerProjectWorkspace = () => {
                                       ragZone.zone === "Weeks 1-2" ||
                                       ragZone.zone === "In Progress";
                                     const canAssign =
-                                      ((isReady && isAssignable) || isOverdue) &&
+                                      ((isReady && isAssignable) ||
+                                        isOverdue) &&
                                       !weeklyControlData?.isProjectEnded;
 
                                     return (
@@ -3990,14 +4129,21 @@ const PlannerProjectWorkspace = () => {
                               width: 16,
                               height: 16,
                               cursor:
-                                action.status === "Completed" || isActionFromClosedWeek(action)
+                                action.status === "Completed" ||
+                                isActionFromClosedWeek(action)
                                   ? "not-allowed"
                                   : "pointer",
                               opacity:
-                                action.status === "Completed" || isActionFromClosedWeek(action) ? 0.3 : 0.7,
+                                action.status === "Completed" ||
+                                isActionFromClosedWeek(action)
+                                  ? 0.3
+                                  : 0.7,
                               "&:hover": {
                                 opacity:
-                                  action.status === "Completed" || isActionFromClosedWeek(action) ? 0.3 : 1,
+                                  action.status === "Completed" ||
+                                  isActionFromClosedWeek(action)
+                                    ? 0.3
+                                    : 1,
                               },
                             }}
                           />
@@ -4572,21 +4718,54 @@ const PlannerProjectWorkspace = () => {
                         mt: 2,
                       }}
                     >
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                        <Box sx={{ width: 12, height: 12, borderRadius: "50%", bgcolor: "#22C55E" }} />
-                        <Typography sx={{ color: COLORS.textSecondary, fontSize: "13px" }}>
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                      >
+                        <Box
+                          sx={{
+                            width: 12,
+                            height: 12,
+                            borderRadius: "50%",
+                            bgcolor: "#22C55E",
+                          }}
+                        />
+                        <Typography
+                          sx={{ color: COLORS.textSecondary, fontSize: "13px" }}
+                        >
                           Green ({greenPct}%)
                         </Typography>
                       </Box>
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                        <Box sx={{ width: 12, height: 12, borderRadius: "50%", bgcolor: "#F59E0B" }} />
-                        <Typography sx={{ color: COLORS.textSecondary, fontSize: "13px" }}>
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                      >
+                        <Box
+                          sx={{
+                            width: 12,
+                            height: 12,
+                            borderRadius: "50%",
+                            bgcolor: "#F59E0B",
+                          }}
+                        />
+                        <Typography
+                          sx={{ color: COLORS.textSecondary, fontSize: "13px" }}
+                        >
                           Amber ({amberPct}%)
                         </Typography>
                       </Box>
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                        <Box sx={{ width: 12, height: 12, borderRadius: "50%", bgcolor: "#EF4444" }} />
-                        <Typography sx={{ color: COLORS.textSecondary, fontSize: "13px" }}>
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                      >
+                        <Box
+                          sx={{
+                            width: 12,
+                            height: 12,
+                            borderRadius: "50%",
+                            bgcolor: "#EF4444",
+                          }}
+                        />
+                        <Typography
+                          sx={{ color: COLORS.textSecondary, fontSize: "13px" }}
+                        >
                           Red ({redPct}%)
                         </Typography>
                       </Box>
@@ -4772,24 +4951,21 @@ const PlannerProjectWorkspace = () => {
                             borderTop: `1px solid ${COLORS.border}`,
                           }}
                         >
-                          {[
-                            "Open",
-                            "Ready",
-                            "Completed",
-                            "Overdue",
-                          ].map((label) => (
-                            <Typography
-                              key={label}
-                              sx={{
-                                color: COLORS.textMuted,
-                                fontSize: "10px",
-                                width: 60,
-                                textAlign: "center",
-                              }}
-                            >
-                              {label}
-                            </Typography>
-                          ))}
+                          {["Open", "Ready", "Completed", "Overdue"].map(
+                            (label) => (
+                              <Typography
+                                key={label}
+                                sx={{
+                                  color: COLORS.textMuted,
+                                  fontSize: "10px",
+                                  width: 60,
+                                  textAlign: "center",
+                                }}
+                              >
+                                {label}
+                              </Typography>
+                            ),
+                          )}
                         </Box>
                       </Box>
                     </Box>
@@ -4852,13 +5028,121 @@ const PlannerProjectWorkspace = () => {
                   mb: 2,
                 }}
               >
-                {cycleStage === "draft"
-                  ? "Programme uploaded. Review activities and open the planning meeting."
-                  : cycleStage === "meetingOpen"
-                    ? "Meeting is open. Start execution when ready."
-                    : "Execution in progress. Monitor activities and actions."}
+                {uploadedProgramme?.cycleStatus === "Closed" || isWeekClosed
+                  ? "This week is closed and locked. No changes allowed."
+                  : uploadedProgramme?.cycleStatus === "Close-Out Eligible"
+                    ? "Week is ready for close-out. Generate exports and close the week."
+                    : cycleStage === "draft"
+                      ? "Programme uploaded. Review activities and open the planning meeting."
+                      : cycleStage === "meetingOpen"
+                        ? "Meeting is open. Start execution when ready."
+                        : "Execution in progress. Monitor activities and actions."}
               </Typography>
-              {cycleStage === "execution" ? (
+              {/* Closed Stage - Show locked message */}
+              {uploadedProgramme?.cycleStatus === "Closed" || isWeekClosed ? (
+                <Box
+                  sx={{
+                    bgcolor: "rgba(107, 114, 128, 0.1)",
+                    border: `1px solid ${COLORS.textMuted}`,
+                    borderRadius: "8px",
+                    px: 2,
+                    py: 1.5,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1.5,
+                  }}
+                >
+                  <Box
+                    component="img"
+                    src={lockIcon}
+                    sx={{ width: 20, height: 20, opacity: 0.6 }}
+                  />
+                  <Typography
+                    sx={{
+                      color: COLORS.textMuted,
+                      fontSize: "13px",
+                      fontWeight: 500,
+                    }}
+                  >
+                    Week locked. View history in Closure & Export tab.
+                  </Typography>
+                </Box>
+              ) : uploadedProgramme?.cycleStatus === "Close-Out Eligible" ? (
+                <Box>
+                  <Box
+                    sx={{
+                      bgcolor: "rgba(59, 130, 246, 0.1)",
+                      border: `1px solid ${COLORS.blue}`,
+                      borderRadius: "8px",
+                      px: 2,
+                      py: 1.5,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 1.5,
+                      mb: 2,
+                    }}
+                  >
+                    <Typography sx={{ color: COLORS.blue, fontSize: "18px" }}>
+                      📋
+                    </Typography>
+                    <Box>
+                      <Typography
+                        sx={{
+                          color: COLORS.blue,
+                          fontSize: "13px",
+                          fontWeight: 600,
+                        }}
+                      >
+                        Close-Out Eligible (Stage 4)
+                      </Typography>
+                      <Typography
+                        sx={{
+                          color: COLORS.textSecondary,
+                          fontSize: "12px",
+                        }}
+                      >
+                        Export documents can be generated. Ready to close and
+                        lock the week.
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <Box sx={{ display: "flex", gap: 2 }}>
+                    <Button
+                      onClick={() => setActiveTab(5)}
+                      sx={{
+                        bgcolor: "transparent",
+                        color: COLORS.blue,
+                        border: `1px solid ${COLORS.blue}`,
+                        textTransform: "none",
+                        px: 2,
+                        py: 1,
+                        borderRadius: "8px",
+                        fontSize: "13px",
+                        fontWeight: 500,
+                        "&:hover": { bgcolor: "rgba(59, 130, 246, 0.1)" },
+                      }}
+                    >
+                      Go to Exports
+                    </Button>
+                    <Button
+                      onClick={handleFinalClose}
+                      sx={{
+                        bgcolor: COLORS.green,
+                        color: "#fff",
+                        textTransform: "none",
+                        px: 3,
+                        py: 1,
+                        borderRadius: "8px",
+                        fontSize: "13px",
+                        fontWeight: 500,
+                        "&:hover": { bgcolor: "#16a34a" },
+                      }}
+                    >
+                      Close & Lock Week
+                    </Button>
+                  </Box>
+                </Box>
+              ) : cycleStage === "execution" ? (
                 <Box>
                   {weeksStatus?.weeks.find((w) => w.canClose) ? (
                     /* Ready for close-out */
@@ -4918,7 +5202,11 @@ const PlannerProjectWorkspace = () => {
                           )?.weekNumber;
                           if (weekToClose) handleCloseSpecificWeek(weekToClose);
                         }}
-                        disabled={closingWeek !== null || weeklyControlData?.isProjectEnded}
+                        disabled={
+                          closingWeek !== null ||
+                          !weeksStatus?.weeks.find((w) => w.canClose) ||
+                          weeklyControlData?.isProjectEnded
+                        }
                         sx={{
                           bgcolor: COLORS.green,
                           color: "#fff",
@@ -4995,7 +5283,11 @@ const PlannerProjectWorkspace = () => {
                 <Button
                   onClick={handleCycleAction}
                   disabled={weeklyControlData?.isProjectEnded}
-                  title={weeklyControlData?.isProjectEnded ? "Project has ended - read only" : ""}
+                  title={
+                    weeklyControlData?.isProjectEnded
+                      ? "Project has ended - read only"
+                      : ""
+                  }
                   sx={{
                     bgcolor: COLORS.blue,
                     color: "#fff",
@@ -5012,7 +5304,9 @@ const PlannerProjectWorkspace = () => {
                     },
                   }}
                 >
-                  {weeklyControlData?.isProjectEnded ? "Project Ended" : getCycleButtonText()}
+                  {weeklyControlData?.isProjectEnded
+                    ? "Project Ended"
+                    : getCycleButtonText()}
                 </Button>
               )}
             </Box>
@@ -5311,25 +5605,31 @@ const PlannerProjectWorkspace = () => {
                     mb: 1,
                   }}
                 >
-                  Closed by PM (Override) via PM Override
+                  Week Closed & Locked
                 </Typography>
                 <Typography
                   sx={{
                     color: COLORS.textSecondary,
                     fontSize: "14px",
-                    mb: 1,
+                    mb:
+                      savedOverrideReason || uploadedProgramme?.overrideReason
+                        ? 1
+                        : 0,
                   }}
                 >
-                  Week 24 — Closed & Locked
+                  This week has been closed. No further changes allowed.
                 </Typography>
-                <Typography
-                  sx={{
-                    color: COLORS.amber,
-                    fontSize: "14px",
-                  }}
-                >
-                  Override reason: {savedOverrideReason}
-                </Typography>
+                {(savedOverrideReason || uploadedProgramme?.overrideReason) && (
+                  <Typography
+                    sx={{
+                      color: COLORS.amber,
+                      fontSize: "14px",
+                    }}
+                  >
+                    Override reason:{" "}
+                    {savedOverrideReason || uploadedProgramme?.overrideReason}
+                  </Typography>
+                )}
               </Box>
             ) : (
               <>
@@ -5514,7 +5814,8 @@ const PlannerProjectWorkspace = () => {
                       fullWidth
                       onClick={handleExportWeeklyPlan}
                       disabled={
-                        exportGatingStatus.isGated || isExporting === "weekly"
+                        isExporting === "weekly" ||
+                        exportCounts.greenActivitiesReady === 0
                       }
                       startIcon={
                         isExporting === "weekly" ? (
@@ -5525,9 +5826,7 @@ const PlannerProjectWorkspace = () => {
                         ) : null
                       }
                       sx={{
-                        bgcolor: exportGatingStatus.isGated
-                          ? COLORS.disabledBlue
-                          : COLORS.green,
+                        bgcolor: COLORS.green,
                         color: "#fff",
                         textTransform: "none",
                         py: 1.25,
@@ -5535,9 +5834,7 @@ const PlannerProjectWorkspace = () => {
                         fontSize: "13px",
                         fontWeight: 500,
                         "&:hover": {
-                          bgcolor: exportGatingStatus.isGated
-                            ? COLORS.disabledBlue
-                            : "#16a34a",
+                          bgcolor: "#16a34a",
                         },
                         "&:disabled": {
                           bgcolor: COLORS.disabledBlue,
@@ -5614,7 +5911,8 @@ const PlannerProjectWorkspace = () => {
                       fullWidth
                       onClick={handleExportPlannerTodo}
                       disabled={
-                        exportGatingStatus.isGated || isExporting === "todo"
+                        isExporting === "todo" ||
+                        exportCounts.outstandingActions === 0
                       }
                       startIcon={
                         isExporting === "todo" ? (
@@ -5625,9 +5923,7 @@ const PlannerProjectWorkspace = () => {
                         ) : null
                       }
                       sx={{
-                        bgcolor: exportGatingStatus.isGated
-                          ? COLORS.disabledBlue
-                          : COLORS.blue,
+                        bgcolor: COLORS.blue,
                         color: "#fff",
                         textTransform: "none",
                         py: 1.25,
@@ -5635,9 +5931,7 @@ const PlannerProjectWorkspace = () => {
                         fontSize: "13px",
                         fontWeight: 500,
                         "&:hover": {
-                          bgcolor: exportGatingStatus.isGated
-                            ? COLORS.disabledBlue
-                            : "#2563eb",
+                          bgcolor: "#2563eb",
                         },
                         "&:disabled": {
                           bgcolor: COLORS.disabledBlue,
@@ -5682,7 +5976,7 @@ const PlannerProjectWorkspace = () => {
                   </Box>
                 )}
 
-                <Box
+                {/* <Box
                   sx={{
                     bgcolor: COLORS.bgSecondary,
                     border: `1px solid ${COLORS.border}`,
@@ -5978,7 +6272,7 @@ const PlannerProjectWorkspace = () => {
                       <CircularProgress size={24} sx={{ color: COLORS.blue }} />
                     </Box>
                   )}
-                </Box>
+                </Box> */}
               </>
             )}
           </Box>

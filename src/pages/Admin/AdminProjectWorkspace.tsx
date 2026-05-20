@@ -1301,9 +1301,9 @@ const AdminProjectWorkspace = () => {
         cycleStatus,
       });
 
-      // Green activities ready = weeklyPlanPreview count (activities with green RAG and no open actions)
+      // Green activities ready = count of green RAG activities in current week
       const greenActivitiesReady =
-        weeklyControlData.weeklyPlanPreview?.length || 0;
+        weeklyControlData.ragDistribution?.green || weeklyControlData.stats?.green || 0;
 
       // Outstanding actions = open + inProgress
       const outstandingActions =
@@ -1324,20 +1324,23 @@ const AdminProjectWorkspace = () => {
         blockedActivities,
       });
 
-      // Update closure checklist based on real data
-      setClosureChecklist((prev) => ({
-        ...prev,
-        overdueAcknowledged:
-          overdueActions === 0 ? true : prev.overdueAcknowledged,
-        blockedAcknowledged:
-          blockedActivities === 0 ? true : prev.blockedAcknowledged,
-      }));
+      // Update closure checklist based on real data - auto-check all
+      setClosureChecklist({
+        // Planner review complete: checked when there are green activities ready
+        plannerReview: greenActivitiesReady > 0,
+        // To-do list generated: checked when no outstanding actions remain
+        todoGenerated: outstandingActions === 0,
+        // Overdue acknowledged: checked when no overdue actions
+        overdueAcknowledged: overdueActions === 0,
+        // Blocked acknowledged: checked when no blocked activities
+        blockedAcknowledged: blockedActivities === 0,
+      });
     }
   }, [weeklyControlData, uploadedProgramme]);
 
   // Handle export downloads
   const handleExportWeeklyPlan = async () => {
-    if (exportGatingStatus.isGated || !uploadedProgramme) return;
+    if (!uploadedProgramme) return;
 
     try {
       setIsExporting("weekly");
@@ -1364,7 +1367,7 @@ const AdminProjectWorkspace = () => {
   };
 
   const handleExportPlannerTodo = async () => {
-    if (exportGatingStatus.isGated || !uploadedProgramme) return;
+    if (!uploadedProgramme) return;
 
     try {
       setIsExporting("todo");
@@ -1532,19 +1535,14 @@ const AdminProjectWorkspace = () => {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  // Use weeklyControlData actionsByStatus which filters out actions from closed weeks
-  // Fall back to projectActions count if weeklyControlData is not available
+  // Calculate action stats from projectActions (same data source as the table)
   const actionStats = {
-    total: weeklyControlData?.actionsByStatus
-      ? (weeklyControlData.actionsByStatus.open || 0) +
-        (weeklyControlData.actionsByStatus.inProgress || 0) +
-        (weeklyControlData.actionsByStatus.closed || 0)
-      : projectActions.length,
-    open: weeklyControlData?.actionsByStatus?.open ?? projectActions.filter((a) => a.status === "Open").length,
-    inProgress: weeklyControlData?.actionsByStatus?.inProgress ?? projectActions.filter((a) => a.status === "In Progress").length,
-    closed: weeklyControlData?.actionsByStatus?.closed ?? projectActions.filter((a) => a.status === "Completed").length,
-    overdue: weeklyControlData?.actionsByStatus?.overdue ?? projectActions.filter(
-      (a) => new Date(a.dueDate) < new Date() && a.status !== "Completed",
+    total: projectActions.length,
+    open: projectActions.filter((a) => a.status === "Open").length,
+    inProgress: projectActions.filter((a) => a.status === "In Progress").length,
+    closed: projectActions.filter((a) => a.status === "Completed").length,
+    overdue: projectActions.filter(
+      (a) => a.dueDate && new Date(a.dueDate) < new Date() && a.status !== "Completed",
     ).length,
   };
 
@@ -6068,9 +6066,7 @@ const AdminProjectWorkspace = () => {
                     <Button
                       fullWidth
                       onClick={handleExportWeeklyPlan}
-                      disabled={
-                        exportGatingStatus.isGated || isExporting === "weekly"
-                      }
+                      disabled={isExporting === "weekly" || exportCounts.greenActivitiesReady === 0}
                       startIcon={
                         isExporting === "weekly" ? (
                           <CircularProgress
@@ -6080,9 +6076,7 @@ const AdminProjectWorkspace = () => {
                         ) : null
                       }
                       sx={{
-                        bgcolor: exportGatingStatus.isGated
-                          ? COLORS.disabledBlue
-                          : COLORS.green,
+                        bgcolor: COLORS.green,
                         color: "#fff",
                         textTransform: "none",
                         py: 1.25,
@@ -6090,9 +6084,7 @@ const AdminProjectWorkspace = () => {
                         fontSize: "13px",
                         fontWeight: 500,
                         "&:hover": {
-                          bgcolor: exportGatingStatus.isGated
-                            ? COLORS.disabledBlue
-                            : "#16a34a",
+                          bgcolor: "#16a34a",
                         },
                         "&:disabled": {
                           bgcolor: COLORS.disabledBlue,
@@ -6168,9 +6160,7 @@ const AdminProjectWorkspace = () => {
                     <Button
                       fullWidth
                       onClick={handleExportPlannerTodo}
-                      disabled={
-                        exportGatingStatus.isGated || isExporting === "todo"
-                      }
+                      disabled={isExporting === "todo" || exportCounts.outstandingActions === 0}
                       startIcon={
                         isExporting === "todo" ? (
                           <CircularProgress
@@ -6180,9 +6170,7 @@ const AdminProjectWorkspace = () => {
                         ) : null
                       }
                       sx={{
-                        bgcolor: exportGatingStatus.isGated
-                          ? COLORS.disabledBlue
-                          : COLORS.blue,
+                        bgcolor: COLORS.blue,
                         color: "#fff",
                         textTransform: "none",
                         py: 1.25,
@@ -6190,9 +6178,7 @@ const AdminProjectWorkspace = () => {
                         fontSize: "13px",
                         fontWeight: 500,
                         "&:hover": {
-                          bgcolor: exportGatingStatus.isGated
-                            ? COLORS.disabledBlue
-                            : "#2563eb",
+                          bgcolor: "#2563eb",
                         },
                         "&:disabled": {
                           bgcolor: COLORS.disabledBlue,
