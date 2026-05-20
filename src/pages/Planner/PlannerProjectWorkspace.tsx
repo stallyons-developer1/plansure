@@ -4896,13 +4896,7 @@ const PlannerProjectWorkspace = () => {
                                 fontWeight: 500,
                               }}
                             >
-                              Weeks{" "}
-                              {weeksStatus?.weeks.find((w) => w.canClose)
-                                ?.weekNumber || 1}{" "}
-                              -{" "}
-                              {(weeksStatus?.weeks.find((w) => w.canClose)
-                                ?.weekNumber || 1) + 1}{" "}
-                              ready for close-out
+                              Current Week ready for close-out
                             </Typography>
                             <Typography
                               sx={{
@@ -4946,7 +4940,7 @@ const PlannerProjectWorkspace = () => {
                         ) : weeklyControlData?.isProjectEnded ? (
                           "Project Ended"
                         ) : (
-                          `Close Weeks ${weeksStatus?.weeks.find((w) => w.canClose)?.weekNumber || 1}-${(weeksStatus?.weeks.find((w) => w.canClose)?.weekNumber || 1) + 1}`
+                          "Close Current Week"
                         )}
                       </Button>
                     </>
