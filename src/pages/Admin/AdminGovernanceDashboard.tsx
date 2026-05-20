@@ -325,6 +325,17 @@ interface GovernanceData {
     };
     closeType?: string;
     notes?: string;
+    activities?: {
+      activityId: string;
+      activityName: string;
+      startDate: string;
+      finishDate: string;
+      duration: string;
+      ragStatus: string;
+      activityStatus: string;
+      ownerName: string;
+      isCompleted: boolean;
+    }[];
   }[];
 }
 
@@ -1835,6 +1846,136 @@ const AdminGovernanceDashboard = () => {
                     </Typography>
                   </Box>
                 </Box>
+
+                {/* Week Activities Table */}
+                {selectedWeekData.activities && selectedWeekData.activities.length > 0 && (
+                  <Box sx={{ mt: 3 }}>
+                    <Typography
+                      sx={{
+                        color: COLORS.textMuted,
+                        fontSize: "12px",
+                        fontWeight: 500,
+                        mb: 2,
+                      }}
+                    >
+                      ACTIVITIES IN THIS WEEK
+                    </Typography>
+                    <Box
+                      sx={{
+                        bgcolor: COLORS.bgPrimary,
+                        border: `1px solid ${COLORS.border}`,
+                        borderRadius: "8px",
+                        overflow: "hidden",
+                      }}
+                    >
+                      {/* Table Header */}
+                      <Box
+                        sx={{
+                          display: "grid",
+                          gridTemplateColumns: "1fr 100px 100px 80px",
+                          gap: 2,
+                          px: 2,
+                          py: 1.5,
+                          borderBottom: `1px solid ${COLORS.border}`,
+                          bgcolor: COLORS.bgTertiary,
+                        }}
+                      >
+                        <Typography sx={{ color: COLORS.textMuted, fontSize: "11px", fontWeight: 600 }}>
+                          ACTIVITY
+                        </Typography>
+                        <Typography sx={{ color: COLORS.textMuted, fontSize: "11px", fontWeight: 600 }}>
+                          FINISH DATE
+                        </Typography>
+                        <Typography sx={{ color: COLORS.textMuted, fontSize: "11px", fontWeight: 600 }}>
+                          STATUS
+                        </Typography>
+                        <Typography sx={{ color: COLORS.textMuted, fontSize: "11px", fontWeight: 600, textAlign: "center" }}>
+                          RAG
+                        </Typography>
+                      </Box>
+                      {/* Table Rows */}
+                      {selectedWeekData.activities.map((activity, idx) => (
+                        <Box
+                          key={activity.activityId}
+                          sx={{
+                            display: "grid",
+                            gridTemplateColumns: "1fr 100px 100px 80px",
+                            gap: 2,
+                            px: 2,
+                            py: 1.5,
+                            borderBottom: idx < (selectedWeekData.activities?.length || 0) - 1 ? `1px solid ${COLORS.border}` : "none",
+                            alignItems: "center",
+                          }}
+                        >
+                          <Box>
+                            <Typography sx={{ color: COLORS.textPrimary, fontSize: "13px", fontWeight: 500 }}>
+                              {activity.activityName}
+                            </Typography>
+                            <Typography sx={{ color: COLORS.textMuted, fontSize: "11px" }}>
+                              {activity.activityId}
+                            </Typography>
+                          </Box>
+                          <Typography sx={{ color: COLORS.textSecondary, fontSize: "12px" }}>
+                            {activity.finishDate?.replace(/\s*[A\*]$/, "") || "-"}
+                          </Typography>
+                          <Box
+                            sx={{
+                              bgcolor: activity.isCompleted
+                                ? "rgba(34, 197, 94, 0.15)"
+                                : activity.activityStatus === "At Risk"
+                                  ? "rgba(245, 158, 11, 0.15)"
+                                  : "rgba(107, 114, 128, 0.15)",
+                              color: activity.isCompleted
+                                ? COLORS.green
+                                : activity.activityStatus === "At Risk"
+                                  ? COLORS.amber
+                                  : COLORS.textMuted,
+                              px: 1.5,
+                              py: 0.25,
+                              borderRadius: "4px",
+                              fontSize: "11px",
+                              fontWeight: 500,
+                              textAlign: "center",
+                              width: "fit-content",
+                            }}
+                          >
+                            {activity.isCompleted ? "Complete" : activity.activityStatus}
+                          </Box>
+                          <Box sx={{ display: "flex", justifyContent: "center" }}>
+                            <Box
+                              sx={{
+                                width: 24,
+                                height: 24,
+                                borderRadius: "50%",
+                                bgcolor: activity.ragStatus === "Green"
+                                  ? "rgba(34, 197, 94, 0.15)"
+                                  : activity.ragStatus === "Amber"
+                                    ? "rgba(245, 158, 11, 0.15)"
+                                    : "rgba(239, 68, 68, 0.15)",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                              }}
+                            >
+                              <Box
+                                sx={{
+                                  width: 10,
+                                  height: 10,
+                                  borderRadius: "50%",
+                                  bgcolor: activity.ragStatus === "Green"
+                                    ? COLORS.green
+                                    : activity.ragStatus === "Amber"
+                                      ? COLORS.amber
+                                      : COLORS.red,
+                                }}
+                              />
+                            </Box>
+                          </Box>
+                        </Box>
+                      ))}
+                    </Box>
+                  </Box>
+                )}
               </>
             ) : (
               <Box
