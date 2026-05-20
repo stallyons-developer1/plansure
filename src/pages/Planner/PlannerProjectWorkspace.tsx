@@ -766,6 +766,7 @@ const PlannerProjectWorkspace = () => {
     // Find the most recent closure by closedAt date
     const mostRecentClosure = closedWeeks.reduce((latest, week) => {
       if (!latest) return week;
+      if (!week.closedAt || !latest.closedAt) return latest;
       return new Date(week.closedAt) > new Date(latest.closedAt) ? week : latest;
     }, null as typeof closedWeeks[0] | null);
 
