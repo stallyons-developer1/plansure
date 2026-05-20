@@ -6422,6 +6422,17 @@ const AdminProjectWorkspace = () => {
                               </Typography>
                               <Typography
                                 sx={{
+                                  color: COLORS.textMuted,
+                                  fontSize: "11px",
+                                  mb: 0.5,
+                                }}
+                              >
+                                {week.startDate && new Date(week.startDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+                                {" - "}
+                                {week.endDate && new Date(week.endDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+                              </Typography>
+                              <Typography
+                                sx={{
                                   color: COLORS.textSecondary,
                                   fontSize: "11px",
                                 }}
