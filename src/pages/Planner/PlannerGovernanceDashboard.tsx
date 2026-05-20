@@ -335,6 +335,7 @@ interface GovernanceData {
       activityStatus: string;
       ownerName: string;
       isCompleted: boolean;
+      projectName: string;
     }[];
   }[];
 }
@@ -1705,9 +1706,14 @@ const PlannerGovernanceDashboard = () => {
                             <Typography sx={{ color: COLORS.textPrimary, fontSize: "13px", fontWeight: 500 }}>
                               {activity.activityName}
                             </Typography>
-                            <Typography sx={{ color: COLORS.textMuted, fontSize: "11px" }}>
-                              {activity.activityId}
-                            </Typography>
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                              <Typography sx={{ color: COLORS.textMuted, fontSize: "11px" }}>
+                                {activity.activityId}
+                              </Typography>
+                              <Typography sx={{ color: COLORS.blue, fontSize: "10px", fontWeight: 500 }}>
+                                • {activity.projectName}
+                              </Typography>
+                            </Box>
                           </Box>
                           <Typography sx={{ color: COLORS.textSecondary, fontSize: "12px" }}>
                             {activity.finishDate?.replace(/\s*[A\*]$/, "") || "-"}
