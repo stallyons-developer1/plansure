@@ -12,7 +12,8 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git push)",
-      "Bash(node scripts/generateEndedProjectPDF.cjs:*)"
+      "Bash(node scripts/generateEndedProjectPDF.cjs:*)",
+      "Bash(grep:*)"
     ]
   }
 }

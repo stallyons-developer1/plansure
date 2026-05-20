@@ -682,26 +682,53 @@ const PlannerProjectWorkspace = () => {
     setClosingWeek(weekNumber);
     try {
       // Close 2 weeks at once since we display 2 weeks together
+      console.log("[PM Override] Closing week", weekNumber, "closeType:", closeType);
       const response1 = await programmeAPI.closeWeek(
         uploadedProgramme._id,
         weekNumber,
         closeType,
         closeType === "PM Override" ? overrideReason : undefined,
       );
+      console.log("[PM Override] response1:", response1);
 
       let response2 = { success: false, isFullyClosed: false };
       if (response1.success && !response1.isFullyClosed) {
         // Close the second week
+        console.log("[PM Override] Closing week", weekNumber + 1);
         response2 = await programmeAPI.closeWeek(
           uploadedProgramme._id,
           weekNumber + 1,
           closeType,
           closeType === "PM Override" ? overrideReason : undefined,
         );
+        console.log("[PM Override] response2:", response2);
       }
 
       if (response1.success) {
-        await fetchWeeksStatus();
+        console.log("[PM Override] response1 success, fetching updated weeks status...");
+        // Fetch updated weeks status
+        const updatedWeeksStatus = await programmeAPI.getWeeksStatus(uploadedProgramme._id);
+        console.log("[PM Override] updatedWeeksStatus:", {
+          closedWeeksCount: updatedWeeksStatus.closedWeeksCount,
+          currentWeekNumber: updatedWeeksStatus.currentWeekNumber,
+          weeks: updatedWeeksStatus.weeks?.map((w: { weekNumber: number; canClose: boolean; isClosed: boolean }) => ({
+            weekNumber: w.weekNumber,
+            canClose: w.canClose,
+            isClosed: w.isClosed,
+          })).slice(0, 15), // Only log first 15 weeks for readability
+        });
+
+        if (updatedWeeksStatus.success) {
+          setWeeksStatus(updatedWeeksStatus);
+
+          // Explicitly fetch weekly control data for the NEXT closable week
+          // (weekNumber + 2 because we just closed weekNumber and weekNumber+1)
+          const nextClosableWeek = updatedWeeksStatus.weeks.find((w: { canClose: boolean }) => w.canClose);
+          const nextWeekNumber = nextClosableWeek?.weekNumber || updatedWeeksStatus.currentWeekNumber;
+          console.log("[PM Override] Next closable week:", nextClosableWeek?.weekNumber, "Using weekNumber:", nextWeekNumber);
+          await fetchWeeklyControlData(uploadedProgramme._id, nextWeekNumber);
+        }
+
         // Reset cycle stage to draft for next week
         setCycleStage("draft");
         setCurrentStep(1);
@@ -721,6 +748,33 @@ const PlannerProjectWorkspace = () => {
     return projectActions.filter(
       (action) => action.linkedActivity?.activityId === activityId,
     );
+  };
+
+  // Check if an action is from a closed week (should be disabled after PM Override)
+  const isActionFromClosedWeek = (action: { createdAt?: string; status?: string }) => {
+    if (!weeksStatus?.weeks || !action.createdAt) return false;
+
+    // Actions that are completed or cancelled should not be disabled
+    if (action.status === 'Completed' || action.status === 'Cancelled') return false;
+
+    const actionDate = new Date(action.createdAt);
+
+    // Find the most recently closed week
+    const closedWeeks = weeksStatus.weeks.filter((w) => w.isClosed && w.closedAt);
+    if (closedWeeks.length === 0) return false;
+
+    // Find the most recent closure by closedAt date
+    const mostRecentClosure = closedWeeks.reduce((latest, week) => {
+      if (!latest) return week;
+      return new Date(week.closedAt) > new Date(latest.closedAt) ? week : latest;
+    }, null as typeof closedWeeks[0] | null);
+
+    if (!mostRecentClosure?.closedAt) return false;
+
+    // If action was created BEFORE the most recent week was closed,
+    // it means this action was from a previous week cycle that has now been closed/PM Override'd
+    const closureDate = new Date(mostRecentClosure.closedAt);
+    return actionDate < closureDate;
   };
 
   const handleCycleAction = () => {
@@ -841,7 +895,10 @@ const PlannerProjectWorkspace = () => {
         }
         // Refresh weekly control data to remove completed activity from blocked/risk list
         if (uploadedProgramme?._id) {
-          await fetchWeeklyControlData(uploadedProgramme._id);
+          // Use the SAME weekNumber that the useEffect uses to ensure consistent data
+          const closableWeek = weeksStatus?.weeks?.find((w: { canClose: boolean }) => w.canClose);
+          const weekNumber = closableWeek?.weekNumber || weeksStatus?.currentWeekNumber;
+          await fetchWeeklyControlData(uploadedProgramme._id, weekNumber);
         }
         handleCloseCompleteConfirm();
       }
@@ -912,19 +969,26 @@ const PlannerProjectWorkspace = () => {
       });
 
       if (response.success) {
-        // Close modal first for better UX
-        handleCloseAssignModal();
+        // Keep modal open, show loading while fetching updated data
+        // Small delay to ensure MongoDB has committed the write
+        await new Promise((resolve) => setTimeout(resolve, 300));
 
-        // Then refresh all data
-        const actionsRes = await actionAPI.getAll({
-          programmeId: uploadedProgramme._id,
-        });
+        // Use the SAME weekNumber that the useEffect uses to ensure consistent data
+        const closableWeek = weeksStatus?.weeks?.find((w: { canClose: boolean }) => w.canClose);
+        const weekNumber = closableWeek?.weekNumber || weeksStatus?.currentWeekNumber;
+
+        // Fetch weekly control data FIRST (this updates all 3 tabs)
+        await fetchWeeklyControlData(uploadedProgramme._id, weekNumber);
+
+        // Refresh actions and lookahead data
+        const [actionsRes, lookaheadRes] = await Promise.all([
+          actionAPI.getAll({ programmeId: uploadedProgramme._id }),
+          programmeAPI.getLookahead(uploadedProgramme._id),
+        ]);
+
         if (actionsRes.success) {
           setProjectActions(actionsRes.actions || []);
         }
-        const lookaheadRes = await programmeAPI.getLookahead(
-          uploadedProgramme._id,
-        );
         if (lookaheadRes.activities) {
           setLookaheadData({
             activities: lookaheadRes.activities,
@@ -932,8 +996,9 @@ const PlannerProjectWorkspace = () => {
             weekZones: lookaheadRes.weekZones,
           });
         }
-        // Refresh weekly control data
-        await fetchWeeklyControlData(uploadedProgramme._id);
+
+        // Close modal AFTER all data is refreshed
+        handleCloseAssignModal();
       }
     } catch (error: unknown) {
       const err = error as {
@@ -1337,12 +1402,18 @@ const PlannerProjectWorkspace = () => {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
+  // Use weeklyControlData actionsByStatus which filters out actions from closed weeks
+  // Fall back to projectActions count if weeklyControlData is not available
   const actionStats = {
-    total: projectActions.length,
-    open: projectActions.filter((a) => a.status === "Open").length,
-    inProgress: projectActions.filter((a) => a.status === "In Progress").length,
-    closed: projectActions.filter((a) => a.status === "Completed").length,
-    overdue: projectActions.filter(
+    total: weeklyControlData?.actionsByStatus
+      ? (weeklyControlData.actionsByStatus.open || 0) +
+        (weeklyControlData.actionsByStatus.inProgress || 0) +
+        (weeklyControlData.actionsByStatus.closed || 0)
+      : projectActions.length,
+    open: weeklyControlData?.actionsByStatus?.open ?? projectActions.filter((a) => a.status === "Open").length,
+    inProgress: weeklyControlData?.actionsByStatus?.inProgress ?? projectActions.filter((a) => a.status === "In Progress").length,
+    closed: weeklyControlData?.actionsByStatus?.closed ?? projectActions.filter((a) => a.status === "Completed").length,
+    overdue: weeklyControlData?.actionsByStatus?.overdue ?? projectActions.filter(
       (a) => new Date(a.dueDate) < new Date() && a.status !== "Completed",
     ).length,
   };
@@ -3863,6 +3934,13 @@ const PlannerProjectWorkspace = () => {
                                 return;
                               }
                               if (action.status === "Completed") return;
+                              if (isActionFromClosedWeek(action)) {
+                                setToastMessage(
+                                  "Cannot edit action from a closed week.",
+                                );
+                                setToastOpen(true);
+                                return;
+                              }
                               handleEditClick(
                                 {
                                   id: action._id.slice(-6).toUpperCase(),
@@ -3903,20 +3981,22 @@ const PlannerProjectWorkspace = () => {
                             title={
                               action.status === "Completed"
                                 ? "Cannot edit completed action"
-                                : "Edit action"
+                                : isActionFromClosedWeek(action)
+                                  ? "Cannot edit action from closed week"
+                                  : "Edit action"
                             }
                             sx={{
                               width: 16,
                               height: 16,
                               cursor:
-                                action.status === "Completed"
+                                action.status === "Completed" || isActionFromClosedWeek(action)
                                   ? "not-allowed"
                                   : "pointer",
                               opacity:
-                                action.status === "Completed" ? 0.3 : 0.7,
+                                action.status === "Completed" || isActionFromClosedWeek(action) ? 0.3 : 0.7,
                               "&:hover": {
                                 opacity:
-                                  action.status === "Completed" ? 0.3 : 1,
+                                  action.status === "Completed" || isActionFromClosedWeek(action) ? 0.3 : 1,
                               },
                             }}
                           />
@@ -3927,6 +4007,13 @@ const PlannerProjectWorkspace = () => {
                               if (cycleStage !== "execution") {
                                 setToastMessage(
                                   "Execution has not started yet. Please start execution first.",
+                                );
+                                setToastOpen(true);
+                                return;
+                              }
+                              if (isActionFromClosedWeek(action)) {
+                                setToastMessage(
+                                  "Cannot complete action from a closed week.",
                                 );
                                 setToastOpen(true);
                                 return;
@@ -3949,21 +4036,24 @@ const PlannerProjectWorkspace = () => {
                             title={
                               action.status === "Completed"
                                 ? "Already completed"
-                                : String(
-                                      (
-                                        action.assignee as unknown as {
-                                          _id?: string;
-                                        }
-                                      )?._id || "",
-                                    ) !== String(user?.id || "")
-                                  ? "Only the assignee can complete this action"
-                                  : "Mark as complete"
+                                : isActionFromClosedWeek(action)
+                                  ? "Cannot complete action from closed week"
+                                  : String(
+                                        (
+                                          action.assignee as unknown as {
+                                            _id?: string;
+                                          }
+                                        )?._id || "",
+                                      ) !== String(user?.id || "")
+                                    ? "Only the assignee can complete this action"
+                                    : "Mark as complete"
                             }
                             sx={{
                               width: 16,
                               height: 16,
                               cursor:
                                 action.status === "Completed" ||
+                                isActionFromClosedWeek(action) ||
                                 String(
                                   (
                                     action.assignee as unknown as {
@@ -3976,7 +4066,8 @@ const PlannerProjectWorkspace = () => {
                               opacity:
                                 action.status === "Completed"
                                   ? 1
-                                  : String(
+                                  : isActionFromClosedWeek(action) ||
+                                      String(
                                         (
                                           action.assignee as unknown as {
                                             _id?: string;
@@ -3992,6 +4083,7 @@ const PlannerProjectWorkspace = () => {
                               "&:hover": {
                                 opacity:
                                   action.status === "Completed" ||
+                                  isActionFromClosedWeek(action) ||
                                   String(
                                     (
                                       action.assignee as unknown as {
@@ -4458,6 +4550,48 @@ const PlannerProjectWorkspace = () => {
                     })()}
                   </svg>
                 </Box>
+                {/* Legend with percentages */}
+                {(() => {
+                  const ragData = weeklyControlData?.ragDistribution || {
+                    green: 0,
+                    amber: 0,
+                    red: 0,
+                  };
+                  const total = ragData.green + ragData.amber + ragData.red;
+                  if (total === 0) return null;
+                  const greenPct = Math.round((ragData.green / total) * 100);
+                  const amberPct = Math.round((ragData.amber / total) * 100);
+                  const redPct = Math.round((ragData.red / total) * 100);
+                  return (
+                    <Box
+                      sx={{
+                        display: "flex",
+                        justifyContent: "center",
+                        gap: 3,
+                        mt: 2,
+                      }}
+                    >
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <Box sx={{ width: 12, height: 12, borderRadius: "50%", bgcolor: "#22C55E" }} />
+                        <Typography sx={{ color: COLORS.textSecondary, fontSize: "13px" }}>
+                          Green ({greenPct}%)
+                        </Typography>
+                      </Box>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <Box sx={{ width: 12, height: 12, borderRadius: "50%", bgcolor: "#F59E0B" }} />
+                        <Typography sx={{ color: COLORS.textSecondary, fontSize: "13px" }}>
+                          Amber ({amberPct}%)
+                        </Typography>
+                      </Box>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <Box sx={{ width: 12, height: 12, borderRadius: "50%", bgcolor: "#EF4444" }} />
+                        <Typography sx={{ color: COLORS.textSecondary, fontSize: "13px" }}>
+                          Red ({redPct}%)
+                        </Typography>
+                      </Box>
+                    </Box>
+                  );
+                })()}
               </Box>
 
               <Box
@@ -4761,9 +4895,12 @@ const PlannerProjectWorkspace = () => {
                                 fontWeight: 500,
                               }}
                             >
-                              Week{" "}
+                              Weeks{" "}
                               {weeksStatus?.weeks.find((w) => w.canClose)
                                 ?.weekNumber || 1}{" "}
+                              -{" "}
+                              {(weeksStatus?.weeks.find((w) => w.canClose)
+                                ?.weekNumber || 1) + 1}{" "}
                               ready for close-out
                             </Typography>
                             <Typography
