@@ -17,6 +17,7 @@ import {
   Skeleton,
   Snackbar,
   Alert,
+  Tooltip,
 } from "@mui/material";
 import {
   Close as CloseIcon,
@@ -202,6 +203,7 @@ interface ActionItem {
   dueDate: string;
   status: string;
   priority: string;
+  createdAt?: string;
 }
 
 const PlannerProjectWorkspace = () => {
@@ -243,9 +245,11 @@ const PlannerProjectWorkspace = () => {
     overdueAcknowledged: false,
     blockedAcknowledged: false,
   });
-  const [overrideReason] = useState("");
+  const [showOverrideForm, setShowOverrideForm] = useState(false);
+  const [overrideReason, setOverrideReason] = useState("");
   const [isWeekClosed, setIsWeekClosed] = useState(false);
-  const [savedOverrideReason] = useState("");
+  const [savedOverrideReason, setSavedOverrideReason] = useState("");
+  const [lockedViewWeek, setLockedViewWeek] = useState<number | null>(null); // Lock view to specific week after Closure & Export PM Override
   const [weeksStatus, setWeeksStatus] = useState<{
     totalWeeks: number;
     currentWeekNumber: number;
@@ -672,13 +676,18 @@ const PlannerProjectWorkspace = () => {
   // Refetch weekly control data when weeksStatus changes (to filter by current week)
   useEffect(() => {
     if (uploadedProgramme?._id && weeksStatus) {
+      // If we have a locked view week (from Closure & Export PM Override), use that
+      if (lockedViewWeek !== null) {
+        fetchWeeklyControlData(uploadedProgramme._id, lockedViewWeek);
+        return;
+      }
       // Get the next closable week number, or current week
       const closableWeek = weeksStatus.weeks.find((w) => w.canClose);
       const weekNumber =
         closableWeek?.weekNumber || weeksStatus.currentWeekNumber;
       fetchWeeklyControlData(uploadedProgramme._id, weekNumber);
     }
-  }, [weeksStatus?.closedWeeksCount, uploadedProgramme?._id]);
+  }, [weeksStatus?.closedWeeksCount, uploadedProgramme?._id, lockedViewWeek]);
 
   const handleCloseSpecificWeek = async (
     weekNumber: number,
@@ -694,7 +703,11 @@ const PlannerProjectWorkspace = () => {
         "closeType:",
         closeType,
       );
-      const response1 = await programmeAPI.closeWeek(
+      const response1: {
+        success: boolean;
+        isFullyClosed: boolean;
+        isLastWeek?: boolean;
+      } = await programmeAPI.closeWeek(
         uploadedProgramme._id,
         weekNumber,
         closeType,
@@ -702,7 +715,11 @@ const PlannerProjectWorkspace = () => {
       );
       console.log("[PM Override] response1:", response1);
 
-      let response2 = { success: false, isFullyClosed: false };
+      let response2: {
+        success: boolean;
+        isFullyClosed: boolean;
+        isLastWeek?: boolean;
+      } = { success: false, isFullyClosed: false };
       if (response1.success && !response1.isFullyClosed) {
         // Close the second week
         console.log("[PM Override] Closing week", weekNumber + 1);
@@ -761,12 +778,27 @@ const PlannerProjectWorkspace = () => {
           await fetchWeeklyControlData(uploadedProgramme._id, nextWeekNumber);
         }
 
-        // Reset cycle stage to draft for next week
-        setCycleStage("draft");
-        setCurrentStep(1);
-        // Update programme status if fully closed
-        if (response1.isFullyClosed || response2.isFullyClosed) {
+        // Update programme status based on response
+        if (response1.isLastWeek || response2.isLastWeek) {
+          // All weeks completed - set to Close-Out Eligible
+          setCycleStage("execution");
+          setCurrentStep(4); // Close-Out Eligible step
+          setUploadedProgramme((prev) =>
+            prev ? { ...prev, cycleStatus: "Close-Out Eligible" } : null,
+          );
+        } else if (response1.isFullyClosed || response2.isFullyClosed) {
           setIsWeekClosed(true);
+          setCurrentStep(5); // Closed step
+          setUploadedProgramme((prev) =>
+            prev ? { ...prev, cycleStatus: "Closed", isLocked: true } : null,
+          );
+        } else {
+          // Reset to Draft for next week
+          setCycleStage("draft");
+          setCurrentStep(1);
+          setUploadedProgramme((prev) =>
+            prev ? { ...prev, cycleStatus: "Draft" } : null,
+          );
         }
       }
     } catch (error) {
@@ -852,6 +884,21 @@ const PlannerProjectWorkspace = () => {
             ...uploadedProgramme,
             cycleStatus: nextStatus,
           });
+
+          // Refresh weeks status first, then weekly control data
+          const weeksResponse = await programmeAPI.getWeeksStatus(
+            uploadedProgramme._id,
+          );
+          if (weeksResponse) {
+            setWeeksStatus(weeksResponse);
+            // Get the current week number for fetching weekly control data
+            const closableWeek = weeksResponse.weeks?.find(
+              (w: { canClose: boolean }) => w.canClose,
+            );
+            const weekNumber =
+              closableWeek?.weekNumber || weeksResponse.currentWeekNumber;
+            await fetchWeeklyControlData(uploadedProgramme._id, weekNumber);
+          }
         }
       }
     } catch (error) {
@@ -881,19 +928,117 @@ const PlannerProjectWorkspace = () => {
     }
   };
 
+  const handleOverrideClose = async () => {
+    if (!uploadedProgramme?._id || overrideReason.length < 10) return;
+
+    // Find the week to close
+    const weekToClose = weeksStatus?.weeks.find((w) => w.canClose)?.weekNumber;
+    if (!weekToClose) {
+      console.error("No week available to close");
+      return;
+    }
+
+    try {
+      // Save override reason for display
+      setSavedOverrideReason(overrideReason);
+      setShowOverrideForm(false);
+
+      // Use handleCloseSpecificWeek with "PM Override" to actually close the weeks
+      await handleCloseSpecificWeek(weekToClose, "PM Override");
+
+      // Clear the override reason input
+      setOverrideReason("");
+    } catch (error) {
+      console.error("Failed to close weeks with override:", error);
+    }
+  };
+
+  // Handler for PM Override from Closure & Export tab - stays on closed week
+  const handleOverrideCloseForExport = async () => {
+    if (!uploadedProgramme?._id || overrideReason.length < 10) return;
+
+    const weekToClose = weeksStatus?.weeks.find((w) => w.canClose)?.weekNumber;
+    if (!weekToClose) {
+      console.error("No week available to close");
+      return;
+    }
+
+    setClosingWeek(weekToClose);
+    try {
+      setSavedOverrideReason(overrideReason);
+      setShowOverrideForm(false);
+
+      // Close 2 weeks at once
+      const response1 = await programmeAPI.closeWeek(
+        uploadedProgramme._id,
+        weekToClose,
+        "PM Override",
+        overrideReason,
+      );
+
+      if (response1.success && !response1.isFullyClosed) {
+        await programmeAPI.closeWeek(
+          uploadedProgramme._id,
+          weekToClose + 1,
+          "PM Override",
+          overrideReason,
+        );
+      }
+
+      if (response1.success) {
+        // Lock the view to the closed week BEFORE updating weeksStatus
+        // This prevents the useEffect from automatically switching to the next week
+        setLockedViewWeek(weekToClose);
+
+        // Fetch updated weeks status
+        const updatedWeeksStatus = await programmeAPI.getWeeksStatus(
+          uploadedProgramme._id,
+        );
+
+        if (updatedWeeksStatus.success) {
+          setWeeksStatus(updatedWeeksStatus);
+
+          // Stay on the CLOSED week (not next) - fetch data for the week we just closed
+          await fetchWeeklyControlData(uploadedProgramme._id, weekToClose);
+
+          // Update export gating status - cycle should now be Close-Out Eligible or Closed
+          setExportGatingStatus({
+            isGated: false,
+            cycleStatus: "Close-Out Eligible",
+          });
+        }
+
+        // Update programme status if fully closed
+        if (response1.isFullyClosed) {
+          setIsWeekClosed(true);
+          setUploadedProgramme((prev) =>
+            prev ? { ...prev, cycleStatus: "Closed", isLocked: true } : null,
+          );
+        } else {
+          // Update to Close-Out Eligible
+          setUploadedProgramme((prev) =>
+            prev ? { ...prev, cycleStatus: "Close-Out Eligible" } : null,
+          );
+        }
+      }
+
+      setOverrideReason("");
+    } catch (error) {
+      console.error("Failed to close weeks with override:", error);
+    } finally {
+      setClosingWeek(null);
+    }
+  };
+
   const getCycleButtonText = () => {
-    const status = weeklyControlData?.stats?.cycleStatus;
-    if (status === "Uploaded" || status === "Draft" || cycleStage === "draft")
-      return "Open Meeting";
-    if (status === "Meeting Open" || cycleStage === "meetingOpen")
-      return "Start Execution";
+    if (cycleStage === "draft") return "Open Meeting";
+    if (cycleStage === "meetingOpen") return "Start Execution";
     return "In Execution";
   };
 
   const getCycleStatusText = () => {
-    // Use actual cycleStatus from weeklyControlData if available
-    if (weeklyControlData?.stats?.cycleStatus) {
-      return weeklyControlData.stats.cycleStatus;
+    if (uploadedProgramme?.cycleStatus) {
+      return uploadedProgramme.cycleStatus;
     }
     if (cycleStage === "draft") return "Draft";
     if (cycleStage === "meetingOpen") return "Meeting Open";
@@ -1547,14 +1692,32 @@ const PlannerProjectWorkspace = () => {
   };
 
   // Calculate action stats from projectActions (same data source as the table)
+  // Use weeklyControlData.actionsByStatus which excludes actions from PM Override'd weeks
+  // Calculate action stats from projectActions for Actions tab (shows ALL actions)
   const actionStats = {
     total: projectActions.length,
     open: projectActions.filter((a) => a.status === "Open").length,
     inProgress: projectActions.filter((a) => a.status === "In Progress").length,
     closed: projectActions.filter((a) => a.status === "Completed").length,
     overdue: projectActions.filter(
-      (a) => a.dueDate && new Date(a.dueDate) < new Date() && a.status !== "Completed",
+      (a) =>
+        a.dueDate &&
+        new Date(a.dueDate) < new Date() &&
+        a.status !== "Completed" &&
+        a.status !== "Cancelled",
     ).length,
+  };
+
+  // Weekly action stats for Weekly Control tab (week-filtered, excludes PM Override'd actions)
+  const weeklyActionStats = {
+    total:
+      (weeklyControlData?.actionsByStatus?.open || 0) +
+      (weeklyControlData?.actionsByStatus?.inProgress || 0) +
+      (weeklyControlData?.actionsByStatus?.closed || 0),
+    open: weeklyControlData?.actionsByStatus?.open || 0,
+    inProgress: weeklyControlData?.actionsByStatus?.inProgress || 0,
+    closed: weeklyControlData?.actionsByStatus?.closed || 0,
+    overdue: weeklyControlData?.actionsByStatus?.overdue || 0,
   };
 
   const handleStepClick = (stepNumber: number) => {
@@ -3994,28 +4157,47 @@ const PlannerProjectWorkspace = () => {
                         </Box>
                         <Box sx={{ display: "flex", justifyContent: "center" }}>
                           {(() => {
+                            const isFromClosedWeek =
+                              isActionFromClosedWeek(action);
                             const isOverdue =
                               action.status !== "Completed" &&
+                              !isFromClosedWeek &&
                               action.dueDate &&
                               new Date(action.dueDate) <
                                 new Date(new Date().setHours(0, 0, 0, 0));
+
+                            // Determine display status
+                            let displayStatus = action.status;
+                            let bgColor = `${COLORS.blue}25`;
+                            let textColor = COLORS.blue;
+
+                            if (
+                              isFromClosedWeek &&
+                              action.status !== "Completed"
+                            ) {
+                              displayStatus = "PM Override";
+                              bgColor = `${COLORS.amber}25`;
+                              textColor = COLORS.amber;
+                            } else if (isOverdue) {
+                              displayStatus = "Overdue";
+                              bgColor = `${COLORS.red}25`;
+                              textColor = COLORS.red;
+                            } else if (action.status === "Open") {
+                              bgColor = `${COLORS.blue}25`;
+                              textColor = COLORS.blue;
+                            } else if (action.status === "In Progress") {
+                              bgColor = `${COLORS.amber}25`;
+                              textColor = COLORS.amber;
+                            } else if (action.status === "Completed") {
+                              bgColor = `${COLORS.green}25`;
+                              textColor = COLORS.green;
+                            }
+
                             return (
                               <Box
                                 sx={{
-                                  bgcolor: isOverdue
-                                    ? `${COLORS.red}25`
-                                    : action.status === "Open"
-                                      ? `${COLORS.blue}25`
-                                      : action.status === "In Progress"
-                                        ? `${COLORS.amber}25`
-                                        : `${COLORS.green}25`,
-                                  color: isOverdue
-                                    ? COLORS.red
-                                    : action.status === "Open"
-                                      ? COLORS.blue
-                                      : action.status === "In Progress"
-                                        ? COLORS.amber
-                                        : COLORS.green,
+                                  bgcolor: bgColor,
+                                  color: textColor,
                                   px: 2,
                                   py: 0.5,
                                   borderRadius: "5px",
@@ -4024,7 +4206,7 @@ const PlannerProjectWorkspace = () => {
                                   whiteSpace: "nowrap",
                                 }}
                               >
-                                {isOverdue ? "Overdue" : action.status}
+                                {displayStatus}
                               </Box>
                             );
                           })()}
@@ -4644,9 +4826,24 @@ const PlannerProjectWorkspace = () => {
                         red: 0,
                       };
                       const data = [
-                        { value: ragData.green, color: "#22C55E" },
-                        { value: ragData.amber, color: "#F59E0B" },
-                        { value: ragData.red, color: "#EF4444" },
+                        {
+                          value: ragData.green,
+                          color: "#22C55E",
+                          tooltip:
+                            "Completed or On Track - Activity is completed, in progress, or starting within 2 weeks",
+                        },
+                        {
+                          value: ragData.amber,
+                          color: "#F59E0B",
+                          tooltip:
+                            "Needs Attention - Activity starting in 3-4 weeks",
+                        },
+                        {
+                          value: ragData.red,
+                          color: "#EF4444",
+                          tooltip:
+                            "Overdue or At Risk - Activity is overdue or starting in 5-6 weeks",
+                        },
                       ].filter((d) => d.value > 0);
                       const total = data.reduce((sum, d) => sum + d.value, 0);
                       if (total === 0) return null;
@@ -4658,15 +4855,34 @@ const PlannerProjectWorkspace = () => {
                       // If only one segment (100%), draw a full circle
                       if (data.length === 1) {
                         return (
-                          <circle
-                            key={0}
-                            cx={center}
-                            cy={center}
-                            r={radius}
-                            fill="none"
-                            stroke={data[0].color}
-                            strokeWidth={strokeWidth}
-                          />
+                          <Tooltip
+                            title={data[0].tooltip}
+                            placement="top"
+                            arrow
+                            slotProps={{
+                              tooltip: {
+                                sx: {
+                                  bgcolor: COLORS.bgSecondary,
+                                  color: COLORS.textPrimary,
+                                  border: `1px solid ${COLORS.border}`,
+                                  fontSize: "12px",
+                                  maxWidth: 250,
+                                  p: 1,
+                                },
+                              },
+                              arrow: { sx: { color: COLORS.bgSecondary } },
+                            }}
+                          >
+                            <circle
+                              cx={center}
+                              cy={center}
+                              r={radius}
+                              fill="none"
+                              stroke={data[0].color}
+                              strokeWidth={strokeWidth}
+                              style={{ cursor: "pointer" }}
+                            />
+                          </Tooltip>
                         );
                       }
 
@@ -4685,13 +4901,33 @@ const PlannerProjectWorkspace = () => {
                         const largeArc = sweepAngle > 180 ? 1 : 0;
 
                         return (
-                          <path
+                          <Tooltip
                             key={i}
-                            d={`M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2}`}
-                            fill="none"
-                            stroke={segment.color}
-                            strokeWidth={strokeWidth}
-                          />
+                            title={segment.tooltip}
+                            placement="top"
+                            arrow
+                            slotProps={{
+                              tooltip: {
+                                sx: {
+                                  bgcolor: COLORS.bgSecondary,
+                                  color: COLORS.textPrimary,
+                                  border: `1px solid ${COLORS.border}`,
+                                  fontSize: "12px",
+                                  maxWidth: 250,
+                                  p: 1,
+                                },
+                              },
+                              arrow: { sx: { color: COLORS.bgSecondary } },
+                            }}
+                          >
+                            <path
+                              d={`M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2}`}
+                              fill="none"
+                              stroke={segment.color}
+                              strokeWidth={strokeWidth}
+                              style={{ cursor: "pointer" }}
+                            />
+                          </Tooltip>
                         );
                       });
                     })()}
@@ -4709,6 +4945,19 @@ const PlannerProjectWorkspace = () => {
                   const greenPct = Math.round((ragData.green / total) * 100);
                   const amberPct = Math.round((ragData.amber / total) * 100);
                   const redPct = Math.round((ragData.red / total) * 100);
+                  const tooltipStyles = {
+                    tooltip: {
+                      sx: {
+                        bgcolor: COLORS.bgSecondary,
+                        color: COLORS.textPrimary,
+                        border: `1px solid ${COLORS.border}`,
+                        fontSize: "12px",
+                        maxWidth: 250,
+                        p: 1,
+                      },
+                    },
+                    arrow: { sx: { color: COLORS.bgSecondary } },
+                  };
                   return (
                     <Box
                       sx={{
@@ -4718,57 +4967,102 @@ const PlannerProjectWorkspace = () => {
                         mt: 2,
                       }}
                     >
-                      <Box
-                        sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                      <Tooltip
+                        title="Completed or On Track - Activity is completed, in progress, or starting within 2 weeks"
+                        placement="bottom"
+                        arrow
+                        slotProps={tooltipStyles}
                       >
                         <Box
                           sx={{
-                            width: 12,
-                            height: 12,
-                            borderRadius: "50%",
-                            bgcolor: "#22C55E",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 1,
+                            cursor: "pointer",
                           }}
-                        />
-                        <Typography
-                          sx={{ color: COLORS.textSecondary, fontSize: "13px" }}
                         >
-                          Green ({greenPct}%)
-                        </Typography>
-                      </Box>
-                      <Box
-                        sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                          <Box
+                            sx={{
+                              width: 12,
+                              height: 12,
+                              borderRadius: "50%",
+                              bgcolor: "#22C55E",
+                            }}
+                          />
+                          <Typography
+                            sx={{
+                              color: COLORS.textSecondary,
+                              fontSize: "13px",
+                            }}
+                          >
+                            Green ({greenPct}%)
+                          </Typography>
+                        </Box>
+                      </Tooltip>
+                      <Tooltip
+                        title="Needs Attention - Activity starting in 3-4 weeks"
+                        placement="bottom"
+                        arrow
+                        slotProps={tooltipStyles}
                       >
                         <Box
                           sx={{
-                            width: 12,
-                            height: 12,
-                            borderRadius: "50%",
-                            bgcolor: "#F59E0B",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 1,
+                            cursor: "pointer",
                           }}
-                        />
-                        <Typography
-                          sx={{ color: COLORS.textSecondary, fontSize: "13px" }}
                         >
-                          Amber ({amberPct}%)
-                        </Typography>
-                      </Box>
-                      <Box
-                        sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                          <Box
+                            sx={{
+                              width: 12,
+                              height: 12,
+                              borderRadius: "50%",
+                              bgcolor: "#F59E0B",
+                            }}
+                          />
+                          <Typography
+                            sx={{
+                              color: COLORS.textSecondary,
+                              fontSize: "13px",
+                            }}
+                          >
+                            Amber ({amberPct}%)
+                          </Typography>
+                        </Box>
+                      </Tooltip>
+                      <Tooltip
+                        title="Overdue or At Risk - Activity is overdue or starting in 5-6 weeks"
+                        placement="bottom"
+                        arrow
+                        slotProps={tooltipStyles}
                       >
                         <Box
                           sx={{
-                            width: 12,
-                            height: 12,
-                            borderRadius: "50%",
-                            bgcolor: "#EF4444",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 1,
+                            cursor: "pointer",
                           }}
-                        />
-                        <Typography
-                          sx={{ color: COLORS.textSecondary, fontSize: "13px" }}
                         >
-                          Red ({redPct}%)
-                        </Typography>
-                      </Box>
+                          <Box
+                            sx={{
+                              width: 12,
+                              height: 12,
+                              borderRadius: "50%",
+                              bgcolor: "#EF4444",
+                            }}
+                          />
+                          <Typography
+                            sx={{
+                              color: COLORS.textSecondary,
+                              fontSize: "13px",
+                            }}
+                          >
+                            Red ({redPct}%)
+                          </Typography>
+                        </Box>
+                      </Tooltip>
                     </Box>
                   );
                 })()}
@@ -4907,39 +5201,67 @@ const PlannerProjectWorkspace = () => {
                           >
                             {[
                               {
-                                label: "In Lookahead",
+                                label: "Open",
                                 value: actionsData.open,
                                 color: COLORS.blue,
+                                tooltip:
+                                  "Open - Actions that are newly created and need to be addressed",
                               },
                               {
                                 label: "Ready",
                                 value: actionsData.inProgress,
                                 color: COLORS.amber,
+                                tooltip:
+                                  "Ready - Actions that are currently in progress",
                               },
                               {
                                 label: "Completed",
                                 value: actionsData.closed,
                                 color: COLORS.green,
+                                tooltip:
+                                  "Completed - Actions that have been successfully completed",
                               },
                               {
                                 label: "Overdue",
                                 value: actionsData.overdue,
                                 color: COLORS.red,
+                                tooltip:
+                                  "Overdue - Actions that are past their due date and need immediate attention",
                               },
                             ].map((bar, i) => (
-                              <Box
+                              <Tooltip
                                 key={i}
-                                sx={{
-                                  width: 60,
-                                  height:
-                                    bar.value > 0
-                                      ? `${(bar.value / actualMax) * 100}%`
-                                      : 0,
-                                  bgcolor: bar.color,
-                                  borderRadius: "4px 4px 0 0",
-                                  minHeight: bar.value > 0 ? 8 : 0,
+                                title={bar.tooltip}
+                                placement="top"
+                                arrow
+                                slotProps={{
+                                  tooltip: {
+                                    sx: {
+                                      bgcolor: COLORS.bgSecondary,
+                                      color: COLORS.textPrimary,
+                                      border: `1px solid ${COLORS.border}`,
+                                      fontSize: "12px",
+                                      maxWidth: 250,
+                                      p: 1,
+                                    },
+                                  },
+                                  arrow: { sx: { color: COLORS.bgSecondary } },
                                 }}
-                              />
+                              >
+                                <Box
+                                  sx={{
+                                    width: 60,
+                                    height:
+                                      bar.value > 0
+                                        ? `${(bar.value / actualMax) * 100}%`
+                                        : 0,
+                                    bgcolor: bar.color,
+                                    borderRadius: "4px 4px 0 0",
+                                    minHeight: bar.value > 0 ? 8 : 0,
+                                    cursor: "pointer",
+                                  }}
+                                />
+                              </Tooltip>
                             ))}
                           </Box>
                         </Box>
@@ -4951,21 +5273,60 @@ const PlannerProjectWorkspace = () => {
                             borderTop: `1px solid ${COLORS.border}`,
                           }}
                         >
-                          {["Open", "Ready", "Completed", "Overdue"].map(
-                            (label) => (
+                          {[
+                            {
+                              label: "Open",
+                              tooltip:
+                                "Open - Actions that are newly created and need to be addressed",
+                            },
+                            {
+                              label: "Ready",
+                              tooltip:
+                                "Ready - Actions that are currently in progress",
+                            },
+                            {
+                              label: "Completed",
+                              tooltip:
+                                "Completed - Actions that have been successfully completed",
+                            },
+                            {
+                              label: "Overdue",
+                              tooltip:
+                                "Overdue - Actions that are past their due date and need immediate attention",
+                            },
+                          ].map((item) => (
+                            <Tooltip
+                              key={item.label}
+                              title={item.tooltip}
+                              placement="bottom"
+                              arrow
+                              slotProps={{
+                                tooltip: {
+                                  sx: {
+                                    bgcolor: COLORS.bgSecondary,
+                                    color: COLORS.textPrimary,
+                                    border: `1px solid ${COLORS.border}`,
+                                    fontSize: "12px",
+                                    maxWidth: 250,
+                                    p: 1,
+                                  },
+                                },
+                                arrow: { sx: { color: COLORS.bgSecondary } },
+                              }}
+                            >
                               <Typography
-                                key={label}
                                 sx={{
                                   color: COLORS.textMuted,
                                   fontSize: "10px",
                                   width: 60,
                                   textAlign: "center",
+                                  cursor: "pointer",
                                 }}
                               >
-                                {label}
+                                {item.label}
                               </Typography>
-                            ),
-                          )}
+                            </Tooltip>
+                          ))}
                         </Box>
                       </Box>
                     </Box>
@@ -5064,7 +5425,7 @@ const PlannerProjectWorkspace = () => {
                       fontWeight: 500,
                     }}
                   >
-                    Week locked. View history in Closure & Export tab.
+                    Proejct locked.
                   </Typography>
                 </Box>
               ) : uploadedProgramme?.cycleStatus === "Close-Out Eligible" ? (
@@ -5082,9 +5443,6 @@ const PlannerProjectWorkspace = () => {
                       mb: 2,
                     }}
                   >
-                    <Typography sx={{ color: COLORS.blue, fontSize: "18px" }}>
-                      📋
-                    </Typography>
                     <Box>
                       <Typography
                         sx={{
@@ -5101,29 +5459,11 @@ const PlannerProjectWorkspace = () => {
                           fontSize: "12px",
                         }}
                       >
-                        Export documents can be generated. Ready to close and
-                        lock the week.
+                        Ready to close and lock the week.
                       </Typography>
                     </Box>
                   </Box>
                   <Box sx={{ display: "flex", gap: 2 }}>
-                    <Button
-                      onClick={() => setActiveTab(5)}
-                      sx={{
-                        bgcolor: "transparent",
-                        color: COLORS.blue,
-                        border: `1px solid ${COLORS.blue}`,
-                        textTransform: "none",
-                        px: 2,
-                        py: 1,
-                        borderRadius: "8px",
-                        fontSize: "13px",
-                        fontWeight: 500,
-                        "&:hover": { bgcolor: "rgba(59, 130, 246, 0.1)" },
-                      }}
-                    >
-                      Go to Exports
-                    </Button>
                     <Button
                       onClick={handleFinalClose}
                       sx={{
@@ -5144,8 +5484,8 @@ const PlannerProjectWorkspace = () => {
                 </Box>
               ) : cycleStage === "execution" ? (
                 <Box>
-                  {weeksStatus?.weeks.find((w) => w.canClose) ? (
-                    /* Ready for close-out */
+                  {weeklyActionStats.open === 0 ? (
+                    /* Ready for close-out - all actions completed */
                     <>
                       <Box
                         sx={{
@@ -5233,50 +5573,179 @@ const PlannerProjectWorkspace = () => {
                       </Button>
                     </>
                   ) : (
-                    /* Waiting for actions or no weeks to close */
-                    <Box
-                      sx={{
-                        bgcolor: "#2D2A24",
-                        border: `1px solid ${COLORS.amber}`,
-                        borderRadius: "8px",
-                        px: 2,
-                        py: 1.5,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 1.5,
-                      }}
-                    >
-                      <svg
-                        width="20"
-                        height="20"
-                        viewBox="0 0 20 20"
-                        fill="none"
-                      >
-                        <circle
-                          cx="10"
-                          cy="10"
-                          r="8.5"
-                          stroke="#F59E0B"
-                          strokeWidth="1.5"
-                        />
-                        <path
-                          d="M10 5.5V10L13 12"
-                          stroke="#F59E0B"
-                          strokeWidth="1.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                      <Typography
+                    /* Open actions remaining */
+                    <>
+                      <Box
                         sx={{
-                          color: COLORS.amber,
-                          fontSize: "13px",
-                          fontWeight: 500,
+                          bgcolor: "#2D2A24",
+                          border: `1px solid ${COLORS.amber}`,
+                          borderRadius: "8px",
+                          px: 2,
+                          py: 1.5,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 1.5,
+                          mb: 2,
                         }}
                       >
-                        No weeks available to close yet
-                      </Typography>
-                    </Box>
+                        <svg
+                          width="20"
+                          height="20"
+                          viewBox="0 0 20 20"
+                          fill="none"
+                        >
+                          <circle
+                            cx="10"
+                            cy="10"
+                            r="8.5"
+                            stroke="#F59E0B"
+                            strokeWidth="1.5"
+                          />
+                          <path
+                            d="M10 5.5V10L13 12"
+                            stroke="#F59E0B"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                        <Typography
+                          sx={{
+                            color: COLORS.amber,
+                            fontSize: "13px",
+                            fontWeight: 500,
+                          }}
+                        >
+                          {weeklyActionStats.open} open action(s) need to be
+                          completed before closing.
+                        </Typography>
+                      </Box>
+                      <Box
+                        sx={{
+                          display: "flex",
+                          gap: 2,
+                          alignItems: "flex-start",
+                        }}
+                      >
+                        <Button
+                          onClick={() => setActiveTab(3)}
+                          sx={{
+                            bgcolor: COLORS.blue,
+                            color: "#fff",
+                            textTransform: "none",
+                            px: 2,
+                            py: 1,
+                            borderRadius: "8px",
+                            fontSize: "13px",
+                            fontWeight: 500,
+                            "&:hover": { bgcolor: COLORS.blueHover },
+                          }}
+                        >
+                          Go to Actions
+                        </Button>
+                        <Button
+                          onClick={() => setShowOverrideForm(!showOverrideForm)}
+                          sx={{
+                            bgcolor: "transparent",
+                            color: COLORS.amber,
+                            border: `1px solid ${COLORS.amber}`,
+                            textTransform: "none",
+                            px: 2,
+                            py: 1,
+                            borderRadius: "8px",
+                            fontSize: "13px",
+                            fontWeight: 500,
+                            "&:hover": { bgcolor: "rgba(245, 158, 11, 0.1)" },
+                          }}
+                        >
+                          PM Override
+                        </Button>
+                      </Box>
+                      {showOverrideForm && (
+                        <Box
+                          sx={{
+                            mt: 2,
+                            bgcolor: "#2D2A24",
+                            border: `1px solid ${COLORS.amber}`,
+                            borderRadius: "8px",
+                            p: 2,
+                          }}
+                        >
+                          <Typography
+                            sx={{
+                              color: COLORS.amber,
+                              fontSize: "14px",
+                              fontWeight: 600,
+                              mb: 1,
+                            }}
+                          >
+                            PM Override — Force Close Weeks
+                          </Typography>
+                          <Typography
+                            sx={{
+                              color: COLORS.textSecondary,
+                              fontSize: "13px",
+                              mb: 2,
+                            }}
+                          >
+                            Enter a mandatory reason (min 10 characters) to
+                            close these weeks despite incomplete actions.
+                          </Typography>
+                          <TextField
+                            fullWidth
+                            multiline
+                            rows={2}
+                            placeholder="Enter justification for override..."
+                            value={overrideReason}
+                            onChange={(e) => setOverrideReason(e.target.value)}
+                            sx={{
+                              mb: 2,
+                              "& .MuiOutlinedInput-root": {
+                                bgcolor: COLORS.bgSecondary,
+                                borderRadius: "8px",
+                                "& fieldset": { borderColor: COLORS.border },
+                                "&:hover fieldset": {
+                                  borderColor: COLORS.amber,
+                                },
+                                "&.Mui-focused fieldset": {
+                                  borderColor: COLORS.amber,
+                                },
+                              },
+                              "& .MuiInputBase-input": {
+                                color: COLORS.textPrimary,
+                                fontSize: "14px",
+                              },
+                            }}
+                          />
+                          <Button
+                            onClick={handleOverrideClose}
+                            disabled={
+                              overrideReason.length < 10 ||
+                              weeklyControlData?.isProjectEnded
+                            }
+                            sx={{
+                              bgcolor: COLORS.amber,
+                              color: "#fff",
+                              textTransform: "none",
+                              px: 3,
+                              py: 1,
+                              borderRadius: "8px",
+                              fontSize: "13px",
+                              fontWeight: 500,
+                              "&:hover": { bgcolor: "#d97706" },
+                              "&.Mui-disabled": {
+                                bgcolor: COLORS.bgTertiary,
+                                color: COLORS.textMuted,
+                              },
+                            }}
+                          >
+                            {weeklyControlData?.isProjectEnded
+                              ? "Project Ended"
+                              : "Force Close Weeks"}
+                          </Button>
+                        </Box>
+                      )}
+                    </>
                   )}
                 </Box>
               ) : (
@@ -5563,8 +6032,7 @@ const PlannerProjectWorkspace = () => {
                   <Typography
                     sx={{ color: COLORS.textSecondary, fontSize: "12px" }}
                   >
-                    Programme is fully closed. View history in Closure & Export
-                    tab.
+                    Programme is fully closed.
                   </Typography>
                 </Box>
               </Box>
@@ -5605,7 +6073,7 @@ const PlannerProjectWorkspace = () => {
                     mb: 1,
                   }}
                 >
-                  Week Closed & Locked
+                  Project Closed & Locked
                 </Typography>
                 <Typography
                   sx={{
@@ -5617,7 +6085,7 @@ const PlannerProjectWorkspace = () => {
                         : 0,
                   }}
                 >
-                  This week has been closed. No further changes allowed.
+                  This project has been closed. No further changes allowed.
                 </Typography>
                 {(savedOverrideReason || uploadedProgramme?.overrideReason) && (
                   <Typography
@@ -5691,14 +6159,7 @@ const PlannerProjectWorkspace = () => {
                           display: "flex",
                           alignItems: "center",
                           gap: 1.5,
-                          cursor: "pointer",
                         }}
-                        onClick={() =>
-                          setClosureChecklist((prev) => ({
-                            ...prev,
-                            [item.key]: !prev[item.key as keyof typeof prev],
-                          }))
-                        }
                       >
                         <Box
                           sx={{
@@ -5810,42 +6271,72 @@ const PlannerProjectWorkspace = () => {
                         : "activities"}{" "}
                       qualify
                     </Typography>
-                    <Button
-                      fullWidth
-                      onClick={handleExportWeeklyPlan}
-                      disabled={
-                        isExporting === "weekly" ||
-                        exportCounts.greenActivitiesReady === 0
+                    <Tooltip
+                      title={
+                        exportGatingStatus.isGated
+                          ? `Exports are gated. The WeekCycle must be in Close-Out Eligible state. Current cycle is in ${exportGatingStatus.cycleStatus}.`
+                          : ""
                       }
-                      startIcon={
-                        isExporting === "weekly" ? (
-                          <CircularProgress
-                            size={14}
-                            sx={{ color: "inherit" }}
-                          />
-                        ) : null
-                      }
-                      sx={{
-                        bgcolor: COLORS.green,
-                        color: "#fff",
-                        textTransform: "none",
-                        py: 1.25,
-                        borderRadius: "8px",
-                        fontSize: "13px",
-                        fontWeight: 500,
-                        "&:hover": {
-                          bgcolor: "#16a34a",
+                      placement="top"
+                      arrow
+                      slotProps={{
+                        tooltip: {
+                          sx: {
+                            bgcolor: COLORS.bgSecondary,
+                            color: COLORS.textPrimary,
+                            border: `1px solid ${COLORS.border}`,
+                            fontSize: "12px",
+                            maxWidth: 300,
+                            p: 1,
+                          },
                         },
-                        "&:disabled": {
-                          bgcolor: COLORS.disabledBlue,
-                          color: "#fff",
-                        },
+                        arrow: { sx: { color: COLORS.bgSecondary } },
                       }}
                     >
-                      {isExporting === "weekly"
-                        ? "Exporting..."
-                        : "Download Weekly Plan"}
-                    </Button>
+                      <span style={{ width: "100%" }}>
+                        <Button
+                          fullWidth
+                          onClick={handleExportWeeklyPlan}
+                          disabled={
+                            isExporting === "weekly" ||
+                            exportCounts.greenActivitiesReady === 0 ||
+                            exportGatingStatus.isGated
+                          }
+                          startIcon={
+                            isExporting === "weekly" ? (
+                              <CircularProgress
+                                size={14}
+                                sx={{ color: "inherit" }}
+                              />
+                            ) : null
+                          }
+                          sx={{
+                            bgcolor: exportGatingStatus.isGated
+                              ? COLORS.disabledBlue
+                              : COLORS.green,
+                            color: "#fff",
+                            textTransform: "none",
+                            py: 1.25,
+                            borderRadius: "8px",
+                            fontSize: "13px",
+                            fontWeight: 500,
+                            "&:hover": {
+                              bgcolor: exportGatingStatus.isGated
+                                ? COLORS.disabledBlue
+                                : "#16a34a",
+                            },
+                            "&:disabled": {
+                              bgcolor: COLORS.disabledBlue,
+                              color: "#fff",
+                            },
+                          }}
+                        >
+                          {isExporting === "weekly"
+                            ? "Exporting..."
+                            : "Download Weekly Plan"}
+                        </Button>
+                      </span>
+                    </Tooltip>
                   </Box>
 
                   <Box
@@ -5907,42 +6398,72 @@ const PlannerProjectWorkspace = () => {
                       {exportCounts.outstandingActions} outstanding{" "}
                       {exportCounts.outstandingActions === 1 ? "item" : "items"}
                     </Typography>
-                    <Button
-                      fullWidth
-                      onClick={handleExportPlannerTodo}
-                      disabled={
-                        isExporting === "todo" ||
-                        exportCounts.outstandingActions === 0
+                    <Tooltip
+                      title={
+                        exportGatingStatus.isGated
+                          ? `Exports are gated. The WeekCycle must be in Close-Out Eligible state. Current cycle is in ${exportGatingStatus.cycleStatus}.`
+                          : ""
                       }
-                      startIcon={
-                        isExporting === "todo" ? (
-                          <CircularProgress
-                            size={14}
-                            sx={{ color: "inherit" }}
-                          />
-                        ) : null
-                      }
-                      sx={{
-                        bgcolor: COLORS.blue,
-                        color: "#fff",
-                        textTransform: "none",
-                        py: 1.25,
-                        borderRadius: "8px",
-                        fontSize: "13px",
-                        fontWeight: 500,
-                        "&:hover": {
-                          bgcolor: "#2563eb",
+                      placement="top"
+                      arrow
+                      slotProps={{
+                        tooltip: {
+                          sx: {
+                            bgcolor: COLORS.bgSecondary,
+                            color: COLORS.textPrimary,
+                            border: `1px solid ${COLORS.border}`,
+                            fontSize: "12px",
+                            maxWidth: 300,
+                            p: 1,
+                          },
                         },
-                        "&:disabled": {
-                          bgcolor: COLORS.disabledBlue,
-                          color: "#fff",
-                        },
+                        arrow: { sx: { color: COLORS.bgSecondary } },
                       }}
                     >
-                      {isExporting === "todo"
-                        ? "Exporting..."
-                        : "Download Planner To-Do"}
-                    </Button>
+                      <span style={{ width: "100%" }}>
+                        <Button
+                          fullWidth
+                          onClick={handleExportPlannerTodo}
+                          disabled={
+                            isExporting === "todo" ||
+                            exportCounts.outstandingActions === 0 ||
+                            exportGatingStatus.isGated
+                          }
+                          startIcon={
+                            isExporting === "todo" ? (
+                              <CircularProgress
+                                size={14}
+                                sx={{ color: "inherit" }}
+                              />
+                            ) : null
+                          }
+                          sx={{
+                            bgcolor: exportGatingStatus.isGated
+                              ? COLORS.disabledBlue
+                              : COLORS.blue,
+                            color: "#fff",
+                            textTransform: "none",
+                            py: 1.25,
+                            borderRadius: "8px",
+                            fontSize: "13px",
+                            fontWeight: 500,
+                            "&:hover": {
+                              bgcolor: exportGatingStatus.isGated
+                                ? COLORS.disabledBlue
+                                : "#2563eb",
+                            },
+                            "&:disabled": {
+                              bgcolor: COLORS.disabledBlue,
+                              color: "#fff",
+                            },
+                          }}
+                        >
+                          {isExporting === "todo"
+                            ? "Exporting..."
+                            : "Download Planner To-Do"}
+                        </Button>
+                      </span>
+                    </Tooltip>
                   </Box>
                 </Box>
 
@@ -5967,12 +6488,209 @@ const PlannerProjectWorkspace = () => {
                       Exports are gated
                     </Typography>
                     <Typography
-                      sx={{ color: COLORS.textSecondary, fontSize: "12px" }}
+                      sx={{
+                        color: COLORS.textSecondary,
+                        fontSize: "12px",
+                        mb: weeklyActionStats.open > 0 ? 2 : 0,
+                      }}
                     >
                       The WeekCycle must be in Close-Out Eligible state. Current
                       cycle is in {exportGatingStatus.cycleStatus}. Close all
                       required actions for green activities to unlock exports.
                     </Typography>
+
+                    {/* Show PM Override option if there are open actions */}
+                    {weeklyActionStats.open > 0 &&
+                      uploadedProgramme?.cycleStatus === "Execution" && (
+                        <>
+                          <Box
+                            sx={{
+                              bgcolor: COLORS.bgSecondary,
+                              border: `1px solid ${COLORS.border}`,
+                              borderRadius: "8px",
+                              px: 2,
+                              py: 1.5,
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 1.5,
+                              mb: 2,
+                            }}
+                          >
+                            <svg
+                              width="20"
+                              height="20"
+                              viewBox="0 0 20 20"
+                              fill="none"
+                            >
+                              <circle
+                                cx="10"
+                                cy="10"
+                                r="8.5"
+                                stroke="#F59E0B"
+                                strokeWidth="1.5"
+                              />
+                              <path
+                                d="M10 5.5V10L13 12"
+                                stroke="#F59E0B"
+                                strokeWidth="1.5"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                            <Typography
+                              sx={{
+                                color: COLORS.amber,
+                                fontSize: "13px",
+                                fontWeight: 500,
+                              }}
+                            >
+                              {weeklyActionStats.open} open action(s) need to be
+                              completed before closing.
+                            </Typography>
+                          </Box>
+                          <Box
+                            sx={{
+                              display: "flex",
+                              gap: 2,
+                              alignItems: "flex-start",
+                            }}
+                          >
+                            <Button
+                              onClick={() => setActiveTab(3)}
+                              sx={{
+                                bgcolor: COLORS.blue,
+                                color: "#fff",
+                                textTransform: "none",
+                                px: 2,
+                                py: 1,
+                                borderRadius: "8px",
+                                fontSize: "13px",
+                                fontWeight: 500,
+                                "&:hover": { bgcolor: COLORS.blueHover },
+                              }}
+                            >
+                              Go to Actions
+                            </Button>
+                            <Button
+                              onClick={() =>
+                                setShowOverrideForm(!showOverrideForm)
+                              }
+                              sx={{
+                                bgcolor: "transparent",
+                                color: COLORS.amber,
+                                border: `1px solid ${COLORS.amber}`,
+                                textTransform: "none",
+                                px: 2,
+                                py: 1,
+                                borderRadius: "8px",
+                                fontSize: "13px",
+                                fontWeight: 500,
+                                "&:hover": {
+                                  bgcolor: "rgba(245, 158, 11, 0.1)",
+                                },
+                              }}
+                            >
+                              PM Override
+                            </Button>
+                          </Box>
+                          {showOverrideForm && (
+                            <Box
+                              sx={{
+                                mt: 2,
+                                bgcolor: COLORS.bgSecondary,
+                                border: `1px solid ${COLORS.amber}`,
+                                borderRadius: "8px",
+                                p: 2,
+                              }}
+                            >
+                              <Typography
+                                sx={{
+                                  color: COLORS.amber,
+                                  fontSize: "14px",
+                                  fontWeight: 600,
+                                  mb: 1,
+                                }}
+                              >
+                                PM Override — Force Close Week
+                              </Typography>
+                              <Typography
+                                sx={{
+                                  color: COLORS.textSecondary,
+                                  fontSize: "13px",
+                                  mb: 2,
+                                }}
+                              >
+                                Enter a mandatory reason (min 10 characters) to
+                                close the week despite incomplete actions.
+                              </Typography>
+                              <TextField
+                                fullWidth
+                                multiline
+                                rows={2}
+                                placeholder="Enter justification for override..."
+                                value={overrideReason}
+                                onChange={(e) =>
+                                  setOverrideReason(e.target.value)
+                                }
+                                sx={{
+                                  mb: 2,
+                                  "& .MuiOutlinedInput-root": {
+                                    bgcolor: COLORS.bgSecondary,
+                                    borderRadius: "8px",
+                                    "& fieldset": {
+                                      borderColor: COLORS.border,
+                                    },
+                                    "&:hover fieldset": {
+                                      borderColor: COLORS.amber,
+                                    },
+                                    "&.Mui-focused fieldset": {
+                                      borderColor: COLORS.amber,
+                                    },
+                                  },
+                                  "& .MuiInputBase-input": {
+                                    color: COLORS.textPrimary,
+                                    fontSize: "14px",
+                                  },
+                                }}
+                              />
+                              <Button
+                                onClick={handleOverrideCloseForExport}
+                                disabled={
+                                  overrideReason.length < 10 ||
+                                  weeklyControlData?.isProjectEnded ||
+                                  closingWeek !== null
+                                }
+                                sx={{
+                                  bgcolor: COLORS.amber,
+                                  color: "#fff",
+                                  textTransform: "none",
+                                  px: 3,
+                                  py: 1,
+                                  borderRadius: "8px",
+                                  fontSize: "13px",
+                                  fontWeight: 500,
+                                  "&:hover": { bgcolor: "#d97706" },
+                                  "&.Mui-disabled": {
+                                    bgcolor: COLORS.bgTertiary,
+                                    color: COLORS.textMuted,
+                                  },
+                                }}
+                              >
+                                {closingWeek !== null ? (
+                                  <CircularProgress
+                                    size={18}
+                                    sx={{ color: "#fff" }}
+                                  />
+                                ) : weeklyControlData?.isProjectEnded ? (
+                                  "Project Ended"
+                                ) : (
+                                  "Force Close Week"
+                                )}
+                              </Button>
+                            </Box>
+                          )}
+                        </>
+                      )}
                   </Box>
                 )}
 
