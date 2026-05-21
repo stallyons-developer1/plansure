@@ -667,8 +667,8 @@ const AdminProjectWorkspace = () => {
               },
             ],
           });
-
-          await fetchWeeklyControlData(programme._id);
+          // Note: Don't call fetchWeeklyControlData here - let the useEffect handle it
+          // once weeksStatus is loaded to ensure correct week number is used
         }
       } catch (error) {
         console.error("Failed to fetch programme:", error);
