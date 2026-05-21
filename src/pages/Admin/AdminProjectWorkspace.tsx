@@ -450,6 +450,12 @@ const AdminProjectWorkspace = () => {
       closed: number;
       overdue: number;
     };
+    weeklyActionsByStatus: {
+      open: number;
+      inProgress: number;
+      closed: number;
+      overdue: number;
+    };
     blockedRiskActivities: Array<{
       activityId: string;
       activityName: string;
@@ -1430,6 +1436,12 @@ const AdminProjectWorkspace = () => {
           closed: 0,
           overdue: 0,
         },
+        weeklyActionsByStatus: response.weeklyActionsByStatus || {
+          open: 0,
+          inProgress: 0,
+          closed: 0,
+          overdue: 0,
+        },
         blockedRiskActivities: response.blockedRiskActivities || [],
         weeklyPlanPreview: response.weeklyPlanPreview || [],
         plannerToDo: response.plannerToDo || [],
@@ -1707,16 +1719,16 @@ const AdminProjectWorkspace = () => {
     ).length,
   };
 
-  // Weekly action stats for Weekly Control tab (week-filtered, excludes PM Override'd actions)
+  // Weekly action stats for PM Override warning (week-filtered, excludes PM Override'd actions)
   const weeklyActionStats = {
     total:
-      (weeklyControlData?.actionsByStatus?.open || 0) +
-      (weeklyControlData?.actionsByStatus?.inProgress || 0) +
-      (weeklyControlData?.actionsByStatus?.closed || 0),
-    open: weeklyControlData?.actionsByStatus?.open || 0,
-    inProgress: weeklyControlData?.actionsByStatus?.inProgress || 0,
-    closed: weeklyControlData?.actionsByStatus?.closed || 0,
-    overdue: weeklyControlData?.actionsByStatus?.overdue || 0,
+      (weeklyControlData?.weeklyActionsByStatus?.open || 0) +
+      (weeklyControlData?.weeklyActionsByStatus?.inProgress || 0) +
+      (weeklyControlData?.weeklyActionsByStatus?.closed || 0),
+    open: weeklyControlData?.weeklyActionsByStatus?.open || 0,
+    inProgress: weeklyControlData?.weeklyActionsByStatus?.inProgress || 0,
+    closed: weeklyControlData?.weeklyActionsByStatus?.closed || 0,
+    overdue: weeklyControlData?.weeklyActionsByStatus?.overdue || 0,
   };
 
   const handleStepClick = (stepNumber: number) => {
