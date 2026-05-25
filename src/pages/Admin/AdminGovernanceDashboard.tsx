@@ -929,15 +929,18 @@ const AdminGovernanceDashboard = () => {
               overflowX: "auto",
               overflowY: "hidden",
               "&::-webkit-scrollbar": {
-                height: "6px",
+                height: "8px",
               },
               "&::-webkit-scrollbar-track": {
                 background: COLORS.bgTertiary,
-                borderRadius: "3px",
+                borderRadius: "4px",
               },
               "&::-webkit-scrollbar-thumb": {
-                background: COLORS.borderDark,
-                borderRadius: "3px",
+                background: COLORS.blue,
+                borderRadius: "4px",
+                "&:hover": {
+                  background: "#4A90D9",
+                },
               },
             }}
           >
@@ -1065,15 +1068,18 @@ const AdminGovernanceDashboard = () => {
                   overflowY: "hidden",
                   width: "100%",
                   "&::-webkit-scrollbar": {
-                    height: "6px",
+                    height: "8px",
                   },
                   "&::-webkit-scrollbar-track": {
                     background: COLORS.bgTertiary,
-                    borderRadius: "3px",
+                    borderRadius: "4px",
                   },
                   "&::-webkit-scrollbar-thumb": {
-                    background: COLORS.borderDark,
-                    borderRadius: "3px",
+                    background: COLORS.blue,
+                    borderRadius: "4px",
+                    "&:hover": {
+                      background: "#4A90D9",
+                    },
                   },
                 }}
               >
@@ -1204,15 +1210,18 @@ const AdminGovernanceDashboard = () => {
               overflowY: "hidden",
               width: "100%",
               "&::-webkit-scrollbar": {
-                height: "6px",
+                height: "8px",
               },
               "&::-webkit-scrollbar-track": {
                 background: COLORS.bgTertiary,
-                borderRadius: "3px",
+                borderRadius: "4px",
               },
               "&::-webkit-scrollbar-thumb": {
-                background: COLORS.borderDark,
-                borderRadius: "3px",
+                background: COLORS.blue,
+                borderRadius: "4px",
+                "&:hover": {
+                  background: "#4A90D9",
+                },
               },
             }}
           >

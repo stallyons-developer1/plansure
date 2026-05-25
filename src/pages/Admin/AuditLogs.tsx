@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Box,
   Typography,
@@ -6,6 +6,8 @@ import {
   Select,
   MenuItem,
   TextField,
+  CircularProgress,
+  Pagination,
 } from "@mui/material";
 import {
   Lock as LockIcon,
@@ -14,207 +16,204 @@ import {
 } from "@mui/icons-material";
 import AdminLayout from "../../layouts/AdminLayout";
 import { COLORS } from "../../constants/colors";
+import { auditAPI, userAPI } from "../../services/api";
 
-interface AuditEvent {
-  id: string;
-  timestamp: string;
-  eventType: string;
-  actor: string;
-  entityType: string;
-  entityId: string;
+interface AuditLog {
+  _id: string;
+  action: string;
+  category: string;
+  performedBy?: {
+    _id: string;
+    name: string;
+    email: string;
+  };
+  performedByName?: string;
+  performedByEmail?: string;
+  resourceType?: string;
+  resourceId?: string;
+  resourceName?: string;
+  project?: {
+    _id: string;
+    name: string;
+  };
   description: string;
+  createdAt: string;
 }
 
-const auditEvents: AuditEvent[] = [
-  {
-    id: "1",
-    timestamp: "2026-04-22 09:30:15",
-    eventType: "User Login",
-    actor: "j.whitfield@plansure.io",
-    entityType: "User",
-    entityId: "USR-001",
-    description: "Successful authentication",
-  },
-  {
-    id: "2",
-    timestamp: "2026-04-22 09:25:00",
-    eventType: "Programme Upload",
-    actor: "k.rashid@plansure.io",
-    entityType: "Programme",
-    entityId: "PRG-047",
-    description: "Week 47 programme uploaded",
-  },
-  {
-    id: "3",
-    timestamp: "2026-04-22 09:15:30",
-    eventType: "Activity Update",
-    actor: "s.mitchell@plansure.io",
-    entityType: "Activity",
-    entityId: "ACT-1042",
-    description: "RAG status changed: Amber → Green",
-  },
-  {
-    id: "4",
-    timestamp: "2026-04-22 09:00:00",
-    eventType: "User Created",
-    actor: "j.whitfield@plansure.io",
-    entityType: "User",
-    entityId: "USR-007",
-    description: "New user: e.rodriguez@plansure.io",
-  },
-  {
-    id: "5",
-    timestamp: "2026-04-22 08:45:20",
-    eventType: "Action Closed",
-    actor: "d.chen@plansure.io",
-    entityType: "Action",
-    entityId: "ACN-0052",
-    description: "Action marked as complete",
-  },
-  {
-    id: "6",
-    timestamp: "2026-04-22 08:30:00",
-    eventType: "Settings Changed",
-    actor: "j.whitfield@plansure.io",
-    entityType: "Project",
-    entityId: "PRJ-001",
-    description: "Notification settings updated",
-  },
-  {
-    id: "7",
-    timestamp: "2026-04-22 08:15:45",
-    eventType: "User Logout",
-    actor: "r.nguyen@plansure.io",
-    entityType: "User",
-    entityId: "USR-006",
-    description: "Session ended",
-  },
-  {
-    id: "8",
-    timestamp: "2026-04-21 17:30:00",
-    eventType: "Week Closed",
-    actor: "k.rashid@plansure.io",
-    entityType: "Week",
-    entityId: "WK-046",
-    description: "Week 46 closed with PM Override",
-  },
-  {
-    id: "9",
-    timestamp: "2026-04-21 16:45:30",
-    eventType: "Export Generated",
-    actor: "s.mitchell@plansure.io",
-    entityType: "Report",
-    entityId: "RPT-089",
-    description: "Governance PDF exported",
-  },
-  {
-    id: "10",
-    timestamp: "2026-04-21 15:00:00",
-    eventType: "Role Changed",
-    actor: "j.whitfield@plansure.io",
-    entityType: "User",
-    entityId: "USR-004",
-    description: "Role updated: User → Planner",
-  },
-  {
-    id: "11",
-    timestamp: "2026-04-21 14:30:00",
-    eventType: "Activity Created",
-    actor: "k.rashid@plansure.io",
-    entityType: "Activity",
-    entityId: "ACT-1050",
-    description: "New activity added to Week 47",
-  },
-  {
-    id: "12",
-    timestamp: "2026-04-21 13:15:00",
-    eventType: "Action Created",
-    actor: "d.chen@plansure.io",
-    entityType: "Action",
-    entityId: "ACN-0055",
-    description: "New action assigned to J. Smith",
-  },
-  {
-    id: "13",
-    timestamp: "2026-04-21 12:00:00",
-    eventType: "Project Updated",
-    actor: "j.whitfield@plansure.io",
-    entityType: "Project",
-    entityId: "PRJ-002",
-    description: "Project phase changed to Delivery",
-  },
-  {
-    id: "14",
-    timestamp: "2026-04-21 10:30:00",
-    eventType: "User Login",
-    actor: "e.rodriguez@plansure.io",
-    entityType: "User",
-    entityId: "USR-005",
-    description: "Successful authentication",
-  },
-  {
-    id: "15",
-    timestamp: "2026-04-21 09:00:00",
-    eventType: "System Backup",
-    actor: "system",
-    entityType: "System",
-    entityId: "SYS-001",
-    description: "Daily backup completed",
-  },
+interface User {
+  _id: string;
+  name: string;
+  email: string;
+}
+
+const formatAction = (action: string) => {
+  return action
+    .replace(/_/g, " ")
+    .split(" ")
+    .map((word) => word.charAt(0) + word.slice(1).toLowerCase())
+    .join(" ");
+};
+
+const formatTimestamp = (dateStr: string) => {
+  const date = new Date(dateStr);
+  return date.toLocaleString("en-GB", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).replace(",", "");
+};
+
+const getEntityId = (log: AuditLog) => {
+  if (log.resourceId) {
+    const id = log.resourceId.toString();
+    const prefix = log.resourceType?.slice(0, 3).toUpperCase() || "ID";
+    return `${prefix}-${id.slice(-4).toUpperCase()}`;
+  }
+  return "-";
+};
+
+const categories = [
+  { value: "", label: "All Events" },
+  { value: "AUTH", label: "Authentication" },
+  { value: "USER", label: "User Management" },
+  { value: "PROJECT", label: "Project Management" },
+  { value: "PROGRAMME", label: "Programme Management" },
+  { value: "ACTIVITY", label: "Activity Management" },
+  { value: "ACTION", label: "Action Management" },
+  { value: "WEEK", label: "Week Management" },
+  { value: "EXPORT", label: "Exports" },
+  { value: "SYSTEM", label: "System" },
 ];
 
-const eventTypes = [
-  "All Events",
-  "User Login",
-  "User Logout",
-  "Programme Upload",
-  "Activity Update",
-  "Activity Created",
-  "Action Created",
-  "Action Closed",
-  "User Created",
-  "Role Changed",
-  "Settings Changed",
-  "Week Closed",
-  "Export Generated",
-  "Project Updated",
-  "System Backup",
-];
-const users = [
-  "All Users",
-  "j.whitfield@plansure.io",
-  "k.rashid@plansure.io",
-  "s.mitchell@plansure.io",
-  "d.chen@plansure.io",
-  "r.nguyen@plansure.io",
-  "e.rodriguez@plansure.io",
-  "system",
-];
 const entityTypes = [
   "All entity",
   "User",
+  "Project",
   "Programme",
   "Activity",
   "Action",
-  "Project",
   "Week",
-  "Report",
+  "Export",
   "System",
 ];
 
 const AuditLogs = () => {
-  const [eventTypeFilter, setEventTypeFilter] = useState("All Events");
-  const [userFilter, setUserFilter] = useState("All Users");
+  const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [users, setUsers] = useState<User[]>([]);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 50,
+    total: 0,
+    pages: 1,
+  });
+
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [userFilter, setUserFilter] = useState("");
   const [entityTypeFilter, setEntityTypeFilter] = useState("All entity");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
+  const fetchLogs = async () => {
+    setLoading(true);
+    try {
+      const params: {
+        page: number;
+        limit: number;
+        category?: string;
+        userId?: string;
+        startDate?: string;
+        endDate?: string;
+      } = {
+        page: pagination.page,
+        limit: pagination.limit,
+      };
+
+      if (categoryFilter) params.category = categoryFilter;
+      if (userFilter) params.userId = userFilter;
+      if (startDate) params.startDate = startDate;
+      if (endDate) params.endDate = endDate;
+
+      const response = await auditAPI.getLogs(params);
+      if (response.success) {
+        let filteredLogs = response.logs;
+
+        // Client-side filter for entity type since backend doesn't support it
+        if (entityTypeFilter !== "All entity") {
+          filteredLogs = filteredLogs.filter(
+            (log: AuditLog) => log.resourceType === entityTypeFilter
+          );
+        }
+
+        setLogs(filteredLogs);
+        setPagination(response.pagination);
+      }
+    } catch (error) {
+      console.error("Failed to fetch audit logs:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchUsers = async () => {
+    try {
+      const response = await userAPI.getAll();
+      if (response.success) {
+        setUsers(response.users || []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch users:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  useEffect(() => {
+    fetchLogs();
+  }, [pagination.page, categoryFilter, userFilter, entityTypeFilter, startDate, endDate]);
+
   const handleClear = () => {
-    setEventTypeFilter("All Events");
-    setUserFilter("All Users");
+    setCategoryFilter("");
+    setUserFilter("");
     setEntityTypeFilter("All entity");
     setStartDate("");
     setEndDate("");
+    setPagination((prev) => ({ ...prev, page: 1 }));
+  };
+
+  const handlePageChange = (_: React.ChangeEvent<unknown>, page: number) => {
+    setPagination((prev) => ({ ...prev, page }));
+  };
+
+  const handleExportCSV = () => {
+    const headers = ["Timestamp", "Event Type", "Actor", "Entity Type", "Entity ID", "Description"];
+    const rows = logs.map((log) => [
+      formatTimestamp(log.createdAt),
+      formatAction(log.action),
+      log.performedByEmail || log.performedByName || "System",
+      log.resourceType || "-",
+      getEntityId(log),
+      log.description,
+    ]);
+
+    const csvContent = [
+      headers.join(","),
+      ...rows.map((row) => row.map((cell) => `"${cell}"`).join(",")),
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `audit_logs_${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
   };
 
   return (
@@ -243,6 +242,7 @@ const AuditLogs = () => {
           </Box>
           <Button
             startIcon={<DescriptionIcon />}
+            onClick={handleExportCSV}
             sx={{
               bgcolor: COLORS.bgSecondary,
               color: COLORS.textPrimary,
@@ -389,8 +389,9 @@ const AuditLogs = () => {
               EVENT TYPE
             </Typography>
             <Select
-              value={eventTypeFilter}
-              onChange={(e) => setEventTypeFilter(e.target.value)}
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              displayEmpty
               IconComponent={ArrowDownIcon}
               sx={{
                 width: "100%",
@@ -443,9 +444,9 @@ const AuditLogs = () => {
                 },
               }}
             >
-              {eventTypes.map((type) => (
-                <MenuItem key={type} value={type}>
-                  {type}
+              {categories.map((cat) => (
+                <MenuItem key={cat.value} value={cat.value}>
+                  {cat.label}
                 </MenuItem>
               ))}
             </Select>
@@ -466,6 +467,7 @@ const AuditLogs = () => {
             <Select
               value={userFilter}
               onChange={(e) => setUserFilter(e.target.value)}
+              displayEmpty
               IconComponent={ArrowDownIcon}
               sx={{
                 width: "100%",
@@ -518,9 +520,10 @@ const AuditLogs = () => {
                 },
               }}
             >
+              <MenuItem value="">All Users</MenuItem>
               {users.map((user) => (
-                <MenuItem key={user} value={user}>
-                  {user}
+                <MenuItem key={user._id} value={user._id}>
+                  {user.email}
                 </MenuItem>
               ))}
             </Select>
@@ -676,150 +679,214 @@ const AuditLogs = () => {
             </Box>
           </Box>
           <Typography sx={{ color: COLORS.textMuted, fontSize: "14px" }}>
-            {auditEvents.length} events
+            {pagination.total} events
           </Typography>
         </Box>
 
-        <Box sx={{ overflowX: "auto" }}>
-          <Box sx={{ minWidth: 900 }}>
-            <Box
-              sx={{
-                display: "grid",
-                gridTemplateColumns: "150px 140px 200px 110px 100px 1fr",
-                gap: 2,
-                px: 3,
-                py: 2,
-                borderBottom: `1px solid ${COLORS.borderDark}`,
-                bgcolor: COLORS.bgTertiary,
-              }}
-            >
-              <Typography
-                sx={{
-                  color: COLORS.textMuted,
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  letterSpacing: "0.5px",
-                }}
-              >
-                TIMESTAMP
-              </Typography>
-              <Typography
-                sx={{
-                  color: COLORS.textMuted,
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  letterSpacing: "0.5px",
-                }}
-              >
-                EVENT TYPE
-              </Typography>
-              <Typography
-                sx={{
-                  color: COLORS.textMuted,
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  letterSpacing: "0.5px",
-                }}
-              >
-                ACTOR
-              </Typography>
-              <Typography
-                sx={{
-                  color: COLORS.textMuted,
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  letterSpacing: "0.5px",
-                }}
-              >
-                ENTITY TYPE
-              </Typography>
-              <Typography
-                sx={{
-                  color: COLORS.textMuted,
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  letterSpacing: "0.5px",
-                }}
-              >
-                ENTITY ID
-              </Typography>
-              <Typography
-                sx={{
-                  color: COLORS.textMuted,
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  letterSpacing: "0.5px",
-                }}
-              >
-                DESCRIPTION
-              </Typography>
+        {loading ? (
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              py: 8,
+            }}
+          >
+            <CircularProgress sx={{ color: COLORS.blue }} />
+          </Box>
+        ) : logs.length === 0 ? (
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              py: 8,
+            }}
+          >
+            <Typography sx={{ color: COLORS.textMuted, fontSize: "14px" }}>
+              No audit logs found
+            </Typography>
+          </Box>
+        ) : (
+          <>
+            <Box>
+              <Box>
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: "14% 14% 18% 12% 12% 30%",
+                    px: 3,
+                    py: 2,
+                    borderBottom: `1px solid ${COLORS.borderDark}`,
+                    bgcolor: COLORS.bgTertiary,
+                  }}
+                >
+                  <Typography
+                    sx={{
+                      color: COLORS.textMuted,
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      letterSpacing: "0.5px",
+                      textAlign: "center",
+                    }}
+                  >
+                    TIMESTAMP
+                  </Typography>
+                  <Typography
+                    sx={{
+                      color: COLORS.textMuted,
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      letterSpacing: "0.5px",
+                      textAlign: "center",
+                    }}
+                  >
+                    EVENT TYPE
+                  </Typography>
+                  <Typography
+                    sx={{
+                      color: COLORS.textMuted,
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      letterSpacing: "0.5px",
+                      textAlign: "center",
+                    }}
+                  >
+                    ACTOR
+                  </Typography>
+                  <Typography
+                    sx={{
+                      color: COLORS.textMuted,
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      letterSpacing: "0.5px",
+                      textAlign: "center",
+                    }}
+                  >
+                    ENTITY TYPE
+                  </Typography>
+                  <Typography
+                    sx={{
+                      color: COLORS.textMuted,
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      letterSpacing: "0.5px",
+                      textAlign: "center",
+                    }}
+                  >
+                    ENTITY ID
+                  </Typography>
+                  <Typography
+                    sx={{
+                      color: COLORS.textMuted,
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      letterSpacing: "0.5px",
+                      textAlign: "center",
+                    }}
+                  >
+                    DESCRIPTION
+                  </Typography>
+                </Box>
+
+                {logs.map((log, index) => (
+                  <Box
+                    key={log._id}
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns: "14% 14% 18% 12% 12% 30%",
+                      px: 3,
+                      py: 2,
+                      borderBottom:
+                        index < logs.length - 1
+                          ? `1px solid ${COLORS.borderDark}`
+                          : "none",
+                      alignItems: "center",
+                      "&:hover": {
+                        bgcolor: COLORS.bgTertiary,
+                      },
+                    }}
+                  >
+                    <Typography
+                      sx={{
+                        color: COLORS.textMuted,
+                        fontSize: "13px",
+                        fontFamily: "monospace",
+                        textAlign: "center",
+                      }}
+                    >
+                      {formatTimestamp(log.createdAt)}
+                    </Typography>
+                    <Typography
+                      sx={{
+                        color: COLORS.textPrimary,
+                        fontSize: "14px",
+                        fontWeight: 500,
+                        textAlign: "center",
+                      }}
+                    >
+                      {formatAction(log.action)}
+                    </Typography>
+                    <Typography
+                      sx={{ color: COLORS.textSecondary, fontSize: "14px", textAlign: "center" }}
+                    >
+                      {log.performedByEmail || log.performedByName || "System"}
+                    </Typography>
+                    <Typography
+                      sx={{ color: COLORS.textSecondary, fontSize: "14px", textAlign: "center" }}
+                    >
+                      {log.resourceType || "-"}
+                    </Typography>
+                    <Typography
+                      sx={{
+                        color: COLORS.blue,
+                        fontSize: "13px",
+                        fontFamily: "monospace",
+                        textAlign: "center",
+                      }}
+                    >
+                      {getEntityId(log)}
+                    </Typography>
+                    <Typography
+                      sx={{ color: COLORS.textSecondary, fontSize: "14px", textAlign: "center" }}
+                    >
+                      {log.description}
+                    </Typography>
+                  </Box>
+                ))}
+              </Box>
             </Box>
 
-            {auditEvents.map((event, index) => (
+            {pagination.pages > 1 && (
               <Box
-                key={event.id}
                 sx={{
-                  display: "grid",
-                  gridTemplateColumns: "150px 140px 200px 110px 100px 1fr",
-                  gap: 2,
-                  px: 3,
-                  py: 2,
-                  borderBottom:
-                    index < auditEvents.length - 1
-                      ? `1px solid ${COLORS.borderDark}`
-                      : "none",
-                  alignItems: "center",
-                  "&:hover": {
-                    bgcolor: COLORS.bgTertiary,
-                  },
+                  display: "flex",
+                  justifyContent: "center",
+                  py: 3,
+                  borderTop: `1px solid ${COLORS.borderDark}`,
                 }}
               >
-                <Typography
+                <Pagination
+                  count={pagination.pages}
+                  page={pagination.page}
+                  onChange={handlePageChange}
                   sx={{
-                    color: COLORS.textMuted,
-                    fontSize: "13px",
-                    fontFamily: "monospace",
+                    "& .MuiPaginationItem-root": {
+                      color: COLORS.textSecondary,
+                      "&.Mui-selected": {
+                        bgcolor: COLORS.blue,
+                        color: "white",
+                        "&:hover": {
+                          bgcolor: COLORS.blue,
+                        },
+                      },
+                    },
                   }}
-                >
-                  {event.timestamp}
-                </Typography>
-                <Typography
-                  sx={{
-                    color: COLORS.textPrimary,
-                    fontSize: "14px",
-                    fontWeight: 500,
-                  }}
-                >
-                  {event.eventType}
-                </Typography>
-                <Typography
-                  sx={{ color: COLORS.textSecondary, fontSize: "14px" }}
-                >
-                  {event.actor}
-                </Typography>
-                <Typography
-                  sx={{ color: COLORS.textSecondary, fontSize: "14px" }}
-                >
-                  {event.entityType}
-                </Typography>
-                <Typography
-                  sx={{
-                    color: COLORS.blue,
-                    fontSize: "13px",
-                    fontFamily: "monospace",
-                  }}
-                >
-                  {event.entityId}
-                </Typography>
-                <Typography
-                  sx={{ color: COLORS.textSecondary, fontSize: "14px" }}
-                >
-                  {event.description}
-                </Typography>
+                />
               </Box>
-            ))}
-          </Box>
-        </Box>
+            )}
+          </>
+        )}
       </Box>
     </AdminLayout>
   );

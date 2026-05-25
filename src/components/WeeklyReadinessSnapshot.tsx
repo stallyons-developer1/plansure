@@ -1,4 +1,4 @@
-import { Box, Card, Typography, Chip } from "@mui/material";
+import { Box, Card, Typography, Chip, Tooltip } from "@mui/material";
 import { COLORS } from "../constants/colors";
 
 interface RagData {
@@ -6,6 +6,7 @@ interface RagData {
   value: number;
   percentage: number;
   color: string;
+  tooltip: string;
 }
 
 interface DonutChartProps {
@@ -47,14 +48,38 @@ const DonutChart = ({ data, onTrackPercentage }: DonutChartProps) => {
       <Box sx={{ position: "relative", width: 240, height: 240, mx: "auto" }}>
         <svg viewBox="0 0 100 100">
           {arcs.map((item, index) => (
-            <path
+            <Tooltip
               key={index}
-              d={item.path}
-              fill="transparent"
-              stroke={item.color}
-              strokeWidth={strokeWidth}
-              strokeLinecap="butt"
-            />
+              title={item.tooltip}
+              placement="top"
+              arrow
+              slotProps={{
+                tooltip: {
+                  sx: {
+                    bgcolor: COLORS.bgSecondary,
+                    color: COLORS.textPrimary,
+                    border: `1px solid ${COLORS.border}`,
+                    fontSize: "12px",
+                    px: 1.5,
+                    py: 1,
+                  },
+                },
+                arrow: {
+                  sx: {
+                    color: COLORS.bgSecondary,
+                  },
+                },
+              }}
+            >
+              <path
+                d={item.path}
+                fill="transparent"
+                stroke={item.color}
+                strokeWidth={strokeWidth}
+                strokeLinecap="butt"
+                style={{ cursor: "pointer" }}
+              />
+            </Tooltip>
           ))}
         </svg>
         <Box
@@ -83,55 +108,84 @@ const DonutChart = ({ data, onTrackPercentage }: DonutChartProps) => {
 
       <Box sx={{ mt: 3 }}>
         {data.map((item, index) => (
-          <Box
+          <Tooltip
             key={index}
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              py: 1,
+            title={item.tooltip}
+            placement="right"
+            arrow
+            slotProps={{
+              tooltip: {
+                sx: {
+                  bgcolor: COLORS.bgSecondary,
+                  color: COLORS.textPrimary,
+                  border: `1px solid ${COLORS.border}`,
+                  fontSize: "12px",
+                  px: 1.5,
+                  py: 1,
+                  maxWidth: 220,
+                },
+              },
+              arrow: {
+                sx: {
+                  color: COLORS.bgSecondary,
+                },
+              },
             }}
           >
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-              <Box
-                sx={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: "50%",
-                  bgcolor: item.color,
-                }}
-              />
-              <Typography
-                sx={{
-                  color: COLORS.textSecondary,
-                  fontSize: "14px",
-                  fontWeight: 400,
-                }}
-              >
-                {item.label}
-              </Typography>
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                py: 1,
+                cursor: "pointer",
+                "&:hover": {
+                  bgcolor: `${COLORS.bgPrimary}50`,
+                  borderRadius: 1,
+                },
+              }}
+            >
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                <Box
+                  sx={{
+                    width: 12,
+                    height: 12,
+                    borderRadius: "50%",
+                    bgcolor: item.color,
+                  }}
+                />
+                <Typography
+                  sx={{
+                    color: COLORS.textSecondary,
+                    fontSize: "14px",
+                    fontWeight: 400,
+                  }}
+                >
+                  {item.label}
+                </Typography>
+              </Box>
+              <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
+                <Typography
+                  sx={{
+                    color: COLORS.white,
+                    fontSize: "14px",
+                    fontWeight: 600,
+                  }}
+                >
+                  {item.value}
+                </Typography>
+                <Typography
+                  sx={{
+                    color: COLORS.textSecondary,
+                    fontSize: "12px",
+                    fontWeight: 400,
+                  }}
+                >
+                  {item.percentage}%
+                </Typography>
+              </Box>
             </Box>
-            <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
-              <Typography
-                sx={{
-                  color: COLORS.white,
-                  fontSize: "14px",
-                  fontWeight: 600,
-                }}
-              >
-                {item.value}
-              </Typography>
-              <Typography
-                sx={{
-                  color: COLORS.textSecondary,
-                  fontSize: "12px",
-                  fontWeight: 400,
-                }}
-              >
-                {item.percentage}%
-              </Typography>
-            </Box>
-          </Box>
+          </Tooltip>
         ))}
       </Box>
     </Box>
@@ -160,24 +214,27 @@ const WeeklyReadinessSnapshot = ({
           value: distribution.green.count,
           percentage: distribution.green.percentage,
           color: COLORS.green,
+          tooltip: "Green activities are progressing as planned with no issues or delays expected.",
         },
         {
           label: "Amber — At Risk",
           value: distribution.amber.count,
           percentage: distribution.amber.percentage,
           color: COLORS.amber,
+          tooltip: "Amber activities have potential risks or minor delays that require monitoring.",
         },
         {
           label: "Red — Critical",
           value: distribution.red.count,
           percentage: distribution.red.percentage,
           color: COLORS.red,
+          tooltip: "Red activities are behind schedule or have critical issues requiring immediate attention.",
         },
       ]
     : [
-        { label: "Green — On Track", value: 0, percentage: 0, color: COLORS.green },
-        { label: "Amber — At Risk", value: 0, percentage: 0, color: COLORS.amber },
-        { label: "Red — Critical", value: 0, percentage: 0, color: COLORS.red },
+        { label: "Green — On Track", value: 0, percentage: 0, color: COLORS.green, tooltip: "Green activities are progressing as planned with no issues or delays expected." },
+        { label: "Amber — At Risk", value: 0, percentage: 0, color: COLORS.amber, tooltip: "Amber activities have potential risks or minor delays that require monitoring." },
+        { label: "Red — Critical", value: 0, percentage: 0, color: COLORS.red, tooltip: "Red activities are behind schedule or have critical issues requiring immediate attention." },
       ];
 
   const onTrackPercentage = distribution?.green.percentage || 0;

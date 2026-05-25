@@ -1,4 +1,4 @@
-import { Box, Card, Typography, Link } from "@mui/material";
+import { Box, Card, Typography } from "@mui/material";
 import {
   WarningAmberOutlined as WarningIcon,
   CheckOutlined as CheckIcon,
@@ -127,13 +127,11 @@ const formatTimestamp = (timestamp: string) => {
 interface RecentActivityProps {
   activities?: ActivityItem[];
   projectName?: string;
-  onViewAll?: () => void;
 }
 
 const RecentActivity = ({
   activities = [],
   projectName = "All Projects",
-  onViewAll,
 }: RecentActivityProps) => {
   return (
     <Card
@@ -145,55 +143,50 @@ const RecentActivity = ({
         height: "100%",
       }}
     >
+      <Box sx={{ mb: 2 }}>
+        <Typography
+          sx={{
+            color: COLORS.textLight,
+            fontWeight: 600,
+            fontSize: "14px",
+          }}
+        >
+          Recent Activity
+        </Typography>
+        <Typography
+          sx={{
+            color: COLORS.textSecondary,
+            fontSize: "12px",
+            fontWeight: 400,
+          }}
+        >
+          Latest events across {projectName}
+        </Typography>
+      </Box>
+
       <Box
         sx={{
           display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          mb: 2,
+          flexDirection: "column",
+          maxHeight: "400px",
+          overflowY: "auto",
+          overflowX: "hidden",
+          "&::-webkit-scrollbar": {
+            width: "8px",
+          },
+          "&::-webkit-scrollbar-track": {
+            background: COLORS.bgTertiary,
+            borderRadius: "4px",
+          },
+          "&::-webkit-scrollbar-thumb": {
+            background: COLORS.blue,
+            borderRadius: "4px",
+            "&:hover": {
+              background: "#4A90D9",
+            },
+          },
         }}
       >
-        <Box>
-          <Typography
-            sx={{
-              color: COLORS.textLight,
-              fontWeight: 600,
-              fontSize: "14px",
-            }}
-          >
-            Recent Activity
-          </Typography>
-          <Typography
-            sx={{
-              color: COLORS.textSecondary,
-              fontSize: "12px",
-              fontWeight: 400,
-            }}
-          >
-            Latest events across {projectName}
-          </Typography>
-        </Box>
-        {onViewAll && (
-          <Link
-            component="button"
-            underline="none"
-            onClick={onViewAll}
-            sx={{
-              color: COLORS.blue,
-              fontSize: "12px",
-              fontWeight: 500,
-              cursor: "pointer",
-              border: "none",
-              bgcolor: "transparent",
-              "&:hover": { textDecoration: "underline" },
-            }}
-          >
-            View all
-          </Link>
-        )}
-      </Box>
-
-      <Box sx={{ display: "flex", flexDirection: "column" }}>
         {activities.length === 0 ? (
           <Box sx={{ py: 4, textAlign: "center" }}>
             <Typography sx={{ color: COLORS.textSecondary, fontSize: "13px" }}>

@@ -1427,7 +1427,7 @@ const PlannerProjectWorkspace = () => {
   useEffect(() => {
     if (weeklyControlData && uploadedProgramme) {
       const cycleStatus = weeklyControlData.stats?.cycleStatus || "Draft";
-      const ungatedStatuses = ["Close-Out Eligible", "Approved", "Closed"];
+      const ungatedStatuses = ["Execution", "Close-Out Eligible", "Approved", "Closed"];
       const isGated = !ungatedStatuses.includes(cycleStatus);
 
       setExportGatingStatus({
@@ -1498,14 +1498,17 @@ const PlannerProjectWorkspace = () => {
 
     try {
       setIsExporting("weekly");
-      const response = await exportAPI.generateWeeklyPlan();
+      // Use locked view week if set (from PM Override), otherwise use current closable week
+      const closableWeek = weeksStatus?.weeks.find((w) => w.canClose);
+      const weekNumber = lockedViewWeek ?? closableWeek?.weekNumber ?? weeksStatus?.currentWeekNumber;
+      const response = await exportAPI.generateWeeklyPlan(weekNumber);
       const blob = new Blob([response.data], {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `Weekly_Plan_${project?.name || "export"}.xlsx`;
+      link.download = `Weekly_Plan_Week${weekNumber}_${project?.name || "export"}.xlsx`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -1525,14 +1528,17 @@ const PlannerProjectWorkspace = () => {
 
     try {
       setIsExporting("todo");
-      const response = await exportAPI.generatePlannerTodo();
+      // Use locked view week if set (from PM Override), otherwise use current closable week
+      const closableWeek = weeksStatus?.weeks.find((w) => w.canClose);
+      const weekNumber = lockedViewWeek ?? closableWeek?.weekNumber ?? weeksStatus?.currentWeekNumber;
+      const response = await exportAPI.generatePlannerTodo(weekNumber);
       const blob = new Blob([response.data], {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `Planner_ToDo_${project?.name || "export"}.xlsx`;
+      link.download = `Planner_ToDo_Week${weekNumber}_${project?.name || "export"}.xlsx`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -6248,7 +6254,9 @@ const PlannerProjectWorkspace = () => {
                       </Typography>
                       <Box
                         sx={{
-                          bgcolor: "#2D2A3D",
+                          bgcolor: exportGatingStatus.isGated
+                            ? "rgba(239, 68, 68, 0.15)"
+                            : "rgba(34, 197, 94, 0.15)",
                           color: exportGatingStatus.isGated
                             ? COLORS.red
                             : COLORS.green,
@@ -6286,7 +6294,9 @@ const PlannerProjectWorkspace = () => {
                     <Tooltip
                       title={
                         exportGatingStatus.isGated
-                          ? `Exports are gated. The WeekCycle must be in Close-Out Eligible state. Current cycle is in ${exportGatingStatus.cycleStatus}.`
+                          ? `Exports are gated. The WeekCycle must be in Execution state. Current cycle is in ${exportGatingStatus.cycleStatus}.`
+                          : exportCounts.greenActivitiesReady === 0
+                          ? "No green activities ready to download"
                           : ""
                       }
                       placement="top"
@@ -6378,7 +6388,9 @@ const PlannerProjectWorkspace = () => {
                       </Typography>
                       <Box
                         sx={{
-                          bgcolor: "#2D2A3D",
+                          bgcolor: exportGatingStatus.isGated
+                            ? "rgba(239, 68, 68, 0.15)"
+                            : "rgba(34, 197, 94, 0.15)",
                           color: exportGatingStatus.isGated
                             ? COLORS.red
                             : COLORS.green,
@@ -6413,7 +6425,9 @@ const PlannerProjectWorkspace = () => {
                     <Tooltip
                       title={
                         exportGatingStatus.isGated
-                          ? `Exports are gated. The WeekCycle must be in Close-Out Eligible state. Current cycle is in ${exportGatingStatus.cycleStatus}.`
+                          ? `Exports are gated. The WeekCycle must be in Execution state. Current cycle is in ${exportGatingStatus.cycleStatus}.`
+                          : exportCounts.outstandingActions === 0
+                          ? "No outstanding items to download"
                           : ""
                       }
                       placement="top"

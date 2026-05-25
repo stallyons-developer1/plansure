@@ -507,6 +507,54 @@ export const fcmAPI = {
   },
 };
 
+export const auditAPI = {
+  getLogs: async (params?: {
+    page?: number;
+    limit?: number;
+    category?: string;
+    action?: string;
+    userId?: string;
+    projectId?: string;
+    startDate?: string;
+    endDate?: string;
+    search?: string;
+  }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.append("page", params.page.toString());
+    if (params?.limit) searchParams.append("limit", params.limit.toString());
+    if (params?.category) searchParams.append("category", params.category);
+    if (params?.action) searchParams.append("action", params.action);
+    if (params?.userId) searchParams.append("userId", params.userId);
+    if (params?.projectId) searchParams.append("projectId", params.projectId);
+    if (params?.startDate) searchParams.append("startDate", params.startDate);
+    if (params?.endDate) searchParams.append("endDate", params.endDate);
+    if (params?.search) searchParams.append("search", params.search);
+    const response = await api.get(`/audit-logs?${searchParams.toString()}`);
+    return response.data;
+  },
+
+  getCategories: async () => {
+    const response = await api.get("/audit-logs/categories");
+    return response.data;
+  },
+
+  getActions: async () => {
+    const response = await api.get("/audit-logs/actions");
+    return response.data;
+  },
+
+  getStats: async (days?: number) => {
+    const params = days ? `?days=${days}` : "";
+    const response = await api.get(`/audit-logs/stats${params}`);
+    return response.data;
+  },
+
+  getById: async (id: string) => {
+    const response = await api.get(`/audit-logs/${id}`);
+    return response.data;
+  },
+};
+
 export const exportAPI = {
   getGatingStatus: async () => {
     const response = await api.get("/exports/gating-status");
@@ -518,15 +566,15 @@ export const exportAPI = {
     return response.data;
   },
 
-  generateWeeklyPlan: async () => {
-    const response = await api.post("/exports/weekly-plan", {}, {
+  generateWeeklyPlan: async (weekNumber?: number) => {
+    const response = await api.post("/exports/weekly-plan", { weekNumber }, {
       responseType: "blob",
     });
     return response;
   },
 
-  generatePlannerTodo: async () => {
-    const response = await api.post("/exports/planner-todo", {}, {
+  generatePlannerTodo: async (weekNumber?: number) => {
+    const response = await api.post("/exports/planner-todo", { weekNumber }, {
       responseType: "blob",
     });
     return response;

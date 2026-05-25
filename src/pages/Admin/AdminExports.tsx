@@ -41,6 +41,11 @@ const AdminExports = () => {
   const greenColor = COLORS.green;
   const greenBg = "rgba(34, 197, 94, 0.15)";
 
+  // Allow exports during Execution or Close-Out Eligible phases
+  const isExportAllowed = ["Execution", "Close-Out Eligible"].includes(gatingStatus.cycleStatus);
+  const statusColor = isExportAllowed ? greenColor : amberColor;
+  const statusBg = isExportAllowed ? greenBg : amberBg;
+
   useEffect(() => {
     fetchData();
   }, []);
@@ -81,7 +86,7 @@ const AdminExports = () => {
   };
 
   const handleExportWeeklyPlan = async () => {
-    if (gatingStatus.isGated) return;
+    if (!isExportAllowed) return;
 
     try {
       setExporting("weekly");
@@ -106,7 +111,7 @@ const AdminExports = () => {
   };
 
   const handleExportPlannerTodo = async () => {
-    if (gatingStatus.isGated) return;
+    if (!isExportAllowed) return;
 
     try {
       setExporting("todo");
@@ -149,9 +154,6 @@ const AdminExports = () => {
     }
   };
 
-  const statusColor = gatingStatus.isGated ? amberColor : greenColor;
-  const statusBg = gatingStatus.isGated ? amberBg : greenBg;
-
   if (loading) {
     return (
       <AdminLayout title="Exports" subtitle="Weekly Plan and Planner To-Do exports">
@@ -190,10 +192,10 @@ const AdminExports = () => {
             justifyContent: "center",
           }}
         >
-          {gatingStatus.isGated ? (
-            <LockIcon sx={{ color: statusColor, fontSize: 24 }} />
-          ) : (
+          {isExportAllowed ? (
             <UnlockIcon sx={{ color: statusColor, fontSize: 24 }} />
+          ) : (
+            <LockIcon sx={{ color: statusColor, fontSize: 24 }} />
           )}
         </Box>
         <Box sx={{ flex: 1 }}>
@@ -231,29 +233,11 @@ const AdminExports = () => {
                   bgcolor: statusColor,
                 }}
               />
-              {gatingStatus.isGated ? "Gated" : "Unlocked"}
+              {isExportAllowed ? "Unlocked" : "Gated"}
             </Box>
           </Box>
           <Typography sx={{ color: COLORS.textSecondary, fontSize: "14px" }}>
-            {gatingStatus.isGated ? (
-              <>
-                Exports are gated — WeekCycle must be in{" "}
-                <Typography
-                  component="span"
-                  sx={{ color: COLORS.blue, fontSize: "14px" }}
-                >
-                  Close-Out Eligible
-                </Typography>{" "}
-                state. Current cycle is in{" "}
-                <Typography
-                  component="span"
-                  sx={{ color: COLORS.blue, fontSize: "14px" }}
-                >
-                  {gatingStatus.cycleStatus}
-                </Typography>
-                .
-              </>
-            ) : (
+            {isExportAllowed ? (
               <>
                 Exports are unlocked — Cycle is in{" "}
                 <Typography
@@ -263,6 +247,24 @@ const AdminExports = () => {
                   {gatingStatus.cycleStatus}
                 </Typography>{" "}
                 state. Ready to export.
+              </>
+            ) : (
+              <>
+                Exports are gated — WeekCycle must be in{" "}
+                <Typography
+                  component="span"
+                  sx={{ color: COLORS.blue, fontSize: "14px" }}
+                >
+                  Execution
+                </Typography>{" "}
+                state. Current cycle is in{" "}
+                <Typography
+                  component="span"
+                  sx={{ color: COLORS.blue, fontSize: "14px" }}
+                >
+                  {gatingStatus.cycleStatus}
+                </Typography>
+                .
               </>
             )}
           </Typography>
@@ -353,7 +355,7 @@ const AdminExports = () => {
                       bgcolor: statusColor,
                     }}
                   />
-                  {gatingStatus.isGated ? "Gated" : "Ready"}
+                  {isExportAllowed ? "Ready" : "Gated"}
                 </Box>
               </Box>
               <Typography
@@ -407,7 +409,7 @@ const AdminExports = () => {
 
           <Button
             onClick={handleExportWeeklyPlan}
-            disabled={gatingStatus.isGated || exporting === "weekly"}
+            disabled={!isExportAllowed || exporting === "weekly"}
             startIcon={
               exporting === "weekly" ? (
                 <CircularProgress size={14} sx={{ color: "inherit" }} />
@@ -420,15 +422,15 @@ const AdminExports = () => {
               )
             }
             sx={{
-              bgcolor: gatingStatus.isGated ? COLORS.bgTertiary : COLORS.green,
-              color: gatingStatus.isGated ? COLORS.textPrimary : COLORS.white,
+              bgcolor: isExportAllowed ? COLORS.green : COLORS.bgTertiary,
+              color: isExportAllowed ? COLORS.white : COLORS.textPrimary,
               textTransform: "none",
               py: 1.5,
               borderRadius: "8px",
               fontSize: "14px",
               fontWeight: 500,
               "&:hover": {
-                bgcolor: gatingStatus.isGated ? COLORS.border : "#16a34a",
+                bgcolor: isExportAllowed ? "#16a34a" : COLORS.border,
               },
               "&:disabled": {
                 bgcolor: COLORS.bgTertiary,
@@ -436,7 +438,7 @@ const AdminExports = () => {
               },
             }}
           >
-            {gatingStatus.isGated ? "Export Gated" : exporting === "weekly" ? "Exporting..." : "Export Weekly Plan"}
+            {!isExportAllowed ? "Export Gated" : exporting === "weekly" ? "Exporting..." : "Export Weekly Plan"}
           </Button>
         </Box>
 
@@ -516,7 +518,7 @@ const AdminExports = () => {
                       bgcolor: statusColor,
                     }}
                   />
-                  {gatingStatus.isGated ? "Gated" : "Ready"}
+                  {isExportAllowed ? "Ready" : "Gated"}
                 </Box>
               </Box>
               <Typography
@@ -578,7 +580,7 @@ const AdminExports = () => {
 
           <Button
             onClick={handleExportPlannerTodo}
-            disabled={gatingStatus.isGated || exporting === "todo"}
+            disabled={!isExportAllowed || exporting === "todo"}
             startIcon={
               exporting === "todo" ? (
                 <CircularProgress size={14} sx={{ color: "inherit" }} />
@@ -591,15 +593,15 @@ const AdminExports = () => {
               )
             }
             sx={{
-              bgcolor: gatingStatus.isGated ? COLORS.bgTertiary : COLORS.blue,
-              color: gatingStatus.isGated ? COLORS.textPrimary : COLORS.white,
+              bgcolor: isExportAllowed ? COLORS.blue : COLORS.bgTertiary,
+              color: isExportAllowed ? COLORS.white : COLORS.textPrimary,
               textTransform: "none",
               py: 1.5,
               borderRadius: "8px",
               fontSize: "14px",
               fontWeight: 500,
               "&:hover": {
-                bgcolor: gatingStatus.isGated ? COLORS.border : "#2563eb",
+                bgcolor: isExportAllowed ? "#2563eb" : COLORS.border,
               },
               "&:disabled": {
                 bgcolor: COLORS.bgTertiary,
@@ -607,7 +609,7 @@ const AdminExports = () => {
               },
             }}
           >
-            {gatingStatus.isGated ? "Export Gated" : exporting === "todo" ? "Exporting..." : "Export Planner To-Do"}
+            {!isExportAllowed ? "Export Gated" : exporting === "todo" ? "Exporting..." : "Export Planner To-Do"}
           </Button>
         </Box>
       </Box>
