@@ -900,7 +900,6 @@ const PlannerDashboard = () => {
         <RecentActivity
           activities={recentActivities}
           projectName={getSelectedProjectName()}
-          onViewAll={() => {}}
         />
       </Box>
 

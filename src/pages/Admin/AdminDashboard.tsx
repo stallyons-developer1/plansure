@@ -880,7 +880,6 @@ const AdminDashboard = () => {
         <RecentActivity
           activities={recentActivities}
           projectName={getSelectedProjectName()}
-          onViewAll={() => {}}
         />
       </Box>
 
