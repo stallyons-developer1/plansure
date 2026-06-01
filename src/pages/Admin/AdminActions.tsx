@@ -16,6 +16,8 @@ import {
   Drawer,
   CircularProgress,
   ListSubheader,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 import {
   Add as AddIcon,
@@ -93,14 +95,7 @@ interface Programme {
   _id: string;
   name: string;
   project: string;
-}
-
-interface ActionStats {
-  total: number;
-  open: number;
-  inProgress: number;
-  completed: number;
-  overdue: number;
+  cycleStatus?: string;
 }
 
 const getInitials = (name: string): string => {
@@ -115,17 +110,11 @@ const AdminActions = () => {
   const { user } = useAuth();
   const [actions, setActions] = useState<Action[]>([]);
   const [actionsLoading, setActionsLoading] = useState(true);
-  const [actionStats, setActionStats] = useState<ActionStats>({
-    total: 0,
-    open: 0,
-    inProgress: 0,
-    completed: 0,
-    overdue: 0,
-  });
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("due_date");
+  const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingAction, setEditingAction] = useState<Action | null>(null);
   const [detailDrawerOpen, setDetailDrawerOpen] = useState(false);
@@ -135,6 +124,10 @@ const AdminActions = () => {
   const [completeConfirmOpen, setCompleteConfirmOpen] = useState(false);
   const [actionToComplete, setActionToComplete] = useState<Action | null>(null);
   const [completeLoading, setCompleteLoading] = useState(false);
+
+  // Toast state
+  const [toastOpen, setToastOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
 
   const [formData, setFormData] = useState({
     selectedProject: "",
@@ -160,9 +153,16 @@ const AdminActions = () => {
   });
   const [users, setUsers] = useState<User[]>([]);
 
-  const fetchActions = async () => {
+  const fetchActions = async (projectId?: string) => {
     try {
-      const response = await actionAPI.getAll();
+      const params: { programmeId?: string } = {};
+      if (projectId) {
+        const programme = programmes.find((p) => p.project === projectId);
+        if (programme) {
+          params.programmeId = programme._id;
+        }
+      }
+      const response = await actionAPI.getAll(params);
       if (response.success) {
         setActions(response.actions || []);
       }
@@ -171,15 +171,8 @@ const AdminActions = () => {
     }
   };
 
-  const fetchStats = async () => {
-    try {
-      const response = await actionAPI.getStats();
-      if (response.success && response.stats) {
-        setActionStats(response.stats);
-      }
-    } catch (error) {
-      console.error("Failed to fetch stats:", error);
-    }
+  const handleProjectFilterChange = (projectId: string) => {
+    setSelectedProjectId(projectId);
   };
 
   const getProgrammeIdForProject = (projectId: string): string | null => {
@@ -187,21 +180,32 @@ const AdminActions = () => {
     return programme?._id || null;
   };
 
+  // Check if the current project's cycle is in execution mode
+  const isExecutionMode = (): boolean => {
+    if (!selectedProjectId) return false;
+    const programme = programmes.find((p) => p.project === selectedProjectId);
+    if (!programme?.cycleStatus) return false;
+    return programme.cycleStatus === "Execution" || programme.cycleStatus === "Close-Out Eligible" || programme.cycleStatus === "Closed";
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       setActionsLoading(true);
       try {
-        const [projectsRes, usersRes, actionsRes, programmesRes, statsRes] =
+        const [projectsRes, usersRes, , programmesRes] =
           await Promise.all([
             projectAPI.getAll(),
             userAPI.getAll({ status: "active" }),
             actionAPI.getAll(),
             programmeAPI.getAll(),
-            actionAPI.getStats(),
           ]);
 
         if (projectsRes.success && projectsRes.projects) {
           setProjects(projectsRes.projects);
+          // Select first project by default
+          if (projectsRes.projects.length > 0) {
+            setSelectedProjectId(projectsRes.projects[0]._id);
+          }
         }
 
         const activeUsers = (usersRes.users || []).filter(
@@ -209,16 +213,8 @@ const AdminActions = () => {
         );
         setUsers(activeUsers);
 
-        if (actionsRes.success) {
-          setActions(actionsRes.actions || []);
-        }
-
         if (programmesRes.success) {
           setProgrammes(programmesRes.programmes || []);
-        }
-
-        if (statsRes.success && statsRes.stats) {
-          setActionStats(statsRes.stats);
         }
       } catch (error) {
         console.error("Failed to fetch data:", error);
@@ -228,6 +224,13 @@ const AdminActions = () => {
     };
     fetchData();
   }, []);
+
+  // Fetch actions when selected project changes
+  useEffect(() => {
+    if (programmes.length > 0) {
+      fetchActions(selectedProjectId);
+    }
+  }, [selectedProjectId, programmes]);
 
   const fetchActivities = async (projectId: string, page: number = 1) => {
     if (!projectId) {
@@ -309,6 +312,19 @@ const AdminActions = () => {
         .includes(searchQuery.toLowerCase());
     return matchesStatus && matchesType && matchesSearch;
   });
+
+  // Compute stats from the actions array (for the selected project)
+  const computedStats = {
+    total: actions.length,
+    open: actions.filter((a) => {
+      const isOverdue = a.status !== "Completed" && new Date(a.dueDate) < new Date();
+      return (a.status === "Open" || a.status === "In Progress") && !isOverdue;
+    }).length,
+    closed: actions.filter((a) => a.status === "Completed").length,
+    overdue: actions.filter((a) => {
+      return a.status !== "Completed" && new Date(a.dueDate) < new Date();
+    }).length,
+  };
 
   const handleOpenCreateModal = () => {
     setEditingAction(null);
@@ -433,7 +449,6 @@ const AdminActions = () => {
         const response = await actionAPI.complete(viewingAction._id);
         if (response.success) {
           await fetchActions();
-          await fetchStats();
           handleCloseDetailDrawer();
         }
       } catch (error) {
@@ -461,8 +476,7 @@ const AdminActions = () => {
       const response = await actionAPI.complete(actionToComplete._id);
       if (response.success) {
         await fetchActions();
-        await fetchStats();
-        handleCloseCompleteConfirm();
+                handleCloseCompleteConfirm();
       }
     } catch (error) {
       console.error("Failed to complete action:", error);
@@ -530,8 +544,7 @@ const AdminActions = () => {
 
         if (response.success) {
           await fetchActions();
-          await fetchStats();
-          handleCloseModal();
+                    handleCloseModal();
         }
       } else {
         const programmeId = getProgrammeIdForProject(formData.selectedProject);
@@ -572,8 +585,7 @@ const AdminActions = () => {
 
         if (response.success) {
           await fetchActions();
-          await fetchStats();
-          handleCloseModal();
+                    handleCloseModal();
         }
       }
     } catch (error: unknown) {
@@ -608,38 +620,106 @@ const AdminActions = () => {
   const blueFilter =
     "brightness(0) saturate(100%) invert(45%) sepia(98%) saturate(1752%) hue-rotate(199deg) brightness(101%) contrast(96%)";
 
+  const projectDropdown = (
+    <FormControl size="small" sx={{ minWidth: 200 }}>
+      <Select
+        value={selectedProjectId}
+        onChange={(e) => handleProjectFilterChange(e.target.value)}
+        displayEmpty
+        IconComponent={ArrowDownIcon}
+        sx={{
+          bgcolor: COLORS.bgSecondary,
+          color: COLORS.textPrimary,
+          borderRadius: "8px",
+          border: `1px solid ${COLORS.border}`,
+          fontSize: "14px",
+          fontWeight: 500,
+          "& .MuiOutlinedInput-notchedOutline": {
+            border: "none",
+          },
+          "& .MuiSelect-icon": {
+            color: COLORS.textSecondary,
+          },
+          "&:hover": {
+            bgcolor: COLORS.bgTertiary,
+          },
+        }}
+        MenuProps={{
+          slotProps: {
+            paper: {
+              sx: {
+                bgcolor: COLORS.bgSecondary,
+                border: `1px solid ${COLORS.border}`,
+                borderRadius: "8px",
+                mt: 1,
+                "& .MuiMenuItem-root": {
+                  color: COLORS.textPrimary,
+                  fontSize: "14px",
+                  "&:hover": {
+                    bgcolor: COLORS.bgTertiary,
+                  },
+                  "&.Mui-selected": {
+                    bgcolor: COLORS.blueBgMedium,
+                    "&:hover": {
+                      bgcolor: COLORS.blueBgMedium,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        }}
+      >
+        {projects.length === 0 ? (
+          <MenuItem value="" disabled>
+            No projects available
+          </MenuItem>
+        ) : (
+          projects.map((project) => (
+            <MenuItem key={project._id} value={project._id}>
+              {project.name}
+            </MenuItem>
+          ))
+        )}
+      </Select>
+    </FormControl>
+  );
+
   return (
     <AdminLayout
       title="Actions"
       subtitle="Readiness actions management"
       headerAction={
-        <Button
-          startIcon={<AddIcon />}
-          onClick={handleOpenCreateModal}
-          sx={{
-            bgcolor: COLORS.blue,
-            color: COLORS.white,
-            textTransform: "none",
-            px: { xs: 1.5, sm: 2.5 },
-            py: 1,
-            borderRadius: "8px",
-            fontSize: "14px",
-            fontWeight: 500,
-            minWidth: { xs: "44px", sm: "auto" },
-            justifyContent: "center",
-            "&:hover": {
-              bgcolor: COLORS.blueHover,
-            },
-            "& .MuiButton-startIcon": {
-              mr: { xs: 0, sm: 1 },
-              ml: { xs: 0, sm: 0 },
-            },
-          }}
-        >
-          <Box component="span" sx={{ display: { xs: "none", sm: "inline" } }}>
-            Create Action
-          </Box>
-        </Button>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+          {projectDropdown}
+          <Button
+            startIcon={<AddIcon />}
+            onClick={handleOpenCreateModal}
+            sx={{
+              bgcolor: COLORS.blue,
+              color: COLORS.white,
+              textTransform: "none",
+              px: { xs: 1.5, sm: 2.5 },
+              py: 1,
+              borderRadius: "8px",
+              fontSize: "14px",
+              fontWeight: 500,
+              minWidth: { xs: "44px", sm: "auto" },
+              justifyContent: "center",
+              "&:hover": {
+                bgcolor: COLORS.blueHover,
+              },
+              "& .MuiButton-startIcon": {
+                mr: { xs: 0, sm: 1 },
+                ml: { xs: 0, sm: 0 },
+              },
+            }}
+          >
+            <Box component="span" sx={{ display: { xs: "none", sm: "inline" } }}>
+              Create Action
+            </Box>
+          </Button>
+        </Box>
       }
     >
       <Box
@@ -685,7 +765,7 @@ const AdminActions = () => {
                 lineHeight: 1,
               }}
             >
-              {actionStats.total}
+              {computedStats.total}
             </Typography>
           </Box>
           <Box
@@ -742,7 +822,7 @@ const AdminActions = () => {
                 lineHeight: 1,
               }}
             >
-              {actionStats.open + actionStats.inProgress}
+              {computedStats.open}
             </Typography>
           </Box>
           <Box
@@ -791,7 +871,7 @@ const AdminActions = () => {
                 lineHeight: 1,
               }}
             >
-              {actionStats.completed}
+              {computedStats.closed}
             </Typography>
           </Box>
           <Box
@@ -840,7 +920,7 @@ const AdminActions = () => {
                 lineHeight: 1,
               }}
             >
-              {actionStats.overdue}
+              {computedStats.overdue}
             </Typography>
           </Box>
           <Box
@@ -1114,6 +1194,7 @@ const AdminActions = () => {
                     fontWeight: 600,
                     letterSpacing: "0.5px",
                     whiteSpace: "nowrap",
+                    textAlign: "center",
                   }}
                 >
                   {header}
@@ -1177,7 +1258,7 @@ const AdminActions = () => {
                       "&:last-child": { borderBottom: "none" },
                     }}
                   >
-                    <Typography sx={{ color: COLORS.blue, fontSize: "13px" }}>
+                    <Typography sx={{ color: COLORS.blue, fontSize: "13px", textAlign: "center" }}>
                       {action._id.slice(-6).toUpperCase()}
                     </Typography>
 
@@ -1188,38 +1269,41 @@ const AdminActions = () => {
                         overflow: "hidden",
                         textOverflow: "ellipsis",
                         whiteSpace: "nowrap",
+                        textAlign: "center",
                       }}
                     >
                       {action.title}
                     </Typography>
 
-                    <Typography sx={{ color: COLORS.blue, fontSize: "13px" }}>
+                    <Typography sx={{ color: COLORS.blue, fontSize: "13px", textAlign: "center" }}>
                       {action.linkedActivity?.activityId || "-"}
                     </Typography>
 
-                    <Box
-                      sx={{
-                        bgcolor:
-                          action.type === "Optional"
-                            ? "rgba(34, 197, 94, 0.15)"
-                            : "rgba(239, 68, 68, 0.15)",
-                        color:
-                          action.type === "Optional"
-                            ? COLORS.green
-                            : COLORS.red,
-                        px: 1.5,
-                        py: 0.5,
-                        borderRadius: "6px",
-                        fontSize: "12px",
-                        fontWeight: 500,
-                        textAlign: "center",
-                        width: "fit-content",
-                      }}
-                    >
-                      {action.type}
+                    <Box sx={{ display: "flex", justifyContent: "center" }}>
+                      <Box
+                        sx={{
+                          bgcolor:
+                            action.type === "Optional"
+                              ? "rgba(34, 197, 94, 0.15)"
+                              : "rgba(239, 68, 68, 0.15)",
+                          color:
+                            action.type === "Optional"
+                              ? COLORS.green
+                              : COLORS.red,
+                          px: 1.5,
+                          py: 0.5,
+                          borderRadius: "6px",
+                          fontSize: "12px",
+                          fontWeight: 500,
+                          textAlign: "center",
+                          width: "fit-content",
+                        }}
+                      >
+                        {action.type}
+                      </Box>
                     </Box>
 
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 1 }}>
                       <Box
                         sx={{
                           width: 28,
@@ -1251,63 +1335,79 @@ const AdminActions = () => {
                     </Box>
 
                     <Typography
-                      sx={{ color: COLORS.textSecondary, fontSize: "13px" }}
+                      sx={{ color: COLORS.textSecondary, fontSize: "13px", textAlign: "center" }}
                     >
                       {action.dueDate
                         ? new Date(action.dueDate).toLocaleDateString()
                         : "-"}
                     </Typography>
 
-                    <Box
-                      sx={{
-                        bgcolor: `${statusColor}20`,
-                        color: statusColor,
-                        px: 1.5,
-                        py: 0.5,
-                        borderRadius: "6px",
-                        fontSize: "12px",
-                        fontWeight: 500,
-                        textAlign: "center",
-                        width: "fit-content",
-                      }}
-                    >
-                      {displayStatus}
+                    <Box sx={{ display: "flex", justifyContent: "center" }}>
+                      <Box
+                        sx={{
+                          bgcolor: `${statusColor}20`,
+                          color: statusColor,
+                          px: 1.5,
+                          py: 0.5,
+                          borderRadius: "6px",
+                          fontSize: "12px",
+                          fontWeight: 500,
+                          textAlign: "center",
+                          width: "fit-content",
+                        }}
+                      >
+                        {displayStatus}
+                      </Box>
                     </Box>
 
-                    <Box
-                      sx={{
-                        bgcolor: `${getPriorityColor(action.priority)}20`,
-                        color: getPriorityColor(action.priority),
-                        px: 1.5,
-                        py: 0.5,
-                        borderRadius: "6px",
-                        fontSize: "12px",
-                        fontWeight: 500,
-                        textAlign: "center",
-                        width: "fit-content",
-                      }}
-                    >
-                      {action.priority}
+                    <Box sx={{ display: "flex", justifyContent: "center" }}>
+                      <Box
+                        sx={{
+                          bgcolor: `${getPriorityColor(action.priority)}20`,
+                          color: getPriorityColor(action.priority),
+                          px: 1.5,
+                          py: 0.5,
+                          borderRadius: "6px",
+                          fontSize: "12px",
+                          fontWeight: 500,
+                          textAlign: "center",
+                          width: "fit-content",
+                        }}
+                      >
+                        {action.priority}
+                      </Box>
                     </Box>
 
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 1 }}>
                       <Box
                         component="img"
                         src={editIcon}
-                        onClick={() =>
-                          action.status !== "Completed" &&
-                          handleOpenEditModal(action)
+                        onClick={() => {
+                          if (!isExecutionMode()) {
+                            setToastMessage("Execution has not started yet. Please start execution first.");
+                            setToastOpen(true);
+                            return;
+                          }
+                          if (action.status === "Completed") return;
+                          handleOpenEditModal(action);
+                        }}
+                        title={
+                          !isExecutionMode()
+                            ? "Execution has not started yet. Please start execution first."
+                            : action.status === "Completed"
+                              ? "Cannot edit completed action"
+                              : "Edit action"
                         }
                         sx={{
                           width: 18,
                           height: 18,
                           cursor:
-                            action.status === "Completed"
+                            !isExecutionMode() || action.status === "Completed"
                               ? "not-allowed"
                               : "pointer",
-                          opacity: action.status === "Completed" ? 0.3 : 0.6,
+                          opacity: !isExecutionMode() || action.status === "Completed" ? 0.3 : 0.6,
                           "&:hover": {
-                            opacity: action.status === "Completed" ? 0.3 : 1,
+                            opacity: !isExecutionMode() || action.status === "Completed" ? 0.3 : 1,
                           },
                         }}
                       />
@@ -1315,6 +1415,11 @@ const AdminActions = () => {
                         component="img"
                         src={frameIcon}
                         onClick={() => {
+                          if (!isExecutionMode()) {
+                            setToastMessage("Execution has not started yet. Please start execution first.");
+                            setToastOpen(true);
+                            return;
+                          }
                           const assigneeId = String(action.assignee?._id || "");
                           const userId = String(user?.id || "");
                           const isAssignee =
@@ -1327,18 +1432,21 @@ const AdminActions = () => {
                           }
                         }}
                         title={
-                          action.status === "Completed"
-                            ? "Already completed"
-                            : String(action.assignee?._id || "") !==
-                                  String(user?.id || "") &&
-                                user?.role !== "admin"
-                              ? "Only the assignee can complete this action"
-                              : "Mark as complete"
+                          !isExecutionMode()
+                            ? "Execution has not started yet. Please start execution first."
+                            : action.status === "Completed"
+                              ? "Already completed"
+                              : String(action.assignee?._id || "") !==
+                                    String(user?.id || "") &&
+                                  user?.role !== "admin"
+                                ? "Only the assignee can complete this action"
+                                : "Mark as complete"
                         }
                         sx={{
                           width: 18,
                           height: 18,
                           cursor:
+                            !isExecutionMode() ||
                             action.status === "Completed" ||
                             (String(action.assignee?._id || "") !==
                               String(user?.id || "") &&
@@ -1346,13 +1454,15 @@ const AdminActions = () => {
                               ? "not-allowed"
                               : "pointer",
                           opacity:
-                            action.status === "Completed"
-                              ? 1
-                              : String(action.assignee?._id || "") !==
-                                    String(user?.id || "") &&
-                                  user?.role !== "admin"
-                                ? 0.3
-                                : 0.6,
+                            !isExecutionMode()
+                              ? 0.3
+                              : action.status === "Completed"
+                                ? 1
+                                : String(action.assignee?._id || "") !==
+                                      String(user?.id || "") &&
+                                    user?.role !== "admin"
+                                  ? 0.3
+                                  : 0.6,
                           filter:
                             action.status === "Completed"
                               ? "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(5323%) hue-rotate(107deg) brightness(92%) contrast(88%)"
@@ -3084,6 +3194,29 @@ const AdminActions = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Toast notification for execution not started */}
+      <Snackbar
+        open={toastOpen}
+        autoHideDuration={4000}
+        onClose={() => setToastOpen(false)}
+        anchorOrigin={{ vertical: "top", horizontal: "center" }}
+      >
+        <Alert
+          onClose={() => setToastOpen(false)}
+          severity="warning"
+          sx={{
+            bgcolor: COLORS.amber,
+            color: "#000",
+            fontWeight: 500,
+            "& .MuiAlert-icon": {
+              color: "#000",
+            },
+          }}
+        >
+          {toastMessage}
+        </Alert>
+      </Snackbar>
     </AdminLayout>
   );
 };

@@ -8,9 +8,6 @@ import {
   IconButton,
 } from "@mui/material";
 import {
-  WarningAmberOutlined as WarningIcon,
-  CalendarTodayOutlined as CalendarIcon,
-  AccessTimeOutlined as TimeIcon,
   DescriptionOutlined as FileIcon,
   StorageOutlined as StorageIcon,
   LockOutlined as LockIcon,
@@ -127,7 +124,7 @@ const ProgramsUpload = () => {
           style={{ display: "none" }}
         />
 
-        <Card
+        {/* <Card
           sx={{
             bgcolor: "transparent",
             border: `1px solid ${COLORS.amber}`,
@@ -235,7 +232,7 @@ const ProgramsUpload = () => {
               </Box>
             </Box>
           </Box>
-        </Card>
+        </Card> */}
 
         <Card
           sx={{

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Box,
   Typography,
@@ -24,16 +24,25 @@ interface ActivitiesLookaheadProps {
   activities: Activity[];
   weeks: WeekData[];
   lastUpdated: string;
+  onAssignClick?: (activity: Activity) => void;
 }
 
 const ActivitiesLookahead = ({
   activities,
   weeks,
   lastUpdated,
+  onAssignClick,
 }: ActivitiesLookaheadProps) => {
   const [ragFilter, setRagFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const activitiesPerPage = 20;
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [ragFilter, statusFilter, searchQuery]);
 
   const filteredActivities = activities.filter((activity) => {
     const matchesRag = ragFilter === "all" || activity.ragColor === ragFilter;
@@ -351,7 +360,25 @@ const ActivitiesLookahead = ({
         </Box>
       </Box>
 
-      <ActivitiesTable activities={filteredActivities} />
+      {(() => {
+        const totalPages = Math.ceil(filteredActivities.length / activitiesPerPage);
+        const paginatedActivities = filteredActivities.slice(
+          (currentPage - 1) * activitiesPerPage,
+          currentPage * activitiesPerPage
+        );
+
+        return (
+          <ActivitiesTable
+            activities={paginatedActivities}
+            onAssignClick={onAssignClick}
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalActivities={filteredActivities.length}
+            onPageChange={setCurrentPage}
+            activitiesPerPage={activitiesPerPage}
+          />
+        );
+      })()}
 
       <ActivitiesSummary
         totalActivities={activities.length}

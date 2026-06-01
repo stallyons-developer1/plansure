@@ -11,6 +11,7 @@ import {
   Collapse,
   Avatar,
   Typography,
+  Button,
 } from "@mui/material";
 import {
   KeyboardArrowDown,
@@ -18,6 +19,69 @@ import {
   ChevronRight,
 } from "@mui/icons-material";
 import { COLORS, getStatusColor } from "../constants/colors";
+
+// Format date from various formats to YYYY-MM-DD
+const formatDate = (dateStr: string): string => {
+  if (!dateStr) return "-";
+
+  const months: { [key: string]: number } = {
+    Jan: 0,
+    Feb: 1,
+    Mar: 2,
+    Apr: 3,
+    May: 4,
+    Jun: 5,
+    Jul: 6,
+    Aug: 7,
+    Sep: 8,
+    Oct: 9,
+    Nov: 10,
+    Dec: 11,
+  };
+
+  // Clean suffix like " A" or " *" (indicates actual/completed)
+  const cleanDate = dateStr.replace(/\s*[A*]$/, "").trim();
+
+  // Handle DD-MMM-YY format (e.g., "25-Oct-21")
+  const match = cleanDate.match(/(\d{2})-([A-Za-z]{3})-(\d{2})/);
+  if (match) {
+    const day = parseInt(match[1]);
+    const month = months[match[2]];
+    let year = parseInt(match[3]);
+    year = year < 50 ? 2000 + year : 1900 + year;
+    return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  }
+
+  // Already in YYYY-MM-DD format (exact match)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(cleanDate)) {
+    return cleanDate;
+  }
+
+  // Handle ISO datetime format (e.g., "2026-03-25T00:00:00.000Z")
+  const isoMatch = cleanDate.match(/^(\d{4})-(\d{2})-(\d{2})T/);
+  if (isoMatch) {
+    return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+  }
+
+  // Fallback: try native Date parsing with UTC methods to avoid timezone shift
+  const date = new Date(dateStr);
+  if (!isNaN(date.getTime())) {
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+    const day = String(date.getUTCDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  return "-";
+};
+
+export interface ActivityAction {
+  _id: string;
+  title: string;
+  status: string;
+  dueDate?: string;
+  assignee?: { _id?: string; name?: string };
+}
 
 export interface Activity {
   id: string;
@@ -32,6 +96,7 @@ export interface Activity {
   statusType: string;
   owner: { initials: string; name: string; color: string };
   linkedActions?: string[];
+  linkedActionsData?: ActivityAction[];
   dependencies?: string;
   notes?: string;
 }
@@ -205,9 +270,11 @@ export const activitiesData: Activity[] = [
 const ActivityRow = ({
   activity,
   isFirst,
+  onAssignClick,
 }: {
   activity: Activity;
   isFirst?: boolean;
+  onAssignClick?: (activity: Activity) => void;
 }) => {
   const [open, setOpen] = useState(isFirst);
   const ragColor = getStatusColor(activity.ragColor);
@@ -228,12 +295,12 @@ const ActivityRow = ({
         }}
       >
         <TableCell
+          align="center"
           sx={{
             color: COLORS.blue,
             borderBottom: open ? `1px solid ${COLORS.border}` : "none",
             py: 1.5,
             position: "relative",
-            pl: 3,
             fontSize: "13px",
           }}
         >
@@ -250,6 +317,7 @@ const ActivityRow = ({
           {activity.id}
         </TableCell>
         <TableCell
+          align="center"
           sx={{
             color: COLORS.textPrimary,
             borderBottom: open ? `1px solid ${COLORS.border}` : "none",
@@ -257,7 +325,7 @@ const ActivityRow = ({
             fontSize: "13px",
           }}
         >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 0.5 }}>
             {activity.linkedActions && (
               <IconButton
                 size="small"
@@ -275,6 +343,7 @@ const ActivityRow = ({
           </Box>
         </TableCell>
         <TableCell
+          align="center"
           sx={{
             color: COLORS.textSecondary,
             borderBottom: open ? `1px solid ${COLORS.border}` : "none",
@@ -282,17 +351,7 @@ const ActivityRow = ({
             fontSize: "13px",
           }}
         >
-          {activity.startDate}
-        </TableCell>
-        <TableCell
-          sx={{
-            color: COLORS.textSecondary,
-            borderBottom: open ? `1px solid ${COLORS.border}` : "none",
-            py: 1.5,
-            fontSize: "13px",
-          }}
-        >
-          {activity.endDate}
+          {formatDate(activity.startDate)}
         </TableCell>
         <TableCell
           align="center"
@@ -303,9 +362,21 @@ const ActivityRow = ({
             fontSize: "13px",
           }}
         >
-          {activity.duration}
+          {formatDate(activity.endDate)}
         </TableCell>
         <TableCell
+          align="center"
+          sx={{
+            color: COLORS.textSecondary,
+            borderBottom: open ? `1px solid ${COLORS.border}` : "none",
+            py: 1.5,
+            fontSize: "13px",
+          }}
+        >
+          {activity.duration || "-"}
+        </TableCell>
+        <TableCell
+          align="center"
           sx={{
             borderBottom: open ? `1px solid ${COLORS.border}` : "none",
             py: 1.5,
@@ -338,18 +409,37 @@ const ActivityRow = ({
           </Box>
         </TableCell>
         <TableCell
+          align="center"
           sx={{
-            color: COLORS.blue,
+            color: COLORS.textMuted,
             borderBottom: open ? `1px solid ${COLORS.border}` : "none",
             py: 1.5,
             fontSize: "13px",
-            cursor: "pointer",
-            "&:hover": { textDecoration: "underline" },
           }}
         >
-          {activity.actions} actions
+          {activity.linkedActionsData && activity.linkedActionsData.length > 0 ? (
+            <Typography
+              sx={{
+                fontSize: "12px",
+                color: COLORS.blue,
+                cursor: "pointer",
+                "&:hover": {
+                  textDecoration: "underline",
+                },
+              }}
+              onClick={() => setOpen(!open)}
+            >
+              {activity.linkedActionsData.length} action
+              {activity.linkedActionsData.length !== 1 ? "s" : ""}
+            </Typography>
+          ) : (
+            <Typography sx={{ fontSize: "12px", color: COLORS.textSecondary }}>
+              -
+            </Typography>
+          )}
         </TableCell>
         <TableCell
+          align="center"
           sx={{
             borderBottom: open ? `1px solid ${COLORS.border}` : "none",
             py: 1.5,
@@ -373,12 +463,128 @@ const ActivityRow = ({
           </Box>
         </TableCell>
         <TableCell
+          align="center"
           sx={{
             borderBottom: open ? `1px solid ${COLORS.border}` : "none",
             py: 1.5,
           }}
         >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          {activity.linkedActionsData && activity.linkedActionsData.length > 0 ? (
+            (() => {
+              const latestAction = activity.linkedActionsData[0];
+              const assigneeName = latestAction.assignee?.name || "Assigned";
+              const assigneeInitials = assigneeName
+                .split(" ")
+                .map((n) => n[0])
+                .join("")
+                .toUpperCase()
+                .slice(0, 2);
+              return (
+                <Box
+                  onClick={() => setOpen(!open)}
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 0.5,
+                    cursor: "pointer",
+                    px: 1,
+                    py: 0.5,
+                    borderRadius: "6px",
+                    "&:hover": {
+                      bgcolor: COLORS.whiteHoverLight,
+                    },
+                  }}
+                >
+                  <Avatar
+                    sx={{
+                      width: 20,
+                      height: 20,
+                      fontSize: "9px",
+                      fontWeight: 600,
+                      bgcolor: COLORS.green,
+                    }}
+                  >
+                    {assigneeInitials}
+                  </Avatar>
+                  <Typography
+                    sx={{
+                      fontSize: "10px",
+                      color: COLORS.textPrimary,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      maxWidth: "60px",
+                    }}
+                  >
+                    {assigneeName.split(" ")[0]}
+                  </Typography>
+                </Box>
+              );
+            })()
+          ) : onAssignClick ? (
+            (() => {
+              // Only allow assignment for Ready activities in Weeks 1-2/In Progress, or any Overdue activities
+              const isReady = activity.status === "Ready";
+              const isOverdue = activity.ragZone === "Overdue";
+              const isAssignable =
+                activity.ragZone === "Weeks 1-2" ||
+                activity.ragZone === "In Progress";
+              const canAssign = (isReady && isAssignable) || isOverdue;
+
+              return (
+                <Button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (canAssign) {
+                      onAssignClick(activity);
+                    }
+                  }}
+                  disabled={!canAssign}
+                  title={
+                    !canAssign
+                      ? "Only Ready (Weeks 1-2/In Progress) or Overdue activities can be assigned"
+                      : "Assign action"
+                  }
+                  sx={{
+                    fontSize: "11px",
+                    fontWeight: 500,
+                    color: canAssign ? COLORS.blue : COLORS.textMuted,
+                    textTransform: "none",
+                    bgcolor: canAssign ? COLORS.blueBgLight : "transparent",
+                    border: `1px solid ${canAssign ? COLORS.blue : COLORS.textMuted}30`,
+                    borderRadius: "6px",
+                    px: 1.5,
+                    py: 0.4,
+                    minWidth: "auto",
+                    cursor: canAssign ? "pointer" : "not-allowed",
+                    opacity: canAssign ? 1 : 0.5,
+                    "&:hover": {
+                      bgcolor: canAssign ? COLORS.blueBgMedium : "transparent",
+                    },
+                    "&.Mui-disabled": {
+                      color: COLORS.textMuted,
+                    },
+                  }}
+                >
+                  Assign
+                </Button>
+              );
+            })()
+          ) : (
+            <Typography sx={{ color: COLORS.textMuted, fontSize: "13px" }}>
+              -
+            </Typography>
+          )}
+        </TableCell>
+        <TableCell
+          align="center"
+          sx={{
+            borderBottom: open ? `1px solid ${COLORS.border}` : "none",
+            py: 1.5,
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 1 }}>
             <Avatar
               sx={{
                 width: 28,
@@ -403,10 +609,10 @@ const ActivityRow = ({
         </TableCell>
       </TableRow>
 
-      {activity.linkedActions && (
+      {activity.linkedActionsData && activity.linkedActionsData.length > 0 && (
         <TableRow>
           <TableCell
-            colSpan={9}
+            colSpan={10}
             sx={{
               py: 0,
               px: 0,
@@ -420,7 +626,7 @@ const ActivityRow = ({
                   py: 2,
                   px: 3,
                   display: "grid",
-                  gridTemplateColumns: "1fr 1fr 1.5fr",
+                  gridTemplateColumns: "1fr 1fr 1fr",
                   gap: 4,
                 }}
               >
@@ -436,26 +642,59 @@ const ActivityRow = ({
                   >
                     LINKED ACTIONS
                   </Typography>
-                  {activity.linkedActions.map((action, idx) => (
-                    <Box
-                      key={idx}
-                      sx={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 0.5,
-                        mb: 0.5,
-                      }}
-                    >
-                      <ChevronRight
-                        sx={{ color: COLORS.blue, fontSize: "1rem" }}
-                      />
-                      <Typography
-                        sx={{ color: COLORS.textLight, fontSize: "13px" }}
+                  {activity.linkedActionsData.map((action) => {
+                    const isOverdue = action.status !== "Completed" && action.dueDate && new Date(action.dueDate) < new Date();
+                    return (
+                      <Box
+                        key={action._id}
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 1,
+                          mb: 0.75,
+                        }}
                       >
-                        {action}
-                      </Typography>
-                    </Box>
-                  ))}
+                        <ChevronRight
+                          sx={{ color: COLORS.blue, fontSize: "1rem" }}
+                        />
+                        <Typography
+                          sx={{ color: COLORS.textLight, fontSize: "13px" }}
+                        >
+                          {action.title}
+                        </Typography>
+                        {isOverdue && (
+                          <Box
+                            sx={{
+                              bgcolor: `${COLORS.red}20`,
+                              color: COLORS.red,
+                              px: 1,
+                              py: 0.25,
+                              borderRadius: "4px",
+                              fontSize: "10px",
+                              fontWeight: 500,
+                            }}
+                          >
+                            Overdue
+                          </Box>
+                        )}
+                        {action.status === "Completed" && (
+                          <Box
+                            sx={{
+                              bgcolor: `${COLORS.green}20`,
+                              color: COLORS.green,
+                              px: 1,
+                              py: 0.25,
+                              borderRadius: "4px",
+                              fontSize: "10px",
+                              fontWeight: 500,
+                            }}
+                          >
+                            Complete
+                          </Box>
+                        )}
+                      </Box>
+                    );
+                  })}
                 </Box>
                 <Box>
                   <Typography
@@ -467,13 +706,37 @@ const ActivityRow = ({
                       letterSpacing: "0.05em",
                     }}
                   >
-                    DEPENDENCIES
+                    REASSIGN
                   </Typography>
-                  <Typography
-                    sx={{ color: COLORS.textLight, fontSize: "13px" }}
-                  >
-                    {activity.dependencies}
-                  </Typography>
+                  {activity.linkedActionsData.map((action) => (
+                    <Box key={action._id} sx={{ mb: 0.75 }}>
+                      <Button
+                        disabled={action.status === "Completed"}
+                        sx={{
+                          fontSize: "10px",
+                          fontWeight: 500,
+                          color: COLORS.amber,
+                          textTransform: "none",
+                          bgcolor: "rgba(245, 158, 11, 0.15)",
+                          border: `1px solid ${COLORS.amber}30`,
+                          borderRadius: "6px",
+                          px: 1.5,
+                          py: 0.3,
+                          minWidth: "auto",
+                          "&:hover": {
+                            bgcolor: "rgba(245, 158, 11, 0.25)",
+                          },
+                          "&.Mui-disabled": {
+                            color: COLORS.textMuted,
+                            bgcolor: COLORS.bgTertiary,
+                            borderColor: COLORS.border,
+                          },
+                        }}
+                      >
+                        Reassign
+                      </Button>
+                    </Box>
+                  ))}
                 </Box>
                 <Box>
                   <Typography
@@ -504,9 +767,26 @@ const ActivityRow = ({
 
 interface ActivitiesTableProps {
   activities: Activity[];
+  onAssignClick?: (activity: Activity) => void;
+  currentPage?: number;
+  totalPages?: number;
+  totalActivities?: number;
+  onPageChange?: (page: number) => void;
+  activitiesPerPage?: number;
 }
 
-const ActivitiesTable = ({ activities }: ActivitiesTableProps) => {
+const ActivitiesTable = ({
+  activities,
+  onAssignClick,
+  currentPage = 1,
+  totalPages = 1,
+  totalActivities = 0,
+  onPageChange,
+  activitiesPerPage = 20,
+}: ActivitiesTableProps) => {
+  const startIndex = (currentPage - 1) * activitiesPerPage + 1;
+  const endIndex = Math.min(currentPage * activitiesPerPage, totalActivities);
+
   return (
     <Box
       sx={{
@@ -516,32 +796,25 @@ const ActivitiesTable = ({ activities }: ActivitiesTableProps) => {
         overflow: "hidden",
       }}
     >
-      <TableContainer
-        sx={{
-          maxHeight: 600,
-          overflowY: "auto",
-          "&::-webkit-scrollbar": { display: "none" },
-          msOverflowStyle: "none",
-          scrollbarWidth: "none",
-        }}
-      >
+      <TableContainer>
         <Table size="small">
           <TableHead>
             <TableRow sx={{ bgcolor: "transparent" }}>
               <TableCell
+                align="center"
                 sx={{
                   color: COLORS.border,
                   fontSize: "11px",
                   fontWeight: 600,
                   borderBottom: `1px solid ${COLORS.border}`,
                   py: 1.5,
-                  pl: 3,
                   letterSpacing: "0.05em",
                 }}
               >
                 ACTIVITY ID
               </TableCell>
               <TableCell
+                align="center"
                 sx={{
                   color: COLORS.border,
                   fontSize: "11px",
@@ -554,6 +827,7 @@ const ActivitiesTable = ({ activities }: ActivitiesTableProps) => {
                 ACTIVITY NAME
               </TableCell>
               <TableCell
+                align="center"
                 sx={{
                   color: COLORS.border,
                   fontSize: "11px",
@@ -563,9 +837,10 @@ const ActivitiesTable = ({ activities }: ActivitiesTableProps) => {
                   letterSpacing: "0.05em",
                 }}
               >
-                STARTDATE
+                START DATE
               </TableCell>
               <TableCell
+                align="center"
                 sx={{
                   color: COLORS.border,
                   fontSize: "11px",
@@ -591,6 +866,7 @@ const ActivitiesTable = ({ activities }: ActivitiesTableProps) => {
                 DURATION
               </TableCell>
               <TableCell
+                align="center"
                 sx={{
                   color: COLORS.border,
                   fontSize: "11px",
@@ -603,6 +879,7 @@ const ActivitiesTable = ({ activities }: ActivitiesTableProps) => {
                 RAG ZONE
               </TableCell>
               <TableCell
+                align="center"
                 sx={{
                   color: COLORS.border,
                   fontSize: "11px",
@@ -615,6 +892,7 @@ const ActivitiesTable = ({ activities }: ActivitiesTableProps) => {
                 ACTIONS
               </TableCell>
               <TableCell
+                align="center"
                 sx={{
                   color: COLORS.border,
                   fontSize: "11px",
@@ -627,6 +905,20 @@ const ActivitiesTable = ({ activities }: ActivitiesTableProps) => {
                 STATUS
               </TableCell>
               <TableCell
+                align="center"
+                sx={{
+                  color: COLORS.border,
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  borderBottom: `1px solid ${COLORS.border}`,
+                  py: 1.5,
+                  letterSpacing: "0.05em",
+                }}
+              >
+                ASSIGNEE
+              </TableCell>
+              <TableCell
+                align="center"
                 sx={{
                   color: COLORS.border,
                   fontSize: "11px",
@@ -646,11 +938,132 @@ const ActivitiesTable = ({ activities }: ActivitiesTableProps) => {
                 key={activity.id}
                 activity={activity}
                 isFirst={index === 0}
+                onAssignClick={onAssignClick}
               />
             ))}
           </TableBody>
         </Table>
       </TableContainer>
+      {/* Pagination Footer */}
+      {totalPages > 1 ? (
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            px: 2,
+            py: 1.5,
+            borderTop: `1px solid ${COLORS.border}`,
+          }}
+        >
+          <Typography sx={{ fontSize: "13px", color: COLORS.textSecondary }}>
+            Showing {startIndex}-{endIndex} of {totalActivities} activities
+          </Typography>
+          <Box sx={{ display: "flex", gap: 1 }}>
+            <Button
+              onClick={() => onPageChange?.(currentPage - 1)}
+              disabled={currentPage === 1}
+              sx={{
+                minWidth: "auto",
+                px: 2,
+                py: 0.75,
+                fontSize: "13px",
+                flexShrink: 0,
+                color: currentPage === 1 ? COLORS.textMuted : COLORS.textPrimary,
+                bgcolor: COLORS.bgSecondary,
+                border: `1px solid ${COLORS.border}`,
+                borderRadius: "8px",
+                textTransform: "none",
+                "&:hover": { bgcolor: COLORS.whiteHoverLight },
+                "&.Mui-disabled": {
+                  bgcolor: COLORS.bgSecondary,
+                  color: COLORS.textMuted,
+                },
+              }}
+            >
+              Previous
+            </Button>
+            {Array.from(
+              { length: Math.min(5, totalPages) },
+              (_, i) => {
+                let pageNum: number;
+                if (totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1;
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                }
+                return (
+                  <Button
+                    key={pageNum}
+                    onClick={() => onPageChange?.(pageNum)}
+                    sx={{
+                      minWidth: 36,
+                      px: 1,
+                      py: 0.75,
+                      fontSize: "13px",
+                      color:
+                        currentPage === pageNum
+                          ? COLORS.blue
+                          : COLORS.textPrimary,
+                      bgcolor:
+                        currentPage === pageNum
+                          ? COLORS.blueBgMedium
+                          : COLORS.bgSecondary,
+                      border: `1px solid ${currentPage === pageNum ? COLORS.blue : COLORS.border}`,
+                      borderRadius: "8px",
+                      textTransform: "none",
+                      "&:hover": {
+                        bgcolor:
+                          currentPage === pageNum
+                            ? COLORS.blueBgMedium
+                            : COLORS.whiteHoverLight,
+                      },
+                    }}
+                  >
+                    {pageNum}
+                  </Button>
+                );
+              },
+            )}
+            <Button
+              onClick={() => onPageChange?.(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              sx={{
+                minWidth: "auto",
+                px: 2,
+                py: 0.75,
+                fontSize: "13px",
+                flexShrink: 0,
+                color:
+                  currentPage === totalPages
+                    ? COLORS.textMuted
+                    : COLORS.textPrimary,
+                bgcolor: COLORS.bgSecondary,
+                border: `1px solid ${COLORS.border}`,
+                borderRadius: "8px",
+                textTransform: "none",
+                "&:hover": { bgcolor: COLORS.whiteHoverLight },
+                "&.Mui-disabled": {
+                  bgcolor: COLORS.bgSecondary,
+                  color: COLORS.textMuted,
+                },
+              }}
+            >
+              Next
+            </Button>
+          </Box>
+        </Box>
+      ) : totalActivities > 0 ? (
+        <Box sx={{ px: 2, py: 1.5, borderTop: `1px solid ${COLORS.border}` }}>
+          <Typography sx={{ fontSize: "13px", color: COLORS.textSecondary }}>
+            Showing {totalActivities} activities
+          </Typography>
+        </Box>
+      ) : null}
     </Box>
   );
 };

@@ -234,6 +234,13 @@ export const programmeAPI = {
     return response.data;
   },
 
+  linkToProject: async (programmeId: string, projectId: string) => {
+    const response = await api.patch(`/programmes/${programmeId}/link-project`, {
+      projectId,
+    });
+    return response.data;
+  },
+
   recalculateAllRAG: async () => {
     const response = await api.post("/programmes/recalculate-rag");
     return response.data;

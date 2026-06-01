@@ -1460,7 +1460,12 @@ const AdminProjectWorkspace = () => {
   useEffect(() => {
     if (weeklyControlData && uploadedProgramme) {
       const cycleStatus = uploadedProgramme.cycleStatus || "Draft";
-      const ungatedStatuses = ["Execution", "Close-Out Eligible", "Approved", "Closed"];
+      const ungatedStatuses = [
+        "Execution",
+        "Close-Out Eligible",
+        "Approved",
+        "Closed",
+      ];
       const isGated = !ungatedStatuses.includes(cycleStatus);
 
       setExportGatingStatus({
@@ -1468,7 +1473,7 @@ const AdminProjectWorkspace = () => {
         cycleStatus,
       });
 
-      // Green activities ready = count of green RAG activities in current week
+      // Green activities ready = count of green RAG activities (includes Complete)
       const greenActivitiesReady =
         weeklyControlData.ragDistribution?.green ||
         weeklyControlData.stats?.green ||
@@ -1515,7 +1520,10 @@ const AdminProjectWorkspace = () => {
       setIsExporting("weekly");
       // Use locked view week if set (from PM Override), otherwise use current closable week
       const closableWeek = weeksStatus?.weeks.find((w) => w.canClose);
-      const weekNumber = lockedViewWeek ?? closableWeek?.weekNumber ?? weeksStatus?.currentWeekNumber;
+      const weekNumber =
+        lockedViewWeek ??
+        closableWeek?.weekNumber ??
+        weeksStatus?.currentWeekNumber;
       const response = await exportAPI.generateWeeklyPlan(weekNumber);
       const blob = new Blob([response.data], {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -1545,7 +1553,10 @@ const AdminProjectWorkspace = () => {
       setIsExporting("todo");
       // Use locked view week if set (from PM Override), otherwise use current closable week
       const closableWeek = weeksStatus?.weeks.find((w) => w.canClose);
-      const weekNumber = lockedViewWeek ?? closableWeek?.weekNumber ?? weeksStatus?.currentWeekNumber;
+      const weekNumber =
+        lockedViewWeek ??
+        closableWeek?.weekNumber ??
+        weeksStatus?.currentWeekNumber;
       const response = await exportAPI.generatePlannerTodo(weekNumber);
       const blob = new Blob([response.data], {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -6469,8 +6480,8 @@ const AdminProjectWorkspace = () => {
                         exportGatingStatus.isGated
                           ? `Exports are gated. The WeekCycle must be in Execution state. Current cycle is in ${exportGatingStatus.cycleStatus}.`
                           : exportCounts.greenActivitiesReady === 0
-                          ? "No green activities ready to download"
-                          : ""
+                            ? "No green activities ready to download"
+                            : ""
                       }
                       placement="top"
                       arrow
@@ -6600,8 +6611,8 @@ const AdminProjectWorkspace = () => {
                         exportGatingStatus.isGated
                           ? `Exports are gated. The WeekCycle must be in Execution state. Current cycle is in ${exportGatingStatus.cycleStatus}.`
                           : exportCounts.outstandingActions === 0
-                          ? "No outstanding items to download"
-                          : ""
+                            ? "No outstanding items to download"
+                            : ""
                       }
                       placement="top"
                       arrow
@@ -6693,9 +6704,9 @@ const AdminProjectWorkspace = () => {
                         mb: weeklyActionStats.open > 0 ? 2 : 0,
                       }}
                     >
-                      The WeekCycle must be in Close-Out Eligible state. Current
-                      cycle is in {exportGatingStatus.cycleStatus}. Close all
-                      required actions for green activities to unlock exports.
+                      The WeekCycle must be in execution state. Current cycle is
+                      in {exportGatingStatus.cycleStatus}. Close all required
+                      actions for green activities to unlock exports.
                     </Typography>
 
                     {/* Show PM Override option if there are open actions */}
