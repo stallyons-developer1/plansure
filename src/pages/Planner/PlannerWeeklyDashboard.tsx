@@ -437,7 +437,7 @@ const PlannerWeeklyDashboard = () => {
               textAlign: "center",
             }}
           >
-            GREEN ACTIVITIRES
+            GREEN ACTIVITIES
           </Typography>
           <Typography
             sx={{

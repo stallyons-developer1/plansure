@@ -9,6 +9,7 @@ interface BlockedActivity {
   activityStatus: string;
   owner: string;
   blocker: string;
+  isBlocked?: boolean;
   linkedAction: {
     actionId: string;
     title?: string;
@@ -47,6 +48,7 @@ interface BlockedActivitiesTableProps {
   weeklyPlanPreview?: WeeklyPlanActivity[];
   plannerToDo?: PlannerToDoItem[];
   onAssignClick?: (activity: { activityId: string; activityName: string }) => void;
+  onUnblockClick?: (activityId: string) => void;
   onActionClick?: () => void;
   isProjectEnded?: boolean;
 }
@@ -56,6 +58,7 @@ const BlockedActivitiesTable = ({
   weeklyPlanPreview = [],
   plannerToDo = [],
   onAssignClick,
+  onUnblockClick,
   onActionClick,
   isProjectEnded = false,
 }: BlockedActivitiesTableProps) => {
@@ -147,12 +150,12 @@ const BlockedActivitiesTable = ({
               sx={{
                 display: "grid",
                 gridTemplateColumns:
-                  "90px minmax(180px, 1fr) 80px 100px minmax(140px, 1fr) 120px 90px",
+                  "90px minmax(180px, 1fr) 80px 100px minmax(140px, 1fr) 120px 90px 90px",
                 gap: 2,
                 px: 3,
                 py: 1.5,
                 borderBottom: `1px solid ${COLORS.border}`,
-                minWidth: 950,
+                minWidth: 1040,
               }}
             >
               {[
@@ -163,6 +166,7 @@ const BlockedActivitiesTable = ({
                 "ISSUE/ACTION",
                 "ACTION ID",
                 "STATUS",
+                "ACTION",
               ].map((header) => (
                 <Typography
                   key={header}
@@ -192,7 +196,7 @@ const BlockedActivitiesTable = ({
                   sx={{
                     display: "grid",
                     gridTemplateColumns:
-                      "90px minmax(180px, 1fr) 80px 100px minmax(140px, 1fr) 120px 90px",
+                      "90px minmax(180px, 1fr) 80px 100px minmax(140px, 1fr) 120px 90px 90px",
                     gap: 2,
                     px: 3,
                     py: 2,
@@ -201,7 +205,7 @@ const BlockedActivitiesTable = ({
                         ? `1px solid ${COLORS.border}`
                         : "none",
                     alignItems: "center",
-                    minWidth: 950,
+                    minWidth: 1040,
                     "&:hover": { bgcolor: COLORS.bgTertiary },
                   }}
                 >
@@ -267,7 +271,7 @@ const BlockedActivitiesTable = ({
                       {activity.ragStatus}
                     </Box>
                   </Box>
-                  {/* ASSIGNEE - show name or Assign button */}
+                  {/* ASSIGNEE - show name or Assign button (disabled if blocked) */}
                   <Box sx={{ display: "flex", justifyContent: "center" }}>
                     {activity.owner && activity.owner !== "-" ? (
                       <Typography
@@ -282,28 +286,34 @@ const BlockedActivitiesTable = ({
                     ) : (
                       <Button
                         onClick={() =>
-                          !isProjectEnded && onAssignClick?.({
+                          !isProjectEnded && !activity.isBlocked && onAssignClick?.({
                             activityId: activity.activityId,
                             activityName: activity.activityName,
                           })
                         }
-                        disabled={isProjectEnded}
-                        title={isProjectEnded ? "Project has ended - read only" : "Assign action"}
+                        disabled={isProjectEnded || activity.isBlocked}
+                        title={
+                          isProjectEnded
+                            ? "Project has ended - read only"
+                            : activity.isBlocked
+                              ? "Unblock activity first to assign"
+                              : "Assign action"
+                        }
                         sx={{
                           fontSize: "11px",
                           fontWeight: 500,
-                          color: isProjectEnded ? COLORS.textMuted : COLORS.blue,
+                          color: (isProjectEnded || activity.isBlocked) ? COLORS.textMuted : COLORS.blue,
                           textTransform: "none",
-                          bgcolor: isProjectEnded ? "transparent" : COLORS.blueBgLight,
-                          border: `1px solid ${isProjectEnded ? COLORS.textMuted : COLORS.blue}50`,
+                          bgcolor: (isProjectEnded || activity.isBlocked) ? "transparent" : COLORS.blueBgLight,
+                          border: `1px solid ${(isProjectEnded || activity.isBlocked) ? COLORS.textMuted : COLORS.blue}50`,
                           borderRadius: "6px",
                           px: 1.5,
                           py: 0.3,
                           minWidth: "auto",
-                          cursor: isProjectEnded ? "not-allowed" : "pointer",
-                          opacity: isProjectEnded ? 0.5 : 1,
+                          cursor: (isProjectEnded || activity.isBlocked) ? "not-allowed" : "pointer",
+                          opacity: (isProjectEnded || activity.isBlocked) ? 0.5 : 1,
                           "&:hover": {
-                            bgcolor: isProjectEnded ? "transparent" : COLORS.blueBgMedium,
+                            bgcolor: (isProjectEnded || activity.isBlocked) ? "transparent" : COLORS.blueBgMedium,
                           },
                         }}
                       >
@@ -378,6 +388,39 @@ const BlockedActivitiesTable = ({
                         ? "Blocked"
                         : activity.linkedAction?.status || "At Risk"}
                     </Box>
+                  </Box>
+                  {/* ACTION - Unblock button for blocked activities */}
+                  <Box sx={{ display: "flex", justifyContent: "center" }}>
+                    {activity.isBlocked ? (
+                      <Button
+                        onClick={() => !isProjectEnded && onUnblockClick?.(activity.activityId)}
+                        disabled={isProjectEnded}
+                        title={isProjectEnded ? "Project has ended - read only" : "Unblock activity"}
+                        sx={{
+                          fontSize: "11px",
+                          fontWeight: 500,
+                          color: isProjectEnded ? COLORS.textMuted : COLORS.green,
+                          textTransform: "none",
+                          bgcolor: isProjectEnded ? "transparent" : `${COLORS.green}15`,
+                          border: `1px solid ${isProjectEnded ? COLORS.textMuted : COLORS.green}50`,
+                          borderRadius: "6px",
+                          px: 1.5,
+                          py: 0.3,
+                          minWidth: "auto",
+                          cursor: isProjectEnded ? "not-allowed" : "pointer",
+                          opacity: isProjectEnded ? 0.5 : 1,
+                          "&:hover": {
+                            bgcolor: isProjectEnded ? "transparent" : `${COLORS.green}25`,
+                          },
+                        }}
+                      >
+                        Unblock
+                      </Button>
+                    ) : (
+                      <Typography sx={{ color: COLORS.textMuted, fontSize: "11px" }}>
+                        -
+                      </Typography>
+                    )}
                   </Box>
                 </Box>
               ))

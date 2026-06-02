@@ -285,6 +285,10 @@ const ActivityRow = ({
         ? COLORS.amber
         : COLORS.red;
 
+  // Start of today (midnight) - actions are only overdue after due date has fully passed
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+
   return (
     <>
       <TableRow
@@ -524,13 +528,10 @@ const ActivityRow = ({
             })()
           ) : onAssignClick ? (
             (() => {
-              // Only allow assignment for Ready activities in Weeks 1-2/In Progress, or any Overdue activities
+              // Only allow assignment for Ready or Overdue activities
               const isReady = activity.status === "Ready";
               const isOverdue = activity.ragZone === "Overdue";
-              const isAssignable =
-                activity.ragZone === "Weeks 1-2" ||
-                activity.ragZone === "In Progress";
-              const canAssign = (isReady && isAssignable) || isOverdue;
+              const canAssign = isReady || isOverdue;
 
               return (
                 <Button
@@ -543,7 +544,7 @@ const ActivityRow = ({
                   disabled={!canAssign}
                   title={
                     !canAssign
-                      ? "Only Ready (Weeks 1-2/In Progress) or Overdue activities can be assigned"
+                      ? "Only Ready or Overdue activities can be assigned"
                       : "Assign action"
                   }
                   sx={{
@@ -643,7 +644,7 @@ const ActivityRow = ({
                     LINKED ACTIONS
                   </Typography>
                   {activity.linkedActionsData.map((action) => {
-                    const isOverdue = action.status !== "Completed" && action.dueDate && new Date(action.dueDate) < new Date();
+                    const isOverdue = action.status !== "Completed" && action.dueDate && new Date(action.dueDate) < startOfToday;
                     return (
                       <Box
                         key={action._id}

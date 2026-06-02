@@ -260,9 +260,11 @@ const AdminProjectWorkspace = () => {
       weekNumber: number;
       startDate: string;
       endDate: string;
+      twoWeekEndDate: string;
       status: string;
       isClosed: boolean;
       canClose: boolean;
+      canCloseReason: string | null;
       closedAt: string | null;
       closeType: string | null;
       stats: {
@@ -286,9 +288,9 @@ const AdminProjectWorkspace = () => {
     overdueActions: 0,
     blockedActivities: 0,
   });
-  const [isExporting, setIsExporting] = useState<"weekly" | "todo" | null>(
-    null,
-  );
+  const [isExporting, setIsExporting] = useState<
+    "weekly" | "todo" | "pdf" | null
+  >(null);
 
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [assigningActivity, setAssigningActivity] = useState<{
@@ -461,6 +463,7 @@ const AdminProjectWorkspace = () => {
       activityName: string;
       ragStatus: string;
       activityStatus?: string;
+      isBlocked?: boolean;
       owner: string;
       blocker: string;
       linkedAction: { actionId: string; title?: string; status: string } | null;
@@ -498,6 +501,7 @@ const AdminProjectWorkspace = () => {
     } | null;
     isProjectEnded?: boolean;
     projectEndDate?: string | null;
+    programmeId?: string;
   } | null>(null);
   const [, setIsLoadingWeeklyControl] = useState(false);
 
@@ -536,6 +540,88 @@ const AdminProjectWorkspace = () => {
     };
     fetchUsers();
   }, []);
+
+  // Reusable function to fetch programme data
+  const refetchProgramme = async () => {
+    if (!projectId) return;
+    try {
+      const response = await programmeAPI.getByProject(projectId);
+      if (response.success && response.programme) {
+        const programme = response.programme;
+        const activities = programme.extractedData?.activities || [];
+        const summary = programme.extractedData?.summary || {
+          total: 0,
+          inLookahead: 0,
+          green: 0,
+          amber: 0,
+          red: 0,
+          blocked: 0,
+        };
+
+        const programmeStatus = programme.cycleStatus || "Uploaded";
+        setUploadedProgramme({
+          _id: programme._id,
+          name: programme.name,
+          totalActivities:
+            programme.extractedData?.totalActivities || activities.length,
+          cycleStatus: programmeStatus,
+          isLocked: programme.isLocked || false,
+          overrideReason: programme.overrideReason || "",
+          summary: {
+            green: summary.green || 0,
+            amber: summary.amber || 0,
+            red: summary.red || 0,
+            inLookahead: summary.inLookahead || activities.length,
+          },
+        });
+
+        setLookaheadData({
+          activities: activities.map(
+            (a: {
+              activityId?: string;
+              activityName?: string;
+              duration?: string;
+              startDate?: string;
+              finishDate?: string;
+              status?: string;
+              ragStatus?: string;
+              activityStatus?: string;
+              weekZone?: string | null;
+              actionsCount?: number;
+              openActionsCount?: number;
+              isBlocked?: boolean;
+              ownerName?: string;
+            }) => ({
+              activityId: a.activityId || "",
+              activityName: a.activityName || "",
+              duration: a.duration || "",
+              startDate: a.startDate || "",
+              finishDate: a.finishDate || "",
+              status: a.status || "",
+              ragStatus: a.ragStatus || "",
+              activityStatus: a.activityStatus || "",
+              weekZone: a.weekZone || null,
+              actionsCount: a.actionsCount || 0,
+              openActionsCount: a.openActionsCount || 0,
+              isBlocked: a.isBlocked || false,
+              ownerName: a.ownerName || "",
+            }),
+          ),
+          summary: {
+            total: summary.total || activities.length,
+            inLookahead: summary.inLookahead || activities.length,
+            green: summary.green || 0,
+            amber: summary.amber || 0,
+            red: summary.red || 0,
+            blocked: summary.blocked || 0,
+          },
+          weekZones: lookaheadData?.weekZones || [],
+        });
+      }
+    } catch (error) {
+      console.error("Failed to refetch programme:", error);
+    }
+  };
 
   useEffect(() => {
     const fetchProgramme = async () => {
@@ -1448,6 +1534,7 @@ const AdminProjectWorkspace = () => {
         weekInfo: response.weekInfo || null,
         isProjectEnded: response.isProjectEnded || false,
         projectEndDate: response.projectEndDate || null,
+        programmeId: response.programmeId || programmeId,
       });
     } catch (error) {
       console.error("Failed to fetch weekly control data:", error);
@@ -1479,13 +1566,14 @@ const AdminProjectWorkspace = () => {
         weeklyControlData.stats?.green ||
         0;
 
-      // Outstanding actions = open + inProgress
-      const outstandingActions =
-        (weeklyControlData.actionsByStatus?.open || 0) +
-        (weeklyControlData.actionsByStatus?.inProgress || 0);
-
       // Overdue actions
       const overdueActions = weeklyControlData.actionsByStatus?.overdue || 0;
+
+      // Outstanding actions for Planner To-Do = open + inProgress + overdue (from all weeks)
+      const outstandingActions =
+        (weeklyControlData.actionsByStatus?.open || 0) +
+        (weeklyControlData.actionsByStatus?.inProgress || 0) +
+        overdueActions;
 
       // Blocked activities
       const blockedActivities =
@@ -1721,6 +1809,10 @@ const AdminProjectWorkspace = () => {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
+  // Start of today (midnight) - actions are only overdue after due date has fully passed
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+
   // Calculate action stats from projectActions for Actions tab (shows ALL actions)
   const actionStats = {
     total: projectActions.length,
@@ -1730,7 +1822,7 @@ const AdminProjectWorkspace = () => {
     overdue: projectActions.filter(
       (a) =>
         a.dueDate &&
-        new Date(a.dueDate) < new Date() &&
+        new Date(a.dueDate) < startOfToday &&
         a.status !== "Completed" &&
         a.status !== "Cancelled",
     ).length,
@@ -3381,18 +3473,10 @@ const AdminProjectWorkspace = () => {
                                         </Box>
                                       );
                                     }
-                                    // Only allow assignment for Ready activities in Week 1-2/In Progress, or any Overdue activities
-                                    const isReady =
-                                      activity.activityStatus === "Ready";
-                                    const isOverdue =
-                                      ragZone.zone === "Overdue";
-                                    const isAssignable =
-                                      ragZone.zone === "Weeks 1-2" ||
-                                      ragZone.zone === "In Progress";
+                                    // Enable assign if status is Ready
                                     const canAssign =
-                                      ((isReady && isAssignable) ||
-                                        isOverdue) &&
-                                      !uploadedProgramme?.isLocked &&
+                                      (activity.activityStatus === "Ready" ||
+                                        !activity.activityStatus) &&
                                       !weeklyControlData?.isProjectEnded;
 
                                     return (
@@ -3426,13 +3510,9 @@ const AdminProjectWorkspace = () => {
                                         }}
                                         disabled={!canAssign}
                                         title={
-                                          weeklyControlData?.isProjectEnded
-                                            ? "Project has ended - read only"
-                                            : uploadedProgramme?.isLocked
-                                              ? "Programme is locked"
-                                              : !canAssign
-                                                ? "Only Ready (Week 1-2/In Progress) or Overdue activities can be assigned"
-                                                : "Assign action"
+                                          !canAssign
+                                            ? "Only Ready activities can be assigned"
+                                            : "Assign action"
                                         }
                                         sx={{
                                           fontSize: "10px",
@@ -5024,7 +5104,7 @@ const AdminProjectWorkspace = () => {
                           value: ragData.green,
                           color: "#22C55E",
                           tooltip:
-                            "Completed or On Track - Activity is completed, in progress, or starting within 2 weeks",
+                            "Completed or On Track - Activity is completed or in progress",
                         },
                         {
                           value: ragData.amber,
@@ -5161,7 +5241,7 @@ const AdminProjectWorkspace = () => {
                       }}
                     >
                       <Tooltip
-                        title="Completed or On Track - Activity is completed, in progress, or starting within 2 weeks"
+                        title="Completed or On Track - Activity is completed or in progress"
                         placement="bottom"
                         arrow
                         slotProps={tooltipStyles}
@@ -5538,6 +5618,7 @@ const AdminProjectWorkspace = () => {
                     activityStatus: a.activityStatus || "At Risk",
                     owner: a.owner || "-",
                     blocker: a.blocker || "",
+                    isBlocked: a.isBlocked,
                     linkedAction: a.linkedAction || null,
                   })) || []
                 }
@@ -5559,6 +5640,29 @@ const AdminProjectWorkspace = () => {
                     dueDate: "",
                   });
                   setAssignModalOpen(true);
+                }}
+                onUnblockClick={async (activityId) => {
+                  const progId =
+                    weeklyControlData?.programmeId || uploadedProgramme?._id;
+                  if (!progId) {
+                    console.error("No programme ID available");
+                    return;
+                  }
+                  try {
+                    await programmeAPI.updateActivity(progId, activityId, {
+                      isBlocked: false,
+                      activityStatus: "Ready",
+                    });
+                    // Refresh both Weekly Control and Activities & Lookahead data
+                    const weekNum =
+                      lockedViewWeek ?? weeklyControlData?.weekInfo?.weekNumber;
+                    await Promise.all([
+                      fetchWeeklyControlData(progId, weekNum),
+                      refetchProgramme(),
+                    ]);
+                  } catch (error) {
+                    console.error("Error unblocking activity:", error);
+                  }
                 }}
                 onActionClick={() => setActiveTab(3)}
                 isProjectEnded={weeklyControlData?.isProjectEnded}
@@ -5773,6 +5877,28 @@ const AdminProjectWorkspace = () => {
                           "Close Current Week"
                         )}
                       </Button>
+                      {/* Show reason why button is disabled */}
+                      {!weeksStatus?.weeks.find((w) => w.canClose) &&
+                        !weeklyControlData?.isProjectEnded && (() => {
+                          const currentWeek = weeksStatus?.weeks.find(
+                            (w) => !w.isClosed && w.canCloseReason
+                          );
+                          if (currentWeek?.canCloseReason) {
+                            return (
+                              <Typography
+                                sx={{
+                                  color: COLORS.red,
+                                  fontSize: "11px",
+                                  mt: 1,
+                                  textAlign: "left",
+                                }}
+                              >
+                                {currentWeek.canCloseReason}
+                              </Typography>
+                            );
+                          }
+                          return null;
+                        })()}
                     </>
                   ) : (
                     /* Open actions remaining */

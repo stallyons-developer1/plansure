@@ -1,8 +1,17 @@
 import { useState, useEffect } from "react";
-import { Box, Typography, CircularProgress } from "@mui/material";
+import {
+  Box,
+  Typography,
+  CircularProgress,
+  FormControl,
+  Select,
+  MenuItem,
+} from "@mui/material";
+import type { SelectChangeEvent } from "@mui/material/Select";
+import { KeyboardArrowDown as ArrowDownIcon } from "@mui/icons-material";
 import AdminLayout from "../../layouts/AdminLayout";
 import { COLORS } from "../../constants/colors";
-import { dashboardAPI } from "../../services/api";
+import { dashboardAPI, projectAPI, programmeAPI, actionAPI } from "../../services/api";
 import BlockedActivitiesTable from "../../components/BlockedActivitiesTable";
 import ClosureOverridePanel from "../../components/ClosureOverridePanel";
 import {
@@ -17,14 +26,34 @@ import {
   Cell,
 } from "recharts";
 
-const activitiesByWeekData = [
-  { week: "Wk 19", green: 30, amber: 10, red: 5 },
-  { week: "Wk 20", green: 28, amber: 14, red: 5 },
-  { week: "Wk 21", green: 26, amber: 15, red: 5 },
-  { week: "Wk 22", green: 22, amber: 17, red: 7 },
-  { week: "Wk 23", green: 25, amber: 14, red: 8 },
-  { week: "Wk 24", green: 24, amber: 17, red: 9 },
-];
+interface Project {
+  _id: string;
+  name: string;
+  phase: string;
+  status: string;
+}
+
+interface WeekStatus {
+  weekNumber: number;
+  status: "open" | "closed";
+  closedAt?: string;
+  closedBy?: string;
+  closeType?: string;
+}
+
+interface ActivityByWeek {
+  week: string;
+  green: number;
+  amber: number;
+  red: number;
+}
+
+interface ActionOwnership {
+  discipline: string;
+  open: number;
+  closed: number;
+  overdue: number;
+}
 
 interface WeeklyData {
   project: { name: string } | null;
@@ -76,6 +105,8 @@ interface WeeklyData {
     priority: string;
     dueDate: string;
   }>;
+  activitiesByWeek?: ActivityByWeek[];
+  actionOwnership?: ActionOwnership[];
 }
 
 const CustomLegend = ({
@@ -125,24 +156,223 @@ const CustomLegend = ({
 const AdminWeeklyDashboard = () => {
   const amberColor = "#F59E0B";
   const [loading, setLoading] = useState(true);
+  const [loadingData, setLoadingData] = useState(false);
   const [data, setData] = useState<WeeklyData | null>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<string>("");
+  const [programmeId, setProgrammeId] = useState<string>("");
+  const [_weeksStatus, setWeeksStatus] = useState<WeekStatus[]>([]);
+  const [currentWeekNumber, setCurrentWeekNumber] = useState<number>(1);
+  const [activitiesByWeekData, setActivitiesByWeekData] = useState<ActivityByWeek[]>([]);
+  const [actionOwnershipData, setActionOwnershipData] = useState<ActionOwnership[]>([]);
 
+  // Fetch projects on mount
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchProjects = async () => {
       try {
         setLoading(true);
-        const response = await dashboardAPI.getWeeklyDashboard();
-        if (response.success) {
-          setData(response.weekly);
+        const res = await projectAPI.getAll();
+        if (res.success) {
+          const projectsList = res.projects || [];
+          setProjects(projectsList);
+          // Select first project by default
+          if (projectsList.length > 0 && !selectedProjectId) {
+            setSelectedProjectId(projectsList[0]._id);
+          }
         }
       } catch (error) {
-        console.error("Error fetching weekly dashboard:", error);
+        console.error("Error fetching projects:", error);
       } finally {
         setLoading(false);
       }
     };
-    fetchData();
+
+    fetchProjects();
   }, []);
+
+  // Fetch programme when project changes
+  useEffect(() => {
+    const fetchProgramme = async () => {
+      if (!selectedProjectId) {
+        setProgrammeId("");
+        setWeeksStatus([]);
+        setData(null);
+        return;
+      }
+
+      try {
+        const response = await programmeAPI.getByProject(selectedProjectId);
+        if (response.success && response.programme) {
+          setProgrammeId(response.programme._id);
+        } else {
+          setProgrammeId("");
+          setWeeksStatus([]);
+          setData(null);
+        }
+      } catch (error) {
+        console.error("Error fetching programme:", error);
+        setProgrammeId("");
+        setWeeksStatus([]);
+        setData(null);
+      }
+    };
+
+    fetchProgramme();
+  }, [selectedProjectId]);
+
+  // Fetch weeks status when programmeId changes
+  useEffect(() => {
+    const fetchWeeksStatus = async () => {
+      if (!programmeId) {
+        setWeeksStatus([]);
+        setCurrentWeekNumber(1);
+        return;
+      }
+
+      try {
+        const response = await programmeAPI.getWeeksStatus(programmeId);
+        if (response.success && response.weeks) {
+          setWeeksStatus(response.weeks);
+          // Find the first open week (current closable week)
+          const openWeek = response.weeks.find((w: WeekStatus) => w.status === "open");
+          if (openWeek) {
+            setCurrentWeekNumber(openWeek.weekNumber);
+          } else {
+            // All weeks closed, show the last week
+            const lastWeek = response.weeks[response.weeks.length - 1];
+            setCurrentWeekNumber(lastWeek?.weekNumber || 1);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching weeks status:", error);
+        setWeeksStatus([]);
+        setCurrentWeekNumber(1);
+      }
+    };
+
+    fetchWeeksStatus();
+  }, [programmeId]);
+
+  // Fetch weekly dashboard data when project and week number are set
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!selectedProjectId) {
+        setData(null);
+        return;
+      }
+
+      try {
+        setLoadingData(true);
+        const response = await dashboardAPI.getWeeklyDashboard(selectedProjectId);
+        if (response.success) {
+          setData(response.weekly);
+
+          // Set activities by week data if available
+          if (response.weekly?.activitiesByWeek) {
+            setActivitiesByWeekData(response.weekly.activitiesByWeek);
+          }
+
+          // Set action ownership data if available
+          if (response.weekly?.actionOwnership) {
+            setActionOwnershipData(response.weekly.actionOwnership);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching weekly dashboard:", error);
+        setData(null);
+      } finally {
+        setLoadingData(false);
+      }
+    };
+
+    fetchData();
+  }, [selectedProjectId, currentWeekNumber]);
+
+  // Fetch weekly control data for activities by week chart
+  useEffect(() => {
+    const fetchWeeklyControlData = async () => {
+      if (!programmeId) {
+        setActivitiesByWeekData([]);
+        setActionOwnershipData([]);
+        return;
+      }
+
+      try {
+        const response = await programmeAPI.getWeeklyControl(programmeId, currentWeekNumber);
+        if (response.success && response.weeklyControl) {
+          const wc = response.weeklyControl;
+
+          // Build activities by week data from the response
+          if (wc.activitiesByWeek && Array.isArray(wc.activitiesByWeek)) {
+            setActivitiesByWeekData(wc.activitiesByWeek);
+          }
+
+          // Build action ownership data
+          if (wc.actionOwnership && Array.isArray(wc.actionOwnership)) {
+            setActionOwnershipData(wc.actionOwnership);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching weekly control data:", error);
+      }
+    };
+
+    fetchWeeklyControlData();
+  }, [programmeId, currentWeekNumber]);
+
+  // Fetch actions for ownership chart
+  useEffect(() => {
+    const fetchActionsData = async () => {
+      if (!programmeId) return;
+
+      try {
+        const response = await actionAPI.getByProgramme(programmeId);
+        if (response.success && response.actions) {
+          // Group actions by discipline/owner and status
+          const ownershipMap: { [key: string]: { open: number; closed: number; overdue: number } } = {};
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+
+          response.actions.forEach((action: { assignee?: { name?: string }; status?: string; dueDate?: string }) => {
+            const discipline = action.assignee?.name || "Unassigned";
+            if (!ownershipMap[discipline]) {
+              ownershipMap[discipline] = { open: 0, closed: 0, overdue: 0 };
+            }
+
+            if (action.status === "Closed" || action.status === "Completed") {
+              ownershipMap[discipline].closed++;
+            } else {
+              const dueDate = action.dueDate ? new Date(action.dueDate) : null;
+              if (dueDate && dueDate < today) {
+                ownershipMap[discipline].overdue++;
+              } else {
+                ownershipMap[discipline].open++;
+              }
+            }
+          });
+
+          const ownershipArray = Object.entries(ownershipMap)
+            .map(([discipline, counts]) => ({
+              discipline,
+              ...counts,
+            }))
+            .slice(0, 5); // Limit to top 5
+
+          if (ownershipArray.length > 0) {
+            setActionOwnershipData(ownershipArray);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching actions:", error);
+      }
+    };
+
+    fetchActionsData();
+  }, [programmeId]);
+
+  const handleProjectChange = (event: SelectChangeEvent<string>) => {
+    setSelectedProjectId(event.target.value);
+  };
 
   const ragTotal =
     (data?.ragDistribution?.green || 0) +
@@ -207,6 +437,72 @@ const AdminWeeklyDashboard = () => {
   const cycleStatusColor = getCycleStatusColor(cycleStatus);
   const cycleStatusBg = `${cycleStatusColor}15`;
 
+  // Project dropdown component
+  const projectDropdown = (
+    <FormControl size="small" sx={{ minWidth: 200 }}>
+      <Select
+        value={selectedProjectId}
+        onChange={handleProjectChange}
+        displayEmpty
+        IconComponent={ArrowDownIcon}
+        sx={{
+          bgcolor: COLORS.bgSecondary,
+          color: COLORS.textPrimary,
+          borderRadius: "8px",
+          border: `1px solid ${COLORS.border}`,
+          fontSize: "14px",
+          fontWeight: 500,
+          "& .MuiOutlinedInput-notchedOutline": {
+            border: "none",
+          },
+          "& .MuiSelect-icon": {
+            color: COLORS.textSecondary,
+          },
+          "&:hover": {
+            bgcolor: COLORS.bgTertiary,
+          },
+        }}
+        MenuProps={{
+          slotProps: {
+            paper: {
+              sx: {
+                bgcolor: COLORS.bgSecondary,
+                border: `1px solid ${COLORS.border}`,
+                borderRadius: "8px",
+                mt: 1,
+                "& .MuiMenuItem-root": {
+                  color: COLORS.textPrimary,
+                  fontSize: "14px",
+                  "&:hover": {
+                    bgcolor: COLORS.bgTertiary,
+                  },
+                  "&.Mui-selected": {
+                    bgcolor: COLORS.blueBgMedium,
+                    "&:hover": {
+                      bgcolor: COLORS.blueBgMedium,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        }}
+      >
+        {projects.length === 0 ? (
+          <MenuItem value="" disabled>
+            No projects available
+          </MenuItem>
+        ) : (
+          projects.map((project) => (
+            <MenuItem key={project._id} value={project._id}>
+              {project.name}
+            </MenuItem>
+          ))
+        )}
+      </Select>
+    </FormControl>
+  );
+
   if (loading) {
     return (
       <AdminLayout
@@ -231,7 +527,54 @@ const AdminWeeklyDashboard = () => {
     <AdminLayout
       title="Weekly Dashboard"
       subtitle="Live operational control for the current cycle"
+      headerAction={projectDropdown}
     >
+      {loadingData ? (
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            height: "50vh",
+          }}
+        >
+          <CircularProgress sx={{ color: COLORS.blue }} />
+        </Box>
+      ) : projects.length === 0 ? (
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            alignItems: "center",
+            minHeight: 400,
+            gap: 2,
+          }}
+        >
+          <Typography sx={{ color: COLORS.textMuted, fontSize: "16px" }}>
+            No projects found. Create a project first.
+          </Typography>
+        </Box>
+      ) : !programmeId && selectedProjectId ? (
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            alignItems: "center",
+            minHeight: 400,
+            gap: 2,
+          }}
+        >
+          <Typography sx={{ color: COLORS.textMuted, fontSize: "16px" }}>
+            No programme uploaded for this project yet.
+          </Typography>
+          <Typography sx={{ color: COLORS.textSecondary, fontSize: "14px" }}>
+            Upload a programme PDF to see weekly dashboard data.
+          </Typography>
+        </Box>
+      ) : (
+        <>
       <Box
         sx={{
           bgcolor: COLORS.bgSecondary,
@@ -593,7 +936,7 @@ const AdminWeeklyDashboard = () => {
               textAlign: "center",
             }}
           >
-            GREEN ACTIVITIRES
+            GREEN ACTIVITIES
           </Typography>
           <Typography
             sx={{
@@ -1069,12 +1412,8 @@ const AdminWeeklyDashboard = () => {
           <Box sx={{ height: { xs: 200, sm: 250 }, mt: 2 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
-                data={[
-                  { discipline: "Civil", open: 8, closed: 5, overdue: 1 },
-                  { discipline: "MEP", open: 3, closed: 7, overdue: 1 },
-                  { discipline: "Structural", open: 3, closed: 5, overdue: 0 },
-                  { discipline: "Signalling", open: 3, closed: 4, overdue: 1 },
-                  { discipline: "Logistics", open: 1, closed: 4, overdue: 0 },
+                data={actionOwnershipData.length > 0 ? actionOwnershipData : [
+                  { discipline: "No Data", open: 0, closed: 0, overdue: 0 },
                 ]}
                 layout="vertical"
                 barCategoryGap="15%"
@@ -1133,12 +1472,26 @@ const AdminWeeklyDashboard = () => {
       </Box>
 
       <Box sx={{ mt: { xs: 2, sm: 3 } }}>
-        <BlockedActivitiesTable />
+        <BlockedActivitiesTable
+          activities={data?.blockedActivities?.map(a => ({
+            activityId: a.id,
+            activityName: a.name,
+            ragStatus: a.rag,
+            activityStatus: a.status,
+            owner: a.owner,
+            blocker: a.blocker,
+            linkedAction: a.linkedAction ? { actionId: a.linkedAction, title: a.linkedAction, status: a.status } : null,
+          }))}
+          weeklyPlanPreview={data?.weeklyPlanPreview}
+          plannerToDo={data?.plannerToDo}
+        />
       </Box>
 
       <Box sx={{ mt: { xs: 2, sm: 3 } }}>
         <ClosureOverridePanel />
       </Box>
+        </>
+      )}
     </AdminLayout>
   );
 };

@@ -288,11 +288,15 @@ const AdminActions = () => {
     }
   };
 
+  // Start of today (midnight) - actions are only overdue after due date has fully passed
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+
   const filteredActions = actions.filter((action) => {
     const isOverdue =
       action.status !== "Completed" &&
       action.status !== "Cancelled" &&
-      new Date(action.dueDate) < new Date();
+      new Date(action.dueDate) < startOfToday;
     const displayStatus = isOverdue ? "overdue" : action.status.toLowerCase();
 
     const matchesStatus =
@@ -317,12 +321,12 @@ const AdminActions = () => {
   const computedStats = {
     total: actions.length,
     open: actions.filter((a) => {
-      const isOverdue = a.status !== "Completed" && new Date(a.dueDate) < new Date();
+      const isOverdue = a.status !== "Completed" && new Date(a.dueDate) < startOfToday;
       return (a.status === "Open" || a.status === "In Progress") && !isOverdue;
     }).length,
     closed: actions.filter((a) => a.status === "Completed").length,
     overdue: actions.filter((a) => {
-      return a.status !== "Completed" && new Date(a.dueDate) < new Date();
+      return a.status !== "Completed" && new Date(a.dueDate) < startOfToday;
     }).length,
   };
 
@@ -1232,7 +1236,7 @@ const AdminActions = () => {
                 const isOverdue =
                   action.status !== "Completed" &&
                   action.status !== "Cancelled" &&
-                  new Date(action.dueDate) < new Date();
+                  new Date(action.dueDate) < startOfToday;
                 const displayStatus = isOverdue ? "Overdue" : action.status;
                 const statusColor = isOverdue
                   ? COLORS.red

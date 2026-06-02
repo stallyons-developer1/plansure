@@ -289,11 +289,15 @@ const PlannerActions = () => {
     }
   };
 
+  // Start of today (midnight) - actions are only overdue after due date has fully passed
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+
   const filteredActions = actions.filter((action) => {
     const isOverdue =
       action.status !== "Completed" &&
       action.status !== "Cancelled" &&
-      new Date(action.dueDate) < new Date();
+      new Date(action.dueDate) < startOfToday;
     const displayStatus = isOverdue ? "overdue" : action.status.toLowerCase();
 
     const matchesStatus =
@@ -1146,7 +1150,7 @@ const PlannerActions = () => {
                 const isOverdue =
                   action.status !== "Completed" &&
                   action.status !== "Cancelled" &&
-                  new Date(action.dueDate) < new Date();
+                  new Date(action.dueDate) < startOfToday;
                 const displayStatus = isOverdue ? "Overdue" : action.status;
                 const statusColor = isOverdue
                   ? COLORS.red
