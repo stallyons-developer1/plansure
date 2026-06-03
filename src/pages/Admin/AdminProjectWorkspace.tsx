@@ -284,9 +284,12 @@ const AdminProjectWorkspace = () => {
   });
   const [exportCounts, setExportCounts] = useState({
     greenActivitiesReady: 0,
+    weeklyPlanTotal: 0,
     outstandingActions: 0,
     overdueActions: 0,
     blockedActivities: 0,
+    completedActions: 0,
+    pmOverrideActions: 0,
   });
   const [isExporting, setIsExporting] = useState<
     "weekly" | "todo" | "pdf" | null
@@ -450,6 +453,7 @@ const AdminProjectWorkspace = () => {
       open: number;
       inProgress: number;
       closed: number;
+      pmOverride: number;
       overdue: number;
     };
     weeklyActionsByStatus: {
@@ -468,6 +472,11 @@ const AdminProjectWorkspace = () => {
       blocker: string;
       linkedAction: { actionId: string; title?: string; status: string } | null;
     }>;
+    activityCounts?: {
+      completed: number;
+      blocked: number;
+      atRisk: number;
+    };
     weeklyPlanPreview: Array<{
       activityId: string;
       activityName: string;
@@ -847,13 +856,14 @@ const AdminProjectWorkspace = () => {
         isLastWeek?: boolean;
       } = { success: false, isFullyClosed: false };
       if (response1.success && !response1.isFullyClosed) {
-        // Close the second week
+        // Close the second week - pass isSecondOfPair=true to skip date validation
         console.log("[Close Week] Closing week", weekNumber + 1);
         response2 = await programmeAPI.closeWeek(
           uploadedProgramme._id,
           weekNumber + 1,
           closeType,
           closeType === "PM Override" ? overrideReason : undefined,
+          true, // isSecondOfPair - skip date check for second week
         );
         console.log("[Close Week] response2:", response2);
       }
@@ -889,6 +899,8 @@ const AdminProjectWorkspace = () => {
             nextWeekNumber,
           );
           await fetchWeeklyControlData(uploadedProgramme._id, nextWeekNumber);
+          // Also refresh programme data to ensure all UI is updated
+          await refetchProgramme();
         }
 
         // Update programme status based on response
@@ -1146,6 +1158,9 @@ const AdminProjectWorkspace = () => {
 
           // Stay on the CLOSED week (not next) - fetch data for the week we just closed
           await fetchWeeklyControlData(uploadedProgramme._id, weekToClose);
+
+          // Also refresh programme data to ensure all UI is updated
+          await refetchProgramme();
 
           // Update export gating status - cycle should now be Close-Out Eligible or Closed
           setExportGatingStatus({
@@ -1529,6 +1544,7 @@ const AdminProjectWorkspace = () => {
           overdue: 0,
         },
         blockedRiskActivities: response.blockedRiskActivities || [],
+        activityCounts: response.activityCounts || { completed: 0, blocked: 0, atRisk: 0 },
         weeklyPlanPreview: response.weeklyPlanPreview || [],
         plannerToDo: response.plannerToDo || [],
         weekInfo: response.weekInfo || null,
@@ -1566,24 +1582,43 @@ const AdminProjectWorkspace = () => {
         weeklyControlData.stats?.green ||
         0;
 
-      // Overdue actions
+      // Completed actions (for weekly plan)
+      const completedActions = weeklyControlData.actionsByStatus?.closed || 0;
+
+      // PM Override actions (for weekly plan)
+      const pmOverrideActions = weeklyControlData.actionsByStatus?.pmOverride || 0;
+
+      // Overdue actions (all)
       const overdueActions = weeklyControlData.actionsByStatus?.overdue || 0;
 
-      // Outstanding actions for Planner To-Do = open + inProgress + overdue (from all weeks)
+      // Outstanding actions for Planner To-Do = open + inProgress + overdue (from CURRENT 2 WEEKS only)
+      // Use weeklyActionsByStatus which is filtered to current week's actions
       const outstandingActions =
-        (weeklyControlData.actionsByStatus?.open || 0) +
-        (weeklyControlData.actionsByStatus?.inProgress || 0) +
-        overdueActions;
+        (weeklyControlData.weeklyActionsByStatus?.open || 0) +
+        (weeklyControlData.weeklyActionsByStatus?.inProgress || 0) +
+        (weeklyControlData.weeklyActionsByStatus?.overdue || 0);
 
-      // Blocked activities
+      // Blocked activities (for UI display)
       const blockedActivities =
         weeklyControlData.blockedRiskActivities?.length || 0;
 
+      // Activity counts from backend (for Weekly Plan export)
+      const completedActivitiesCount = weeklyControlData.activityCounts?.completed || 0;
+      const blockedActivitiesCount = weeklyControlData.activityCounts?.blocked || 0;
+      const atRiskActivitiesCount = weeklyControlData.activityCounts?.atRisk || 0;
+
+      // Weekly Plan total = Actions + Activities (Completed + Blocked + At Risk)
+      const weeklyPlanTotal = completedActions + overdueActions + pmOverrideActions +
+        completedActivitiesCount + blockedActivitiesCount + atRiskActivitiesCount;
+
       setExportCounts({
         greenActivitiesReady,
+        weeklyPlanTotal,
         outstandingActions,
         overdueActions,
         blockedActivities,
+        completedActions,
+        pmOverrideActions,
       });
 
       // Update closure checklist based on real data - auto-check all
@@ -5877,10 +5912,14 @@ const AdminProjectWorkspace = () => {
                           "Close Current Week"
                         )}
                       </Button>
-                      {/* Show reason why button is disabled */}
+                      {/* Show reason why button is disabled - use the currently displayed week */}
                       {!weeksStatus?.weeks.find((w) => w.canClose) &&
                         !weeklyControlData?.isProjectEnded && (() => {
+                          // Find the week matching the currently displayed week number
+                          const displayedWeekNumber = weeklyControlData?.weekInfo?.weekNumber;
                           const currentWeek = weeksStatus?.weeks.find(
+                            (w) => w.weekNumber === displayedWeekNumber && !w.isClosed && w.canCloseReason
+                          ) || weeksStatus?.weeks.find(
                             (w) => !w.isClosed && w.canCloseReason
                           );
                           if (currentWeek?.canCloseReason) {
@@ -6590,23 +6629,23 @@ const AdminProjectWorkspace = () => {
                         mb: 0.5,
                       }}
                     >
-                      Green activities with zero open required actions.
+                      Actions + Activities (Completed/Blocked)
                     </Typography>
                     <Typography
                       sx={{ color: COLORS.textMuted, fontSize: "12px", mb: 2 }}
                     >
-                      {exportCounts.greenActivitiesReady}{" "}
-                      {exportCounts.greenActivitiesReady === 1
-                        ? "activity"
-                        : "activities"}{" "}
-                      qualify
+                      {exportCounts.weeklyPlanTotal}{" "}
+                      {exportCounts.weeklyPlanTotal === 1
+                        ? "item"
+                        : "items"}{" "}
+                      to export
                     </Typography>
                     <Tooltip
                       title={
                         exportGatingStatus.isGated
                           ? `Exports are gated. The WeekCycle must be in Execution state. Current cycle is in ${exportGatingStatus.cycleStatus}.`
-                          : exportCounts.greenActivitiesReady === 0
-                            ? "No green activities ready to download"
+                          : exportCounts.weeklyPlanTotal === 0
+                            ? "No items to export"
                             : ""
                       }
                       placement="top"
@@ -6631,7 +6670,7 @@ const AdminProjectWorkspace = () => {
                           onClick={handleExportWeeklyPlan}
                           disabled={
                             isExporting === "weekly" ||
-                            exportCounts.greenActivitiesReady === 0 ||
+                            exportCounts.weeklyPlanTotal === 0 ||
                             exportGatingStatus.isGated
                           }
                           startIcon={

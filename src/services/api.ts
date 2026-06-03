@@ -272,10 +272,11 @@ export const programmeAPI = {
     return response.data;
   },
 
-  closeWeek: async (id: string, weekNumber: number, closeType?: string, notes?: string) => {
+  closeWeek: async (id: string, weekNumber: number, closeType?: string, notes?: string, isSecondOfPair?: boolean) => {
     const response = await api.post(`/programmes/${id}/close-week/${weekNumber}`, {
       closeType: closeType || "Normal Close",
       notes,
+      isSecondOfPair,
     });
     return response.data;
   },
