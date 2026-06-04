@@ -1820,7 +1820,7 @@ const AdminProjectWorkspace = () => {
           ],
         });
 
-        await fetchWeeklyControlData(programme._id);
+        await fetchWeeklyControlData(programme._id, 1); // Start with Week 1 after upload
       }
     } catch (error: unknown) {
       const err = error as {
@@ -2009,7 +2009,12 @@ const AdminProjectWorkspace = () => {
                     refetchProgramme();
                     break;
                   case 4: // Weekly Control
-                    fetchWeeklyControlData(uploadedProgramme._id);
+                    {
+                      const closableWeek = weeksStatus?.weeks.find((w) => w.canClose);
+                      const firstUnclosedWeek = weeksStatus?.weeks.find((w) => !w.isClosed);
+                      const weekNum = closableWeek?.weekNumber || firstUnclosedWeek?.weekNumber || 1;
+                      fetchWeeklyControlData(uploadedProgramme._id, weekNum);
+                    }
                     break;
                   case 5: // Closure & Export
                     refetchProgramme();

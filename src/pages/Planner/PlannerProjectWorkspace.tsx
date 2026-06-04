@@ -2009,7 +2009,12 @@ const PlannerProjectWorkspace = () => {
                     refetchProgramme();
                     break;
                   case 4: // Weekly Control
-                    fetchWeeklyControlData(uploadedProgramme._id);
+                    {
+                      const closableWeek = weeksStatus?.weeks.find((w) => w.canClose);
+                      const firstUnclosedWeek = weeksStatus?.weeks.find((w) => !w.isClosed);
+                      const weekNum = closableWeek?.weekNumber || firstUnclosedWeek?.weekNumber || 1;
+                      fetchWeeklyControlData(uploadedProgramme._id, weekNum);
+                    }
                     break;
                   case 5: // Closure & Export
                     refetchProgramme();
