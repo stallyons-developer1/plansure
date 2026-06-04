@@ -1260,10 +1260,13 @@ const AdminProjectWorkspace = () => {
         // Refetch weekly control data to update close-out button status
         if (uploadedProgramme?._id) {
           try {
-            const weekNumber = cycleWeekNumber || weeklyControlData?.weekInfo?.weekNumber;
+            const weekNumber = weeklyControlData?.weekInfo?.weekNumber;
             await fetchWeeklyControlData(uploadedProgramme._id, weekNumber);
           } catch (refetchError) {
-            console.error("Failed to refetch weekly control data:", refetchError);
+            console.error(
+              "Failed to refetch weekly control data:",
+              refetchError,
+            );
             // Don't block the update success flow
           }
         }
@@ -1555,7 +1558,11 @@ const AdminProjectWorkspace = () => {
           overdue: 0,
         },
         blockedRiskActivities: response.blockedRiskActivities || [],
-        activityCounts: response.activityCounts || { completed: 0, blocked: 0, atRisk: 0 },
+        activityCounts: response.activityCounts || {
+          completed: 0,
+          blocked: 0,
+          atRisk: 0,
+        },
         weeklyPlanPreview: response.weeklyPlanPreview || [],
         plannerToDo: response.plannerToDo || [],
         weekInfo: response.weekInfo || null,
@@ -1597,7 +1604,8 @@ const AdminProjectWorkspace = () => {
       const completedActions = weeklyControlData.actionsByStatus?.closed || 0;
 
       // PM Override actions (for weekly plan)
-      const pmOverrideActions = weeklyControlData.actionsByStatus?.pmOverride || 0;
+      const pmOverrideActions =
+        weeklyControlData.actionsByStatus?.pmOverride || 0;
 
       // Overdue actions (all)
       const overdueActions = weeklyControlData.actionsByStatus?.overdue || 0;
@@ -1614,13 +1622,21 @@ const AdminProjectWorkspace = () => {
         weeklyControlData.blockedRiskActivities?.length || 0;
 
       // Activity counts from backend (for Weekly Plan export)
-      const completedActivitiesCount = weeklyControlData.activityCounts?.completed || 0;
-      const blockedActivitiesCount = weeklyControlData.activityCounts?.blocked || 0;
-      const atRiskActivitiesCount = weeklyControlData.activityCounts?.atRisk || 0;
+      const completedActivitiesCount =
+        weeklyControlData.activityCounts?.completed || 0;
+      const blockedActivitiesCount =
+        weeklyControlData.activityCounts?.blocked || 0;
+      const atRiskActivitiesCount =
+        weeklyControlData.activityCounts?.atRisk || 0;
 
       // Weekly Plan total = Actions + Activities (Completed + Blocked + At Risk)
-      const weeklyPlanTotal = completedActions + overdueActions + pmOverrideActions +
-        completedActivitiesCount + blockedActivitiesCount + atRiskActivitiesCount;
+      const weeklyPlanTotal =
+        completedActions +
+        overdueActions +
+        pmOverrideActions +
+        completedActivitiesCount +
+        blockedActivitiesCount +
+        atRiskActivitiesCount;
 
       setExportCounts({
         greenActivitiesReady,
@@ -2010,9 +2026,16 @@ const AdminProjectWorkspace = () => {
                     break;
                   case 4: // Weekly Control
                     {
-                      const closableWeek = weeksStatus?.weeks.find((w) => w.canClose);
-                      const firstUnclosedWeek = weeksStatus?.weeks.find((w) => !w.isClosed);
-                      const weekNum = closableWeek?.weekNumber || firstUnclosedWeek?.weekNumber || 1;
+                      const closableWeek = weeksStatus?.weeks.find(
+                        (w) => w.canClose,
+                      );
+                      const firstUnclosedWeek = weeksStatus?.weeks.find(
+                        (w) => !w.isClosed,
+                      );
+                      const weekNum =
+                        closableWeek?.weekNumber ||
+                        firstUnclosedWeek?.weekNumber ||
+                        1;
                       fetchWeeklyControlData(uploadedProgramme._id, weekNum);
                     }
                     break;
@@ -5121,7 +5144,14 @@ const AdminProjectWorkspace = () => {
                   Ready to Close
                 </Typography>
                 <Typography
-                  sx={{ color: weeklyControlData?.stats.readyToClose === "Yes" ? COLORS.green : COLORS.red, fontSize: "20px", fontWeight: 700 }}
+                  sx={{
+                    color:
+                      weeklyControlData?.stats.readyToClose === "Yes"
+                        ? COLORS.green
+                        : COLORS.red,
+                    fontSize: "20px",
+                    fontWeight: 700,
+                  }}
                 >
                   {weeklyControlData?.stats.readyToClose || "No"}
                 </Typography>
@@ -5950,14 +5980,21 @@ const AdminProjectWorkspace = () => {
                       </Button>
                       {/* Show reason why button is disabled - use the currently displayed week */}
                       {!weeksStatus?.weeks.find((w) => w.canClose) &&
-                        !weeklyControlData?.isProjectEnded && (() => {
+                        !weeklyControlData?.isProjectEnded &&
+                        (() => {
                           // Find the week matching the currently displayed week number
-                          const displayedWeekNumber = weeklyControlData?.weekInfo?.weekNumber;
-                          const currentWeek = weeksStatus?.weeks.find(
-                            (w) => w.weekNumber === displayedWeekNumber && !w.isClosed && w.canCloseReason
-                          ) || weeksStatus?.weeks.find(
-                            (w) => !w.isClosed && w.canCloseReason
-                          );
+                          const displayedWeekNumber =
+                            weeklyControlData?.weekInfo?.weekNumber;
+                          const currentWeek =
+                            weeksStatus?.weeks.find(
+                              (w) =>
+                                w.weekNumber === displayedWeekNumber &&
+                                !w.isClosed &&
+                                w.canCloseReason,
+                            ) ||
+                            weeksStatus?.weeks.find(
+                              (w) => !w.isClosed && w.canCloseReason,
+                            );
                           if (currentWeek?.canCloseReason) {
                             return (
                               <Typography
@@ -6671,10 +6708,8 @@ const AdminProjectWorkspace = () => {
                       sx={{ color: COLORS.textMuted, fontSize: "12px", mb: 2 }}
                     >
                       {exportCounts.weeklyPlanTotal}{" "}
-                      {exportCounts.weeklyPlanTotal === 1
-                        ? "item"
-                        : "items"}{" "}
-                      to export
+                      {exportCounts.weeklyPlanTotal === 1 ? "item" : "items"} to
+                      export
                     </Typography>
                     <Tooltip
                       title={
