@@ -5730,7 +5730,7 @@ const AdminProjectWorkspace = () => {
                 }}
                 onActionClick={() => setActiveTab(3)}
                 isProjectEnded={weeklyControlData?.isProjectEnded}
-                cycleStatus={weeklyControlData?.cycleStatus}
+                cycleStatus={weeklyControlData?.stats?.cycleStatus}
               />
             </Box>
 
