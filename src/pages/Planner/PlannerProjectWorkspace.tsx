@@ -1201,6 +1201,16 @@ const PlannerProjectWorkspace = () => {
         if (actionsRes.success) {
           setProjectActions(actionsRes.actions || []);
         }
+        // Refetch weekly control data to update close-out button status
+        if (uploadedProgramme?._id) {
+          try {
+            const weekNumber = cycleWeekNumber || weeklyControlData?.weekInfo?.weekNumber;
+            await fetchWeeklyControlData(uploadedProgramme._id, weekNumber);
+          } catch (refetchError) {
+            console.error("Failed to refetch weekly control data:", refetchError);
+            // Don't block the update success flow
+          }
+        }
         handleEditClose();
       }
     } catch (error) {
@@ -1985,6 +1995,25 @@ const PlannerProjectWorkspace = () => {
               setActiveTab(newValue);
               if (newValue !== 3) {
                 setSelectedActionId(null);
+              }
+              // Refetch data when switching tabs
+              if (uploadedProgramme?._id) {
+                switch (newValue) {
+                  case 0: // Overview
+                  case 1: // Programme Upload
+                  case 2: // Activities & Lookahead
+                    refetchProgramme();
+                    break;
+                  case 3: // Actions
+                    refetchProgramme();
+                    break;
+                  case 4: // Weekly Control
+                    fetchWeeklyControlData(uploadedProgramme._id);
+                    break;
+                  case 5: // Closure & Export
+                    refetchProgramme();
+                    break;
+                }
               }
             }}
             variant="scrollable"
@@ -4923,7 +4952,7 @@ const PlannerProjectWorkspace = () => {
                   Ready to Close
                 </Typography>
                 <Typography
-                  sx={{ color: COLORS.red, fontSize: "20px", fontWeight: 700 }}
+                  sx={{ color: weeklyControlData?.stats.readyToClose === "Yes" ? COLORS.green : COLORS.red, fontSize: "20px", fontWeight: 700 }}
                 >
                   {weeklyControlData?.stats.readyToClose || "No"}
                 </Typography>
@@ -5530,6 +5559,7 @@ const PlannerProjectWorkspace = () => {
                 }}
                 onActionClick={() => setActiveTab(3)}
                 isProjectEnded={weeklyControlData?.isProjectEnded}
+                cycleStatus={weeklyControlData?.cycleStatus}
               />
             </Box>
 

@@ -279,11 +279,13 @@ const ActivityRow = ({
   const [open, setOpen] = useState(isFirst);
   const ragColor = getStatusColor(activity.ragColor);
   const statusColor =
-    activity.statusType === "green"
-      ? COLORS.green
-      : activity.statusType === "amber"
-        ? COLORS.amber
-        : COLORS.red;
+    activity.statusType === "blue"
+      ? COLORS.blue
+      : activity.statusType === "green"
+        ? COLORS.green
+        : activity.statusType === "amber"
+          ? COLORS.amber
+          : COLORS.red;
 
   // Start of today (midnight) - actions are only overdue after due date has fully passed
   const startOfToday = new Date();

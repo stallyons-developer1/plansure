@@ -41,6 +41,7 @@ export const STATUS_COLORS = {
   green: COLORS.green,
   amber: COLORS.amber,
   red: COLORS.red,
+  blue: COLORS.blue,
 };
 
 export const getStatusColor = (status: string): string => {
@@ -51,6 +52,8 @@ export const getStatusColor = (status: string): string => {
       return STATUS_COLORS.amber;
     case "red":
       return STATUS_COLORS.red;
+    case "blue":
+      return STATUS_COLORS.blue;
     default:
       return COLORS.textMuted;
   }

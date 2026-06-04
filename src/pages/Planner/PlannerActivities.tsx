@@ -141,6 +141,9 @@ const formatDateForDisplay = (dateStr: string): string => {
 // Helper to determine status badge color based on activity status
 const getStatusType = (activityStatus: string): string => {
   switch (activityStatus?.toLowerCase()) {
+    case "complete":
+    case "completed":
+      return "blue";
     case "blocked":
       return "red";
     case "at risk":
@@ -153,6 +156,7 @@ const getStatusType = (activityStatus: string): string => {
 
 // Helper to get display status
 const getDisplayStatus = (activityStatus: string): string => {
+  if (activityStatus === "Complete" || activityStatus === "Completed") return "Complete";
   if (activityStatus === "Blocked") return "Blocked";
   if (activityStatus === "At Risk") return "At Risk";
   return "Ready";
@@ -187,7 +191,7 @@ const calculateRagZone = (
   startDate: string,
   finishDate: string,
   activityStatus?: string
-): { zone: string; color: "green" | "amber" | "red" | "muted" } => {
+): { zone: string; color: "green" | "amber" | "red" | "muted" | "blue" } => {
   // Check if completed
   const isCompleted =
     activityStatus === "Complete" ||
@@ -196,7 +200,7 @@ const calculateRagZone = (
     finishDate?.includes(" A");
 
   if (isCompleted) {
-    return { zone: "Complete", color: "green" };
+    return { zone: "Complete", color: "blue" };
   }
 
   if (!startDate) return { zone: "N/A", color: "muted" };

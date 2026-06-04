@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Box, Typography, Button } from "@mui/material";
+import { Box, Typography, Button, Tooltip } from "@mui/material";
 import { COLORS } from "../constants/colors";
 
 interface BlockedActivity {
@@ -51,6 +51,7 @@ interface BlockedActivitiesTableProps {
   onUnblockClick?: (activityId: string) => void;
   onActionClick?: () => void;
   isProjectEnded?: boolean;
+  cycleStatus?: string;
 }
 
 const BlockedActivitiesTable = ({
@@ -61,7 +62,9 @@ const BlockedActivitiesTable = ({
   onUnblockClick,
   onActionClick,
   isProjectEnded = false,
+  cycleStatus = "",
 }: BlockedActivitiesTableProps) => {
+  const canUnblock = cycleStatus === "Execution" || cycleStatus === "Close-Out Eligible";
   const [activeTab, setActiveTab] = useState(0);
 
   const tabs = [
@@ -392,30 +395,43 @@ const BlockedActivitiesTable = ({
                   {/* ACTION - Unblock button for blocked activities */}
                   <Box sx={{ display: "flex", justifyContent: "center" }}>
                     {activity.isBlocked ? (
-                      <Button
-                        onClick={() => !isProjectEnded && onUnblockClick?.(activity.activityId)}
-                        disabled={isProjectEnded}
-                        title={isProjectEnded ? "Project has ended - read only" : "Unblock activity"}
-                        sx={{
-                          fontSize: "11px",
-                          fontWeight: 500,
-                          color: isProjectEnded ? COLORS.textMuted : COLORS.green,
-                          textTransform: "none",
-                          bgcolor: isProjectEnded ? "transparent" : `${COLORS.green}15`,
-                          border: `1px solid ${isProjectEnded ? COLORS.textMuted : COLORS.green}50`,
-                          borderRadius: "6px",
-                          px: 1.5,
-                          py: 0.3,
-                          minWidth: "auto",
-                          cursor: isProjectEnded ? "not-allowed" : "pointer",
-                          opacity: isProjectEnded ? 0.5 : 1,
-                          "&:hover": {
-                            bgcolor: isProjectEnded ? "transparent" : `${COLORS.green}25`,
-                          },
-                        }}
+                      <Tooltip
+                        title={
+                          isProjectEnded
+                            ? "Project has ended - read only"
+                            : !canUnblock
+                              ? "Cycle Control must be in Execution to unblock activities"
+                              : ""
+                        }
+                        arrow
+                        placement="top"
                       >
-                        Unblock
-                      </Button>
+                        <span>
+                          <Button
+                            onClick={() => canUnblock && !isProjectEnded && onUnblockClick?.(activity.activityId)}
+                            disabled={isProjectEnded || !canUnblock}
+                            sx={{
+                              fontSize: "11px",
+                              fontWeight: 500,
+                              color: (isProjectEnded || !canUnblock) ? COLORS.textMuted : COLORS.green,
+                              textTransform: "none",
+                              bgcolor: (isProjectEnded || !canUnblock) ? "transparent" : `${COLORS.green}15`,
+                              border: `1px solid ${(isProjectEnded || !canUnblock) ? COLORS.textMuted : COLORS.green}50`,
+                              borderRadius: "6px",
+                              px: 1.5,
+                              py: 0.3,
+                              minWidth: "auto",
+                              cursor: (isProjectEnded || !canUnblock) ? "not-allowed" : "pointer",
+                              opacity: (isProjectEnded || !canUnblock) ? 0.5 : 1,
+                              "&:hover": {
+                                bgcolor: (isProjectEnded || !canUnblock) ? "transparent" : `${COLORS.green}25`,
+                              },
+                            }}
+                          >
+                            Unblock
+                          </Button>
+                        </span>
+                      </Tooltip>
                     ) : (
                       <Typography sx={{ color: COLORS.textMuted, fontSize: "11px" }}>
                         -
