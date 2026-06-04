@@ -6555,10 +6555,14 @@ const PlannerProjectWorkspace = () => {
                         sx={{
                           bgcolor: exportGatingStatus.isGated
                             ? "rgba(239, 68, 68, 0.15)"
-                            : "rgba(34, 197, 94, 0.15)",
+                            : weeklyActionStats.openRequired > 0
+                              ? "rgba(245, 158, 11, 0.15)"
+                              : "rgba(34, 197, 94, 0.15)",
                           color: exportGatingStatus.isGated
                             ? COLORS.red
-                            : COLORS.green,
+                            : weeklyActionStats.openRequired > 0
+                              ? COLORS.amber
+                              : COLORS.green,
                           px: 1.5,
                           height: 20,
                           borderRadius: "10px",
@@ -6569,7 +6573,7 @@ const PlannerProjectWorkspace = () => {
                           alignItems: "center",
                         }}
                       >
-                        {exportGatingStatus.isGated ? "Gated" : "Ready"}
+                        {exportGatingStatus.isGated ? "Gated" : weeklyActionStats.openRequired > 0 ? "Pending" : "Ready"}
                       </Box>
                     </Box>
                     <Typography
@@ -6592,9 +6596,11 @@ const PlannerProjectWorkspace = () => {
                       title={
                         exportGatingStatus.isGated
                           ? `Exports are gated. The WeekCycle must be in Execution state. Current cycle is in ${exportGatingStatus.cycleStatus}.`
-                          : exportCounts.weeklyPlanTotal === 0
-                            ? "No items to export"
-                            : ""
+                          : weeklyActionStats.openRequired > 0
+                            ? `${weeklyActionStats.openRequired} required action(s) pending. Complete all required actions to download Weekly Plan.`
+                            : exportCounts.weeklyPlanTotal === 0
+                              ? "No items to export"
+                              : ""
                       }
                       placement="top"
                       arrow
@@ -6619,7 +6625,8 @@ const PlannerProjectWorkspace = () => {
                           disabled={
                             isExporting === "weekly" ||
                             exportCounts.weeklyPlanTotal === 0 ||
-                            exportGatingStatus.isGated
+                            exportGatingStatus.isGated ||
+                            weeklyActionStats.openRequired > 0
                           }
                           startIcon={
                             isExporting === "weekly" ? (
@@ -6630,7 +6637,7 @@ const PlannerProjectWorkspace = () => {
                             ) : null
                           }
                           sx={{
-                            bgcolor: exportGatingStatus.isGated
+                            bgcolor: exportGatingStatus.isGated || weeklyActionStats.openRequired > 0
                               ? COLORS.disabledBlue
                               : COLORS.green,
                             color: "#fff",
@@ -6640,7 +6647,7 @@ const PlannerProjectWorkspace = () => {
                             fontSize: "13px",
                             fontWeight: 500,
                             "&:hover": {
-                              bgcolor: exportGatingStatus.isGated
+                              bgcolor: exportGatingStatus.isGated || weeklyActionStats.openRequired > 0
                                 ? COLORS.disabledBlue
                                 : "#16a34a",
                             },
