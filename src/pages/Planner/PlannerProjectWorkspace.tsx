@@ -781,10 +781,11 @@ const PlannerProjectWorkspace = () => {
         fetchWeeklyControlData(uploadedProgramme._id, lockedViewWeek);
         return;
       }
-      // Get the next closable week number, or current week
+      // Get the next closable week, or first unclosed week, or Week 1
       const closableWeek = weeksStatus.weeks.find((w) => w.canClose);
+      const firstUnclosedWeek = weeksStatus.weeks.find((w) => !w.isClosed);
       const weekNumber =
-        closableWeek?.weekNumber || weeksStatus.currentWeekNumber;
+        closableWeek?.weekNumber || firstUnclosedWeek?.weekNumber || 1;
       fetchWeeklyControlData(uploadedProgramme._id, weekNumber);
     }
   }, [weeksStatus?.closedWeeksCount, uploadedProgramme?._id, lockedViewWeek]);
