@@ -363,6 +363,7 @@ const getStatusColor = (status: string) => {
     case "Blocked":
       return { bg: "rgba(239, 68, 68, 0.15)", text: COLORS.red };
     case "Complete":
+    case "Completed":
       return { bg: "rgba(59, 130, 246, 0.15)", text: COLORS.blue };
     default:
       return { bg: "rgba(142, 156, 177, 0.15)", text: COLORS.textSecondary };
@@ -378,6 +379,7 @@ const getIndicatorColor = (status: string) => {
     case "Blocked":
       return COLORS.red;
     case "Complete":
+    case "Completed":
       return COLORS.blue;
     default:
       return COLORS.textMuted;
@@ -946,7 +948,7 @@ const ProjectWorkspace = () => {
                 { label: "All", value: "all" },
                 { label: "Blocked", value: "Blocked" },
                 { label: "Ready", value: "Ready" },
-                { label: "Complete", value: "Complete" },
+                { label: "Completed", value: "Completed" },
                 { label: "At Risk", value: "At Risk" },
               ].map((filter) => (
                 <Box
@@ -1288,7 +1290,7 @@ const ProjectWorkspace = () => {
                                   whiteSpace: "nowrap",
                                 }}
                               >
-                                {activity.activityStatus || "Ready"}
+                                {activity.activityStatus === "Complete" ? "Completed" : (activity.activityStatus || "Ready")}
                               </Typography>
                             </Box>
                           </Box>

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   FormControl,
   Select,
@@ -156,7 +157,7 @@ const getStatusType = (activityStatus: string): string => {
 
 // Helper to get display status
 const getDisplayStatus = (activityStatus: string): string => {
-  if (activityStatus === "Complete" || activityStatus === "Completed") return "Complete";
+  if (activityStatus === "Complete" || activityStatus === "Completed") return "Completed";
   if (activityStatus === "Blocked") return "Blocked";
   if (activityStatus === "At Risk") return "At Risk";
   return "Ready";
@@ -200,7 +201,7 @@ const calculateRagZone = (
     finishDate?.includes(" A");
 
   if (isCompleted) {
-    return { zone: "Complete", color: "blue" };
+    return { zone: "Completed", color: "blue" };
   }
 
   if (!startDate) return { zone: "N/A", color: "muted" };
@@ -239,6 +240,7 @@ const calculateRagZone = (
 };
 
 const AdminActivities = () => {
+  const navigate = useNavigate();
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
@@ -521,6 +523,10 @@ const AdminActivities = () => {
     setAssignError("");
   };
 
+  const handleActionClick = () => {
+    navigate("/admin/action");
+  };
+
   const handleAssignChange = (field: string, value: string) => {
     setAssignFormData({ ...assignFormData, [field]: value });
   };
@@ -759,6 +765,7 @@ const AdminActivities = () => {
           weeks={weeks}
           lastUpdated={lastUpdated}
           onAssignClick={handleAssignClick}
+          onActionClick={handleActionClick}
         />
       )}
 

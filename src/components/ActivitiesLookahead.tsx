@@ -25,6 +25,7 @@ interface ActivitiesLookaheadProps {
   weeks: WeekData[];
   lastUpdated: string;
   onAssignClick?: (activity: Activity) => void;
+  onActionClick?: () => void;
 }
 
 const ActivitiesLookahead = ({
@@ -32,6 +33,7 @@ const ActivitiesLookahead = ({
   weeks,
   lastUpdated,
   onAssignClick,
+  onActionClick,
 }: ActivitiesLookaheadProps) => {
   const [ragFilter, setRagFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -371,6 +373,7 @@ const ActivitiesLookahead = ({
           <ActivitiesTable
             activities={paginatedActivities}
             onAssignClick={onAssignClick}
+            onActionClick={onActionClick}
             currentPage={currentPage}
             totalPages={totalPages}
             totalActivities={filteredActivities.length}

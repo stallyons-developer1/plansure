@@ -271,10 +271,12 @@ const ActivityRow = ({
   activity,
   isFirst,
   onAssignClick,
+  onActionClick,
 }: {
   activity: Activity;
   isFirst?: boolean;
   onAssignClick?: (activity: Activity) => void;
+  onActionClick?: () => void;
 }) => {
   const [open, setOpen] = useState(isFirst);
   const ragColor = getStatusColor(activity.ragColor);
@@ -301,13 +303,13 @@ const ActivityRow = ({
         }}
       >
         <TableCell
-          align="center"
           sx={{
             color: COLORS.blue,
             borderBottom: open ? `1px solid ${COLORS.border}` : "none",
             py: 1.5,
             position: "relative",
             fontSize: "13px",
+            pl: 2,
           }}
         >
           <Box
@@ -323,7 +325,6 @@ const ActivityRow = ({
           {activity.id}
         </TableCell>
         <TableCell
-          align="center"
           sx={{
             color: COLORS.textPrimary,
             borderBottom: open ? `1px solid ${COLORS.border}` : "none",
@@ -331,12 +332,12 @@ const ActivityRow = ({
             fontSize: "13px",
           }}
         >
-          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 0.5 }}>
-            {activity.linkedActions && (
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+            {(activity.linkedActions || (activity.linkedActionsData && activity.linkedActionsData.length > 0)) && (
               <IconButton
                 size="small"
                 onClick={() => setOpen(!open)}
-                sx={{ color: COLORS.textSecondary, p: 0.25, mr: 0.5 }}
+                sx={{ color: COLORS.textSecondary, p: 0.25 }}
               >
                 {open ? (
                   <KeyboardArrowDown fontSize="small" />
@@ -661,7 +662,16 @@ const ActivityRow = ({
                           sx={{ color: COLORS.blue, fontSize: "1rem" }}
                         />
                         <Typography
-                          sx={{ color: COLORS.textLight, fontSize: "13px" }}
+                          onClick={() => onActionClick?.()}
+                          sx={{
+                            color: COLORS.textLight,
+                            fontSize: "13px",
+                            cursor: "pointer",
+                            "&:hover": {
+                              color: COLORS.blue,
+                              textDecoration: "underline",
+                            },
+                          }}
                         >
                           {action.title}
                         </Typography>
@@ -771,6 +781,7 @@ const ActivityRow = ({
 interface ActivitiesTableProps {
   activities: Activity[];
   onAssignClick?: (activity: Activity) => void;
+  onActionClick?: () => void;
   currentPage?: number;
   totalPages?: number;
   totalActivities?: number;
@@ -781,6 +792,7 @@ interface ActivitiesTableProps {
 const ActivitiesTable = ({
   activities,
   onAssignClick,
+  onActionClick,
   currentPage = 1,
   totalPages = 1,
   totalActivities = 0,
@@ -804,20 +816,19 @@ const ActivitiesTable = ({
           <TableHead>
             <TableRow sx={{ bgcolor: "transparent" }}>
               <TableCell
-                align="center"
                 sx={{
                   color: COLORS.border,
                   fontSize: "11px",
                   fontWeight: 600,
                   borderBottom: `1px solid ${COLORS.border}`,
                   py: 1.5,
+                  pl: 2,
                   letterSpacing: "0.05em",
                 }}
               >
                 ACTIVITY ID
               </TableCell>
               <TableCell
-                align="center"
                 sx={{
                   color: COLORS.border,
                   fontSize: "11px",
@@ -942,6 +953,7 @@ const ActivitiesTable = ({
                 activity={activity}
                 isFirst={index === 0}
                 onAssignClick={onAssignClick}
+                onActionClick={onActionClick}
               />
             ))}
           </TableBody>

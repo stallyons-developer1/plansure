@@ -438,7 +438,8 @@ const AdminProjectWorkspace = () => {
     stats: {
       cycleStatus: string;
       inLookahead: number;
-      green: number;
+      ready: number;
+      complete: number;
       blocked: number;
       openActions: number;
       overdue: number;
@@ -461,6 +462,10 @@ const AdminProjectWorkspace = () => {
       inProgress: number;
       closed: number;
       overdue: number;
+    };
+    requiredActionsByStatus: {
+      open: number;
+      inProgress: number;
     };
     blockedRiskActivities: Array<{
       activityId: string;
@@ -1090,8 +1095,8 @@ const AdminProjectWorkspace = () => {
   const handleOverrideClose = async () => {
     if (!uploadedProgramme?._id || overrideReason.length < 10) return;
 
-    // Find the week to close
-    const weekToClose = weeksStatus?.weeks.find((w) => w.canClose)?.weekNumber;
+    // Find the first unclosed week (PM Override bypasses canClose date restriction)
+    const weekToClose = weeksStatus?.weeks.find((w) => !w.isClosed)?.weekNumber;
     if (!weekToClose) {
       console.error("No week available to close");
       return;
@@ -1116,7 +1121,8 @@ const AdminProjectWorkspace = () => {
   const handleOverrideCloseForExport = async () => {
     if (!uploadedProgramme?._id || overrideReason.length < 10) return;
 
-    const weekToClose = weeksStatus?.weeks.find((w) => w.canClose)?.weekNumber;
+    // Find the first unclosed week (PM Override bypasses canClose date restriction)
+    const weekToClose = weeksStatus?.weeks.find((w) => !w.isClosed)?.weekNumber;
     if (!weekToClose) {
       console.error("No week available to close");
       return;
@@ -1534,7 +1540,8 @@ const AdminProjectWorkspace = () => {
         stats: response.stats || {
           cycleStatus: "Draft",
           inLookahead: 0,
-          green: 0,
+          ready: 0,
+          complete: 0,
           blocked: 0,
           openActions: 0,
           overdue: 0,
@@ -1556,6 +1563,10 @@ const AdminProjectWorkspace = () => {
           inProgress: 0,
           closed: 0,
           overdue: 0,
+        },
+        requiredActionsByStatus: response.requiredActionsByStatus || {
+          open: 0,
+          inProgress: 0,
         },
         blockedRiskActivities: response.blockedRiskActivities || [],
         activityCounts: response.activityCounts || {
@@ -1900,6 +1911,10 @@ const AdminProjectWorkspace = () => {
     inProgress: weeklyControlData?.weeklyActionsByStatus?.inProgress || 0,
     closed: weeklyControlData?.weeklyActionsByStatus?.closed || 0,
     overdue: weeklyControlData?.weeklyActionsByStatus?.overdue || 0,
+    // Required-only open actions (excludes Optional) - for "before closing" warning
+    openRequired:
+      (weeklyControlData?.requiredActionsByStatus?.open || 0) +
+      (weeklyControlData?.requiredActionsByStatus?.inProgress || 0),
   };
 
   const handleStepClick = (stepNumber: number) => {
@@ -2398,7 +2413,7 @@ const AdminProjectWorkspace = () => {
                               fontSize: "12px",
                             }}
                           >
-                            Complete
+                            Completed
                           </Typography>
                         </Box>
                         <Box
@@ -2935,7 +2950,7 @@ const AdminProjectWorkspace = () => {
                 { label: "All", value: "all" },
                 { label: "Blocked", value: "Blocked" },
                 { label: "Ready", value: "Ready" },
-                { label: "Complete", value: "Complete" },
+                { label: "Completed", value: "Completed" },
                 { label: "At Risk", value: "At Risk" },
               ].map((filter) => (
                 <Box
@@ -3106,6 +3121,7 @@ const AdminProjectWorkspace = () => {
                                   text: COLORS.red,
                                 };
                               case "Complete":
+                              case "Completed":
                                 return {
                                   bg: "rgba(59, 130, 246, 0.15)",
                                   text: COLORS.blue,
@@ -3126,6 +3142,7 @@ const AdminProjectWorkspace = () => {
                               case "Blocked":
                                 return COLORS.red;
                               case "Complete":
+                              case "Completed":
                                 return COLORS.blue;
                               default:
                                 return COLORS.textMuted;
@@ -3144,7 +3161,7 @@ const AdminProjectWorkspace = () => {
                               finishDate?.includes(" A");
 
                             if (isCompleted) {
-                              return { zone: "Complete", color: COLORS.blue };
+                              return { zone: "Completed", color: COLORS.blue };
                             }
 
                             if (!startDate)
@@ -3489,7 +3506,9 @@ const AdminProjectWorkspace = () => {
                                         whiteSpace: "nowrap",
                                       }}
                                     >
-                                      {activity.activityStatus || "Ready"}
+                                      {activity.activityStatus === "Complete"
+                                        ? "Completed"
+                                        : activity.activityStatus || "Ready"}
                                     </Typography>
                                   </Box>
                                 </Box>
@@ -4530,7 +4549,8 @@ const AdminProjectWorkspace = () => {
 
                             if (
                               isFromClosedWeek &&
-                              action.status !== "Completed"
+                              action.status !== "Completed" &&
+                              action.type !== "Optional" // Optional actions stay Open, only Required get PM Override
                             ) {
                               displayStatus = "PM Override";
                               bgColor = `${COLORS.amber}25`;
@@ -4953,9 +4973,9 @@ const AdminProjectWorkspace = () => {
                 gridTemplateColumns: {
                   xs: "repeat(2, 1fr)",
                   sm: "repeat(4, 1fr)",
-                  md: "repeat(7, 1fr)",
+                  lg: "repeat(8, 1fr)",
                 },
-                gap: 2,
+                gap: { xs: 1, sm: 1.5 },
                 mb: 3,
               }}
             >
@@ -4963,16 +4983,16 @@ const AdminProjectWorkspace = () => {
                 sx={{
                   bgcolor: COLORS.bgSecondary,
                   border: `1px solid ${COLORS.border}`,
-                  borderRadius: "12px",
-                  py: 2,
-                  px: 2,
+                  borderRadius: { xs: "8px", sm: "12px" },
+                  py: { xs: 1.5, sm: 2 },
+                  px: { xs: 1, sm: 2 },
                   textAlign: "center",
                 }}
               >
                 <Typography
                   sx={{
                     color: COLORS.textSecondary,
-                    fontSize: "12px",
+                    fontSize: { xs: "10px", sm: "12px" },
                     fontWeight: 500,
                     mb: 0.5,
                   }}
@@ -4982,7 +5002,7 @@ const AdminProjectWorkspace = () => {
                 <Typography
                   sx={{
                     color: COLORS.textPrimary,
-                    fontSize: "16px",
+                    fontSize: { xs: "12px", sm: "16px" },
                     fontWeight: 600,
                   }}
                 >
@@ -4993,16 +5013,16 @@ const AdminProjectWorkspace = () => {
                 sx={{
                   bgcolor: COLORS.bgSecondary,
                   border: `1px solid ${COLORS.border}`,
-                  borderRadius: "12px",
-                  py: 2,
-                  px: 2,
+                  borderRadius: { xs: "8px", sm: "12px" },
+                  py: { xs: 1.5, sm: 2 },
+                  px: { xs: 1, sm: 2 },
                   textAlign: "center",
                 }}
               >
                 <Typography
                   sx={{
                     color: COLORS.textSecondary,
-                    fontSize: "12px",
+                    fontSize: { xs: "10px", sm: "12px" },
                     fontWeight: 500,
                     mb: 0.5,
                   }}
@@ -5010,7 +5030,11 @@ const AdminProjectWorkspace = () => {
                   In Lookahead
                 </Typography>
                 <Typography
-                  sx={{ color: COLORS.blue, fontSize: "20px", fontWeight: 700 }}
+                  sx={{
+                    color: COLORS.blue,
+                    fontSize: { xs: "16px", sm: "20px" },
+                    fontWeight: 700,
+                  }}
                 >
                   {weeklyControlData?.stats.inLookahead || 0}
                 </Typography>
@@ -5019,16 +5043,16 @@ const AdminProjectWorkspace = () => {
                 sx={{
                   bgcolor: COLORS.bgSecondary,
                   border: `1px solid ${COLORS.border}`,
-                  borderRadius: "12px",
-                  py: 2,
-                  px: 2,
+                  borderRadius: { xs: "8px", sm: "12px" },
+                  py: { xs: 1.5, sm: 2 },
+                  px: { xs: 1, sm: 2 },
                   textAlign: "center",
                 }}
               >
                 <Typography
                   sx={{
                     color: COLORS.textSecondary,
-                    fontSize: "12px",
+                    fontSize: { xs: "10px", sm: "12px" },
                     fontWeight: 500,
                     mb: 0.5,
                   }}
@@ -5038,27 +5062,57 @@ const AdminProjectWorkspace = () => {
                 <Typography
                   sx={{
                     color: COLORS.green,
-                    fontSize: "20px",
+                    fontSize: { xs: "16px", sm: "20px" },
                     fontWeight: 700,
                   }}
                 >
-                  {weeklyControlData?.stats.green || 0}
+                  {weeklyControlData?.stats.ready || 0}
                 </Typography>
               </Box>
               <Box
                 sx={{
                   bgcolor: COLORS.bgSecondary,
                   border: `1px solid ${COLORS.border}`,
-                  borderRadius: "12px",
-                  py: 2,
-                  px: 2,
+                  borderRadius: { xs: "8px", sm: "12px" },
+                  py: { xs: 1.5, sm: 2 },
+                  px: { xs: 1, sm: 2 },
                   textAlign: "center",
                 }}
               >
                 <Typography
                   sx={{
                     color: COLORS.textSecondary,
-                    fontSize: "12px",
+                    fontSize: { xs: "10px", sm: "12px" },
+                    fontWeight: 500,
+                    mb: 0.5,
+                  }}
+                >
+                  Completed
+                </Typography>
+                <Typography
+                  sx={{
+                    color: COLORS.blue,
+                    fontSize: { xs: "16px", sm: "20px" },
+                    fontWeight: 700,
+                  }}
+                >
+                  {weeklyControlData?.stats.complete || 0}
+                </Typography>
+              </Box>
+              <Box
+                sx={{
+                  bgcolor: COLORS.bgSecondary,
+                  border: `1px solid ${COLORS.border}`,
+                  borderRadius: { xs: "8px", sm: "12px" },
+                  py: { xs: 1.5, sm: 2 },
+                  px: { xs: 1, sm: 2 },
+                  textAlign: "center",
+                }}
+              >
+                <Typography
+                  sx={{
+                    color: COLORS.textSecondary,
+                    fontSize: { xs: "10px", sm: "12px" },
                     fontWeight: 500,
                     mb: 0.5,
                   }}
@@ -5066,7 +5120,11 @@ const AdminProjectWorkspace = () => {
                   Blocked
                 </Typography>
                 <Typography
-                  sx={{ color: COLORS.red, fontSize: "20px", fontWeight: 700 }}
+                  sx={{
+                    color: COLORS.red,
+                    fontSize: { xs: "16px", sm: "20px" },
+                    fontWeight: 700,
+                  }}
                 >
                   {weeklyControlData?.stats.blocked || 0}
                 </Typography>
@@ -5075,16 +5133,16 @@ const AdminProjectWorkspace = () => {
                 sx={{
                   bgcolor: COLORS.bgSecondary,
                   border: `1px solid ${COLORS.border}`,
-                  borderRadius: "12px",
-                  py: 2,
-                  px: 2,
+                  borderRadius: { xs: "8px", sm: "12px" },
+                  py: { xs: 1.5, sm: 2 },
+                  px: { xs: 1, sm: 2 },
                   textAlign: "center",
                 }}
               >
                 <Typography
                   sx={{
                     color: COLORS.textSecondary,
-                    fontSize: "12px",
+                    fontSize: { xs: "10px", sm: "12px" },
                     fontWeight: 500,
                     mb: 0.5,
                   }}
@@ -5092,7 +5150,11 @@ const AdminProjectWorkspace = () => {
                   Open Actions
                 </Typography>
                 <Typography
-                  sx={{ color: COLORS.blue, fontSize: "20px", fontWeight: 700 }}
+                  sx={{
+                    color: COLORS.blue,
+                    fontSize: { xs: "16px", sm: "20px" },
+                    fontWeight: 700,
+                  }}
                 >
                   {weeklyControlData?.stats.openActions || 0}
                 </Typography>
@@ -5101,16 +5163,16 @@ const AdminProjectWorkspace = () => {
                 sx={{
                   bgcolor: COLORS.bgSecondary,
                   border: `1px solid ${COLORS.border}`,
-                  borderRadius: "12px",
-                  py: 2,
-                  px: 2,
+                  borderRadius: { xs: "8px", sm: "12px" },
+                  py: { xs: 1.5, sm: 2 },
+                  px: { xs: 1, sm: 2 },
                   textAlign: "center",
                 }}
               >
                 <Typography
                   sx={{
                     color: COLORS.textSecondary,
-                    fontSize: "12px",
+                    fontSize: { xs: "10px", sm: "12px" },
                     fontWeight: 500,
                     mb: 0.5,
                   }}
@@ -5118,7 +5180,11 @@ const AdminProjectWorkspace = () => {
                   Overdue
                 </Typography>
                 <Typography
-                  sx={{ color: COLORS.red, fontSize: "20px", fontWeight: 700 }}
+                  sx={{
+                    color: COLORS.red,
+                    fontSize: { xs: "16px", sm: "20px" },
+                    fontWeight: 700,
+                  }}
                 >
                   {weeklyControlData?.stats.overdue || 0}
                 </Typography>
@@ -5127,16 +5193,16 @@ const AdminProjectWorkspace = () => {
                 sx={{
                   bgcolor: COLORS.bgSecondary,
                   border: `1px solid ${COLORS.border}`,
-                  borderRadius: "12px",
-                  py: 2,
-                  px: 2,
+                  borderRadius: { xs: "8px", sm: "12px" },
+                  py: { xs: 1.5, sm: 2 },
+                  px: { xs: 1, sm: 2 },
                   textAlign: "center",
                 }}
               >
                 <Typography
                   sx={{
                     color: COLORS.textSecondary,
-                    fontSize: "12px",
+                    fontSize: { xs: "10px", sm: "12px" },
                     fontWeight: 500,
                     mb: 0.5,
                   }}
@@ -5149,7 +5215,7 @@ const AdminProjectWorkspace = () => {
                       weeklyControlData?.stats.readyToClose === "Yes"
                         ? COLORS.green
                         : COLORS.red,
-                    fontSize: "20px",
+                    fontSize: { xs: "16px", sm: "20px" },
                     fontWeight: 700,
                   }}
                 >
@@ -5891,8 +5957,8 @@ const AdminProjectWorkspace = () => {
                 </Box>
               ) : cycleStage === "execution" ? (
                 <Box>
-                  {weeklyActionStats.open === 0 ? (
-                    /* Ready for close-out - all actions completed */
+                  {weeklyActionStats.openRequired === 0 ? (
+                    /* Ready for close-out - all Required actions completed */
                     <>
                       <Box
                         sx={{
@@ -6056,8 +6122,8 @@ const AdminProjectWorkspace = () => {
                             fontWeight: 500,
                           }}
                         >
-                          {weeklyActionStats.open} open action(s) need to be
-                          completed before closing.
+                          {weeklyActionStats.openRequired} open required
+                          action(s) need to be completed before closing.
                         </Typography>
                       </Box>
                       <Box
@@ -6937,7 +7003,7 @@ const AdminProjectWorkspace = () => {
                       sx={{
                         color: COLORS.textSecondary,
                         fontSize: "12px",
-                        mb: weeklyActionStats.open > 0 ? 2 : 0,
+                        mb: weeklyActionStats.openRequired > 0 ? 2 : 0,
                       }}
                     >
                       The WeekCycle must be in execution state. Current cycle is
@@ -6945,8 +7011,8 @@ const AdminProjectWorkspace = () => {
                       actions for green activities to unlock exports.
                     </Typography>
 
-                    {/* Show PM Override option if there are open actions */}
-                    {weeklyActionStats.open > 0 &&
+                    {/* Show PM Override option if there are open required actions */}
+                    {weeklyActionStats.openRequired > 0 &&
                       uploadedProgramme?.cycleStatus === "Execution" && (
                         <>
                           <Box
@@ -6990,8 +7056,8 @@ const AdminProjectWorkspace = () => {
                                 fontWeight: 500,
                               }}
                             >
-                              {weeklyActionStats.open} open action(s) need to be
-                              completed before closing.
+                              {weeklyActionStats.openRequired} open required
+                              action(s) need to be completed before closing.
                             </Typography>
                           </Box>
                           <Box
