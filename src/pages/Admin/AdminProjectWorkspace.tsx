@@ -1659,8 +1659,8 @@ const AdminProjectWorkspace = () => {
 
       // Update closure checklist based on real data - auto-check all
       setClosureChecklist({
-        // Planner review complete: checked when there are green activities ready
-        plannerReview: greenActivitiesReady > 0,
+        // Planner review complete: checked when cycle moves to Meeting Open
+        plannerReview: cycleStatus === "Meeting Open",
         // To-do list generated: checked when no outstanding actions remain
         todoGenerated: outstandingActions === 0,
         // Overdue acknowledged: checked when no overdue actions
