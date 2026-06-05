@@ -1645,8 +1645,8 @@ const PlannerProjectWorkspace = () => {
       setClosureChecklist({
         // Planner review complete: checked when cycle moves to Meeting Open
         plannerReview: cycleStatus === "Meeting Open",
-        // To-do list generated: checked at Close-Out AND has pending actions
-        todoGenerated: cycleStatus === "Close-Out" && outstandingActions > 0,
+        // To-do list generated: checked at Close-Out Eligible AND has pending actions
+        todoGenerated: cycleStatus === "Close-Out Eligible" && outstandingActions > 0,
         // Overdue acknowledged: checked when no overdue actions
         overdueAcknowledged: overdueActions === 0,
         // Blocked acknowledged: checked when no blocked activities
