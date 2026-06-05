@@ -240,7 +240,7 @@ const AdminProjectWorkspace = () => {
     "draft" | "meetingOpen" | "execution"
   >("draft");
   const [closureChecklist, setClosureChecklist] = useState({
-    plannerReview: true,
+    plannerReview: false,
     todoGenerated: false,
     overdueAcknowledged: false,
     blockedAcknowledged: false,
