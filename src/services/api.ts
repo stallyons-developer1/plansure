@@ -581,8 +581,8 @@ export const exportAPI = {
     return response;
   },
 
-  generatePlannerTodo: async (weekNumber?: number) => {
-    const response = await api.post("/exports/planner-todo", { weekNumber }, {
+  generatePlannerTodo: async (programmeId: string, weekNumber?: number) => {
+    const response = await api.post("/exports/planner-todo", { programmeId, weekNumber }, {
       responseType: "blob",
     });
     return response;

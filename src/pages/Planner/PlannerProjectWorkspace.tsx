@@ -1591,9 +1591,7 @@ const PlannerProjectWorkspace = () => {
 
       // Green activities ready = count of green RAG activities in current week
       const greenActivitiesReady =
-        weeklyControlData.ragDistribution?.green ||
-        weeklyControlData.stats?.green ||
-        0;
+        weeklyControlData.ragDistribution?.green || 0;
 
       // Completed actions (for weekly plan)
       const completedActions = weeklyControlData.actionsByStatus?.closed || 0;
@@ -1702,7 +1700,7 @@ const PlannerProjectWorkspace = () => {
         lockedViewWeek ??
         closableWeek?.weekNumber ??
         weeksStatus?.currentWeekNumber;
-      const response = await exportAPI.generatePlannerTodo(weekNumber);
+      const response = await exportAPI.generatePlannerTodo(uploadedProgramme._id, weekNumber);
       const blob = new Blob([response.data], {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       });
