@@ -47,20 +47,45 @@ const ActivitiesLookahead = ({
     setCurrentPage(1);
   }, [ragFilter, statusFilter, searchQuery, weekFilter]);
 
-  // Helper to check if activity belongs to a specific week based on ragZone
-  const activityMatchesWeek = (activity: Activity, weekNum: number): boolean => {
-    const ragZone = activity.ragZone?.toLowerCase() || "";
+  // Helper to parse date string (handles YYYY-MM-DD format)
+  const parseDate = (dateStr: string): Date | null => {
+    if (!dateStr) return null;
+    const date = new Date(dateStr);
+    return isNaN(date.getTime()) ? null : date;
+  };
 
-    // Map week numbers to expected ragZone values
-    if (weekNum === 1 || weekNum === 2) {
-      // Weeks 1-2: Green zone, also includes Overdue and In Progress
-      return ragZone.includes("weeks 1-2") || ragZone === "overdue" || ragZone === "in progress";
-    } else if (weekNum === 3 || weekNum === 4) {
-      return ragZone.includes("weeks 3-4");
-    } else if (weekNum === 5 || weekNum === 6) {
-      return ragZone.includes("weeks 5-6");
-    }
-    return false;
+  // Use today's date as the starting point for 6-week lookahead
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Get Monday of the current week
+  const dayOfWeek = today.getDay();
+  const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  const weekStart = new Date(today);
+  weekStart.setDate(today.getDate() - daysToMonday);
+
+  // End of 6th week (6 weeks from current Monday = 42 days)
+  const sixWeekEnd = new Date(weekStart);
+  sixWeekEnd.setDate(weekStart.getDate() + 42);
+
+  // Helper to get which week an activity falls into (1-6) based on current week
+  const getActivityWeek = (startDate: string): number | null => {
+    const activityStart = parseDate(startDate);
+    if (!activityStart) return null;
+    const msPerDay = 1000 * 60 * 60 * 24;
+    const daysFromStart = Math.floor((activityStart.getTime() - weekStart.getTime()) / msPerDay);
+    if (daysFromStart < 0) return null; // Before current week = don't assign to any week filter
+    const weekNum = Math.floor(daysFromStart / 7) + 1;
+    if (weekNum > 6) return null; // Beyond 6 weeks
+    return weekNum;
+  };
+
+  // Check if activity matches the selected week filter
+  // Activities before current week or beyond 6 weeks won't match any specific week
+  const activityMatchesWeek = (activity: Activity, weekNum: number): boolean => {
+    const activityWeek = getActivityWeek(activity.startDate);
+    if (activityWeek === null) return false; // Activity is before current week or beyond 6 weeks
+    return activityWeek === weekNum;
   };
 
   const filteredActivities = activities.filter((activity) => {
@@ -73,16 +98,22 @@ const ActivitiesLookahead = ({
       activity.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       activity.id.toLowerCase().includes(searchQuery.toLowerCase());
 
+    // Apply 6-week lookahead filter: only show activities from current week to 6 weeks ahead
+    const activityStart = parseDate(activity.startDate);
+    // Must be >= weekStart (current Monday) AND < sixWeekEnd
+    const withinLookahead = !activityStart || (activityStart >= weekStart && activityStart < sixWeekEnd);
+
     // Week filter - if a specific week is selected, filter by that week
     const matchesWeek = weekFilter === null || activityMatchesWeek(activity, weekFilter);
 
-    return matchesRag && matchesStatus && matchesSearch && matchesWeek;
+    return matchesRag && matchesStatus && matchesSearch && withinLookahead && matchesWeek;
   });
 
-  const greenCount = activities.filter((a) => a.ragColor === "green").length;
-  const amberCount = activities.filter((a) => a.ragColor === "amber").length;
-  const redCount = activities.filter((a) => a.ragColor === "red").length;
-  const blockedCount = activities.filter((a) => a.status === "Blocked").length;
+  // Calculate counts from filtered activities (dynamic based on filters)
+  const greenCount = filteredActivities.filter((a) => a.ragColor === "green").length;
+  const amberCount = filteredActivities.filter((a) => a.ragColor === "amber").length;
+  const redCount = filteredActivities.filter((a) => a.ragColor === "red").length;
+  const blockedCount = filteredActivities.filter((a) => a.status === "Blocked").length;
 
   const getColorValue = (color: string) => {
     switch (color) {
@@ -449,7 +480,7 @@ const ActivitiesLookahead = ({
       })()}
 
       <ActivitiesSummary
-        totalActivities={activities.length}
+        totalActivities={filteredActivities.length}
         greenCount={greenCount}
         amberCount={amberCount}
         redCount={redCount}

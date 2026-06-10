@@ -531,10 +531,9 @@ const ActivityRow = ({
             })()
           ) : onAssignClick ? (
             (() => {
-              // Only allow assignment for Ready or Overdue activities
-              const isReady = activity.status === "Ready";
-              const isOverdue = activity.ragZone === "Overdue";
-              const canAssign = isReady || isOverdue;
+              // Only allow assignment for green RAG zone activities (Weeks 1-2 or In Progress)
+              const isGreenRagZone = activity.ragZone === "Weeks 1-2" || activity.ragZone === "In Progress";
+              const canAssign = isGreenRagZone;
 
               return (
                 <Button
@@ -547,7 +546,7 @@ const ActivityRow = ({
                   disabled={!canAssign}
                   title={
                     !canAssign
-                      ? "Only Ready or Overdue activities can be assigned"
+                      ? "Only green zone activities can be assigned"
                       : "Assign action"
                   }
                   sx={{

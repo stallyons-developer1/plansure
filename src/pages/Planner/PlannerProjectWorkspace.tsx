@@ -1668,7 +1668,7 @@ const PlannerProjectWorkspace = () => {
         lockedViewWeek ??
         closableWeek?.weekNumber ??
         weeksStatus?.currentWeekNumber;
-      const response = await exportAPI.generateWeeklyPlan(weekNumber);
+      const response = await exportAPI.generateWeeklyPlan(uploadedProgramme._id);
       const blob = new Blob([response.data], {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       });
@@ -1701,7 +1701,7 @@ const PlannerProjectWorkspace = () => {
         lockedViewWeek ??
         closableWeek?.weekNumber ??
         weeksStatus?.currentWeekNumber;
-      const response = await exportAPI.generatePlannerTodo(uploadedProgramme._id, weekNumber);
+      const response = await exportAPI.generatePlannerTodo(uploadedProgramme._id);
       const blob = new Blob([response.data], {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       });
@@ -2988,25 +2988,36 @@ const PlannerProjectWorkspace = () => {
                     </Box>
                   ) : (
                     (() => {
-                      // Calculate 6-week lookahead window from start of current week
+                      // Use today's date for 6-week lookahead calculation
                       const today = new Date();
                       today.setHours(0, 0, 0, 0);
-                      // Get start of current week (Monday)
+
+                      // Get Monday of the current week
                       const dayOfWeek = today.getDay();
                       const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
                       const weekStart = new Date(today);
                       weekStart.setDate(today.getDate() - daysToMonday);
-                      // End of 6th week (6 weeks from week start = 42 days)
+
+                      // End of 6th week (6 weeks from current Monday = 42 days)
                       const sixWeekEnd = new Date(weekStart);
                       sixWeekEnd.setDate(weekStart.getDate() + 42);
 
-                      // Calculate week boundaries for week filter
-                      const getWeekBoundaries = (weekNum: number) => {
-                        const start = new Date(weekStart);
-                        start.setDate(weekStart.getDate() + (weekNum - 1) * 7);
-                        const end = new Date(start);
-                        end.setDate(start.getDate() + 7);
-                        return { start, end };
+                      // Helper to get which week an activity falls into (1-6) based on current week
+                      const getActivityWeek = (startDate: string): number | null => {
+                        const activityStart = parseDate(startDate);
+                        if (!activityStart) return null;
+                        const msPerDay = 1000 * 60 * 60 * 24;
+                        const daysFromStart = Math.floor((activityStart.getTime() - weekStart.getTime()) / msPerDay);
+                        if (daysFromStart < 0) return null; // Before current week
+                        const weekNum = Math.floor(daysFromStart / 7) + 1;
+                        if (weekNum > 6) return null; // Beyond 6 weeks
+                        return weekNum;
+                      };
+
+                      // Check if activity matches the selected week filter
+                      const activityMatchesWeek = (activityWeek: number | null, weekNum: number): boolean => {
+                        if (activityWeek === null) return false;
+                        return activityWeek === weekNum;
                       };
 
                       const filteredActivities = lookaheadData.activities
@@ -3021,14 +3032,16 @@ const PlannerProjectWorkspace = () => {
                           const activityStart = parseDate(activity.startDate);
                           if (!activityStart) return true; // Include if no start date
 
-                          // If specific week is selected, filter by that week
+                          // Only show activities from current week to 6 weeks ahead
+                          if (activityStart < weekStart || activityStart >= sixWeekEnd) return false;
+
+                          // Then apply week filter if selected
                           if (weekFilter !== null) {
-                            const { start: weekStartDate, end: weekEndDate } = getWeekBoundaries(weekFilter);
-                            return activityStart >= weekStartDate && activityStart < weekEndDate;
+                            const activityWeek = getActivityWeek(activity.startDate);
+                            return activityMatchesWeek(activityWeek, weekFilter);
                           }
 
-                          // Show activities that start within the 6-week window
-                          return activityStart < sixWeekEnd;
+                          return true;
                         })
                         .sort((a, b) => {
                           const colorA = getRAGColor(a.startDate, a.finishDate);
@@ -3119,43 +3132,43 @@ const PlannerProjectWorkspace = () => {
                               return { zone: "N/A", color: COLORS.textMuted };
 
                             const start = parseDate(startDate);
-                            const finish = parseDate(finishDate);
                             const today = new Date();
                             today.setHours(0, 0, 0, 0);
+                            const finish = parseDate(finishDate);
 
                             if (!start)
                               return { zone: "N/A", color: COLORS.textMuted };
 
-                            const msPerDay = 1000 * 60 * 60 * 24;
-                            const daysUntilStart = Math.ceil(
-                              (start.getTime() - today.getTime()) / msPerDay,
-                            );
-                            const weeksUntilStart = Math.ceil(
-                              daysUntilStart / 7,
-                            );
+                            // Check if overdue (finish date passed and not completed)
+                            if (finish && finish < today) {
+                              return { zone: "Overdue", color: COLORS.red };
+                            }
 
-                            // Already started
-                            if (daysUntilStart < 0) {
-                              // Check if overdue (finish date passed)
-                              if (finish && finish < today) {
-                                return { zone: "Overdue", color: COLORS.red };
-                              }
+                            // Check if in progress (started but not finished)
+                            if (start < today) {
                               return {
                                 zone: "In Progress",
                                 color: COLORS.green,
                               };
                             }
 
-                            // Future activities
-                            if (weeksUntilStart <= 2) {
+                            // Calculate which week from current week (weekStart is today's Monday)
+                            const msPerDay = 1000 * 60 * 60 * 24;
+                            const daysFromStart = Math.floor(
+                              (start.getTime() - weekStart.getTime()) / msPerDay,
+                            );
+                            const weekNum = Math.floor(daysFromStart / 7) + 1;
+
+                            // Show week number based on current week
+                            if (weekNum <= 2) {
                               return { zone: "Weeks 1-2", color: COLORS.green };
-                            } else if (weeksUntilStart <= 4) {
+                            } else if (weekNum <= 4) {
                               return { zone: "Weeks 3-4", color: COLORS.amber };
-                            } else if (weeksUntilStart <= 6) {
+                            } else if (weekNum <= 6) {
                               return { zone: "Weeks 5-6", color: COLORS.red };
                             } else {
                               return {
-                                zone: `${weeksUntilStart} Weeks`,
+                                zone: `Week ${weekNum}`,
                                 color: COLORS.textMuted,
                               };
                             }
@@ -3500,10 +3513,10 @@ const PlannerProjectWorkspace = () => {
                                         </Box>
                                       );
                                     }
-                                    // Enable assign if status is Ready
+                                    // Enable assign only for activities with green RAG zone (Weeks 1-2 or In Progress)
+                                    const isGreenRagZone = ragZone.zone === "Weeks 1-2" || ragZone.zone === "In Progress";
                                     const canAssign =
-                                      (activity.activityStatus === "Ready" ||
-                                        !activity.activityStatus) &&
+                                      isGreenRagZone &&
                                       !weeklyControlData?.isProjectEnded;
 
                                     return (
@@ -3527,7 +3540,7 @@ const PlannerProjectWorkspace = () => {
                                         disabled={!canAssign}
                                         title={
                                           !canAssign
-                                            ? "Only Ready activities can be assigned"
+                                            ? "Only green zone activities can be assigned"
                                             : "Assign action"
                                         }
                                         sx={{
@@ -3871,9 +3884,10 @@ const PlannerProjectWorkspace = () => {
               {lookaheadData?.activities &&
                 lookaheadData.activities.length > 0 &&
                 (() => {
-                  // Calculate 6-week lookahead window from start of current week
+                  // Use today's date for 6-week lookahead calculation
                   const today = new Date();
                   today.setHours(0, 0, 0, 0);
+
                   const dayOfWeek = today.getDay();
                   const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
                   const weekStart = new Date(today);
@@ -3881,13 +3895,20 @@ const PlannerProjectWorkspace = () => {
                   const sixWeekEnd = new Date(weekStart);
                   sixWeekEnd.setDate(weekStart.getDate() + 42);
 
-                  // Calculate week boundaries for week filter
-                  const getWeekBoundaries = (weekNum: number) => {
-                    const start = new Date(weekStart);
-                    start.setDate(weekStart.getDate() + (weekNum - 1) * 7);
-                    const end = new Date(start);
-                    end.setDate(start.getDate() + 7);
-                    return { start, end };
+                  const getActivityWeek = (startDate: string): number | null => {
+                    const activityStart = parseDate(startDate);
+                    if (!activityStart) return null;
+                    const msPerDay = 1000 * 60 * 60 * 24;
+                    const daysFromStart = Math.floor((activityStart.getTime() - weekStart.getTime()) / msPerDay);
+                    if (daysFromStart < 0) return null;
+                    const weekNum = Math.floor(daysFromStart / 7) + 1;
+                    if (weekNum > 6) return null;
+                    return weekNum;
+                  };
+
+                  const activityMatchesWeek = (activityWeek: number | null, weekNum: number): boolean => {
+                    if (activityWeek === null) return false;
+                    return activityWeek === weekNum;
                   };
 
                   const filteredActivities = lookaheadData.activities
@@ -3900,13 +3921,16 @@ const PlannerProjectWorkspace = () => {
                       const activityStart = parseDate(activity.startDate);
                       if (!activityStart) return true;
 
-                      // If specific week is selected, filter by that week
+                      // Only show activities from current week to 6 weeks ahead
+                      if (activityStart < weekStart || activityStart >= sixWeekEnd) return false;
+
+                      // Then apply week filter if selected
                       if (weekFilter !== null) {
-                        const { start: weekStartDate, end: weekEndDate } = getWeekBoundaries(weekFilter);
-                        return activityStart >= weekStartDate && activityStart < weekEndDate;
+                        const activityWeek = getActivityWeek(activity.startDate);
+                        return activityMatchesWeek(activityWeek, weekFilter);
                       }
 
-                      return activityStart < sixWeekEnd;
+                      return true;
                     })
                     .sort((a, b) => {
                       const colorA = getRAGColor(a.startDate, a.finishDate);
@@ -4069,7 +4093,52 @@ const PlannerProjectWorkspace = () => {
             </>
 
             {(() => {
-              const activities = lookaheadData?.activities || [];
+              const allActivities = lookaheadData?.activities || [];
+
+              // Use today's date for 6-week lookahead calculation
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+
+              const dayOfWeek = today.getDay();
+              const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+              const weekStart = new Date(today);
+              weekStart.setDate(today.getDate() - daysToMonday);
+              const sixWeekEnd = new Date(weekStart);
+              sixWeekEnd.setDate(weekStart.getDate() + 42);
+
+              const getActivityWeekForSummary = (startDate: string): number | null => {
+                const activityStart = parseDate(startDate);
+                if (!activityStart) return null;
+                const msPerDay = 1000 * 60 * 60 * 24;
+                const daysFromStart = Math.floor((activityStart.getTime() - weekStart.getTime()) / msPerDay);
+                if (daysFromStart < 0) return null;
+                const weekNum = Math.floor(daysFromStart / 7) + 1;
+                if (weekNum > 6) return null;
+                return weekNum;
+              };
+
+              const activities = allActivities.filter((activity) => {
+                const matchesStatus =
+                  ragFilter === "all" ||
+                  activity.activityStatus === ragFilter;
+                if (!matchesStatus) return false;
+
+                const activityStart = parseDate(activity.startDate);
+                if (!activityStart) return true;
+
+                // Only show activities from current week to 6 weeks ahead
+                if (activityStart < weekStart || activityStart >= sixWeekEnd) return false;
+
+                // Then apply week filter if selected
+                if (weekFilter !== null) {
+                  const activityWeek = getActivityWeekForSummary(activity.startDate);
+                  if (activityWeek === null) return false;
+                  return activityWeek === weekFilter;
+                }
+
+                return true;
+              });
+
               let readyCount = 0;
               let atRiskCount = 0;
               let blockedCount = 0;

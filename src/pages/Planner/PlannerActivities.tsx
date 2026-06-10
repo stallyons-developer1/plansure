@@ -187,11 +187,12 @@ const parseDate = (dateStr: string): Date | null => {
   return isNaN(date.getTime()) ? null : date;
 };
 
-// Helper to calculate RAG zone based on dates
+// Helper to calculate RAG zone based on dates and programme start
 const calculateRagZone = (
   startDate: string,
   finishDate: string,
-  activityStatus?: string
+  activityStatus?: string,
+  weekStart?: Date // Monday of the week containing earliest activity start
 ): { zone: string; color: "green" | "amber" | "red" | "muted" | "blue" } => {
   // Check if completed
   const isCompleted =
@@ -214,10 +215,9 @@ const calculateRagZone = (
   if (!start) return { zone: "N/A", color: "muted" };
 
   const msPerDay = 1000 * 60 * 60 * 24;
-  const daysUntilStart = Math.ceil((start.getTime() - today.getTime()) / msPerDay);
-  const weeksUntilStart = Math.ceil(daysUntilStart / 7);
 
-  // Already started
+  // Check if activity has already started (based on today)
+  const daysUntilStart = Math.ceil((start.getTime() - today.getTime()) / msPerDay);
   if (daysUntilStart < 0) {
     // Check if overdue (finish date passed)
     if (finish && finish < today) {
@@ -226,7 +226,26 @@ const calculateRagZone = (
     return { zone: "In Progress", color: "green" };
   }
 
-  // Future activities - classify by weeks
+  // Calculate which week from programme start (not from today)
+  if (weekStart) {
+    const daysFromProgrammeStart = Math.floor(
+      (start.getTime() - weekStart.getTime()) / msPerDay
+    );
+    const weekNum = daysFromProgrammeStart < 0 ? 1 : Math.floor(daysFromProgrammeStart / 7) + 1;
+
+    if (weekNum <= 2) {
+      return { zone: "Weeks 1-2", color: "green" };
+    } else if (weekNum <= 4) {
+      return { zone: "Weeks 3-4", color: "amber" };
+    } else if (weekNum <= 6) {
+      return { zone: "Weeks 5-6", color: "red" };
+    } else {
+      return { zone: `Week ${weekNum}`, color: "muted" };
+    }
+  }
+
+  // Fallback to today-based calculation if no weekStart provided
+  const weeksUntilStart = Math.ceil(daysUntilStart / 7);
   if (weeksUntilStart <= 2) {
     return { zone: "Weeks 1-2", color: "green" };
   } else if (weeksUntilStart <= 4) {
@@ -234,7 +253,6 @@ const calculateRagZone = (
   } else if (weeksUntilStart <= 6) {
     return { zone: "Weeks 5-6", color: "red" };
   } else {
-    // More than 6 weeks out - show muted/gray color
     return { zone: `${weeksUntilStart} Weeks`, color: "muted" };
   }
 };
@@ -379,14 +397,23 @@ const PlannerActivities = () => {
           // Get the uploader name from the programme
           const uploaderName = programme.uploadedBy?.name || "Planner";
 
+          // Use today's date for weekStart calculation
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const dayOfWeek = today.getDay();
+          const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+          const weekStart = new Date(today);
+          weekStart.setDate(today.getDate() - daysToMonday);
+
           // Transform activities to match the Activity interface
           const transformedActivities: Activity[] = programmeActivities.map(
             (a, index) => {
-              // Calculate RAG zone based on dates (always returns green, amber, or red)
+              // Calculate RAG zone based on dates and programme start
               const ragZoneData = calculateRagZone(
                 a.startDate || "",
                 a.finishDate || "",
-                a.activityStatus
+                a.activityStatus,
+                weekStart
               );
 
               return {
@@ -411,53 +438,36 @@ const PlannerActivities = () => {
 
           setActivities(transformedActivities);
 
-          // Generate week zones from programme's earliest activity start date
+          // Generate week zones from today's date (6-week lookahead from current week)
           if (programmeActivities.length > 0) {
-            // Find earliest activity start date
-            let earliestDate: Date | null = null;
-            for (const a of programmeActivities) {
-              if (a.startDate) {
-                const parsed = parseDate(a.startDate);
-                if (parsed && (!earliestDate || parsed < earliestDate)) {
-                  earliestDate = parsed;
-                }
-              }
+            const todayForWeeks = new Date();
+            todayForWeeks.setHours(0, 0, 0, 0);
+            const dayOfWeekForWeeks = todayForWeeks.getDay();
+            const daysToMondayForWeeks = dayOfWeekForWeeks === 0 ? 6 : dayOfWeekForWeeks - 1;
+            const currentMonday = new Date(todayForWeeks);
+            currentMonday.setDate(todayForWeeks.getDate() - daysToMondayForWeeks);
+
+            const generatedWeeks: WeekData[] = [];
+            for (let i = 0; i < 6; i++) {
+              const weekStartDate = new Date(currentMonday);
+              weekStartDate.setDate(currentMonday.getDate() + i * 7);
+              const weekEnd = new Date(weekStartDate);
+              weekEnd.setDate(weekStartDate.getDate() + 6);
+
+              // Week 1 is always current week
+              const isCurrent = i === 0;
+
+              const formatDate = (d: Date) =>
+                `${String(d.getDate()).padStart(2, "0")} ${d.toLocaleString("en-US", { month: "short" })}`;
+
+              generatedWeeks.push({
+                week: i + 1,
+                dateRange: `${formatDate(weekStartDate)} - ${formatDate(weekEnd)}`,
+                color: i < 2 ? "green" : i < 4 ? "amber" : "red",
+                isCurrent,
+              });
             }
-
-            if (earliestDate !== null) {
-              // Get Monday of the week containing the earliest date
-              const progStartDate = earliestDate as Date;
-              const dayOfWeek = progStartDate.getDay();
-              const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-              const programmeStartMonday = new Date(progStartDate);
-              programmeStartMonday.setDate(progStartDate.getDate() + diffToMonday);
-              programmeStartMonday.setHours(0, 0, 0, 0);
-
-              const today = new Date();
-              today.setHours(0, 0, 0, 0);
-
-              const generatedWeeks: WeekData[] = [];
-              for (let i = 0; i < 6; i++) {
-                const weekStart = new Date(programmeStartMonday);
-                weekStart.setDate(programmeStartMonday.getDate() + i * 7);
-                const weekEnd = new Date(weekStart);
-                weekEnd.setDate(weekStart.getDate() + 6);
-
-                // Check if today falls within this week
-                const isCurrent = today >= weekStart && today <= weekEnd;
-
-                const formatDate = (d: Date) =>
-                  `${String(d.getDate()).padStart(2, "0")} ${d.toLocaleString("en-US", { month: "short" })}`;
-
-                generatedWeeks.push({
-                  week: i + 1,
-                  dateRange: `${formatDate(weekStart)} - ${formatDate(weekEnd)}`,
-                  color: i < 2 ? "green" : i < 4 ? "amber" : "red",
-                  isCurrent,
-                });
-              }
-              setWeeks(generatedWeeks);
-            }
+            setWeeks(generatedWeeks);
           }
 
           // Set last updated timestamp
@@ -570,13 +580,23 @@ const PlannerActivities = () => {
             progResponse.programme.extractedData?.activities || [];
           const uploaderName = progResponse.programme.uploadedBy?.name || "Planner";
           const freshActions = actionsResponse?.actions || [];
+
+          // Use today's date for weekStart calculation
+          const todayRefresh = new Date();
+          todayRefresh.setHours(0, 0, 0, 0);
+          const dayOfWeekRefresh = todayRefresh.getDay();
+          const daysToMondayRefresh = dayOfWeekRefresh === 0 ? 6 : dayOfWeekRefresh - 1;
+          const weekStartRefresh = new Date(todayRefresh);
+          weekStartRefresh.setDate(todayRefresh.getDate() - daysToMondayRefresh);
+
           const transformedActivities: Activity[] = programmeActivities.map(
             (a, index) => {
-              // Calculate RAG zone based on dates (always returns green, amber, or red)
+              // Calculate RAG zone based on dates and current week
               const ragZoneData = calculateRagZone(
                 a.startDate || "",
                 a.finishDate || "",
-                a.activityStatus
+                a.activityStatus,
+                weekStartRefresh
               );
 
               const activityId = a.activityId || `ACT-${String(index + 1).padStart(3, "0")}`;
