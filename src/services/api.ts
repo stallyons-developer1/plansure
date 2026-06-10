@@ -444,9 +444,12 @@ export const dashboardAPI = {
     return response.data;
   },
 
-  getWeeklyDashboard: async (projectId?: string) => {
-    const params = projectId ? `?projectId=${projectId}` : "";
-    const response = await api.get(`/dashboard/weekly${params}`);
+  getWeeklyDashboard: async (projectId?: string, weekNumber?: number) => {
+    const params = new URLSearchParams();
+    if (projectId) params.append("projectId", projectId);
+    if (weekNumber) params.append("weekNumber", weekNumber.toString());
+    const queryString = params.toString() ? `?${params.toString()}` : "";
+    const response = await api.get(`/dashboard/weekly${queryString}`);
     return response.data;
   },
 
@@ -564,25 +567,27 @@ export const auditAPI = {
 };
 
 export const exportAPI = {
-  getGatingStatus: async () => {
-    const response = await api.get("/exports/gating-status");
+  getGatingStatus: async (programmeId?: string) => {
+    const params = programmeId ? `?programmeId=${programmeId}` : "";
+    const response = await api.get(`/exports/gating-status${params}`);
     return response.data;
   },
 
-  getHistory: async () => {
-    const response = await api.get("/exports/history");
+  getHistory: async (programmeId?: string) => {
+    const params = programmeId ? `?programmeId=${programmeId}` : "";
+    const response = await api.get(`/exports/history${params}`);
     return response.data;
   },
 
-  generateWeeklyPlan: async (weekNumber?: number) => {
-    const response = await api.post("/exports/weekly-plan", { weekNumber }, {
+  generateWeeklyPlan: async (programmeId: string) => {
+    const response = await api.post("/exports/weekly-plan", { programmeId }, {
       responseType: "blob",
     });
     return response;
   },
 
-  generatePlannerTodo: async (programmeId?: string, weekNumber?: number) => {
-    const response = await api.post("/exports/planner-todo", { programmeId, weekNumber }, {
+  generatePlannerTodo: async (programmeId: string) => {
+    const response = await api.post("/exports/planner-todo", { programmeId }, {
       responseType: "blob",
     });
     return response;

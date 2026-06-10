@@ -226,6 +226,7 @@ const PlannerProjectWorkspace = () => {
   });
   const [currentStep, setCurrentStep] = useState(1);
   const [ragFilter, setRagFilter] = useState("all");
+  const [weekFilter, setWeekFilter] = useState<number | null>(null); // null = all weeks, 1-6 = specific week
   const [activitiesPage, setActivitiesPage] = useState(1);
   const activitiesPerPage = 20;
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
@@ -1643,10 +1644,10 @@ const PlannerProjectWorkspace = () => {
 
       // Update closure checklist based on real data - auto-check all
       setClosureChecklist({
-        // Planner review complete: checked when cycle moves to Meeting Open
-        plannerReview: cycleStatus === "Meeting Open",
-        // To-do list generated: checked at Close-Out Eligible AND has pending actions
-        todoGenerated: cycleStatus === "Close-Out Eligible" && outstandingActions > 0,
+        // Planner review complete: checked at Meeting Open and remains checked in subsequent stages
+        plannerReview: ["Meeting Open", "Execution", "Close-Out Eligible", "Closed"].includes(cycleStatus),
+        // To-do list generated: checked when there are pending actions
+        todoGenerated: outstandingActions > 0,
         // Overdue acknowledged: checked when no overdue actions
         overdueAcknowledged: overdueActions === 0,
         // Blocked acknowledged: checked when no blocked activities
@@ -1915,10 +1916,8 @@ const PlannerProjectWorkspace = () => {
       (weeklyControlData?.requiredActionsByStatus?.inProgress || 0),
   };
 
-  const handleStepClick = (stepNumber: number) => {
-    if (stepNumber === currentStep && currentStep < steps.length) {
-      setCurrentStep(currentStep + 1);
-    }
+  const handleStepClick = (_stepNumber: number) => {
+    // Disabled - steps should not auto-progress on click
   };
 
   if (isLoading) {
@@ -2758,16 +2757,55 @@ const PlannerProjectWorkspace = () => {
                 "&::-webkit-scrollbar": { display: "none" },
               }}
             >
+              {/* All Weeks Button */}
+              <Box
+                onClick={() => {
+                  setWeekFilter(null);
+                  setActivitiesPage(1);
+                }}
+                sx={{
+                  minWidth: 70,
+                  height: 58,
+                  border: `2px solid ${weekFilter === null ? COLORS.blue : COLORS.border}`,
+                  borderRadius: "12px",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  bgcolor: weekFilter === null ? COLORS.blueBgMedium : "transparent",
+                  cursor: "pointer",
+                  transition: "all 0.2s ease",
+                  "&:hover": {
+                    borderColor: COLORS.blue,
+                    bgcolor: COLORS.blueBgLight,
+                  },
+                }}
+              >
+                <Box
+                  component="span"
+                  sx={{
+                    color: weekFilter === null ? COLORS.blue : COLORS.textSecondary,
+                    fontSize: "12px",
+                    fontWeight: 500,
+                  }}
+                >
+                  All
+                </Box>
+              </Box>
               {[
-                { week: "Week 1", label: "Committed", color: COLORS.green },
-                { week: "Week 2", label: "Committed", color: COLORS.green },
-                { week: "Week 3", label: "Readiness", color: COLORS.amber },
-                { week: "Week 4", label: "Readiness", color: COLORS.amber },
-                { week: "Week 5", label: "Strategic", color: COLORS.red },
-                { week: "Week 6", label: "Strategic", color: COLORS.red },
+                { week: "Week 1", label: "Committed", color: COLORS.green, weekNum: 1 },
+                { week: "Week 2", label: "Committed", color: COLORS.green, weekNum: 2 },
+                { week: "Week 3", label: "Readiness", color: COLORS.amber, weekNum: 3 },
+                { week: "Week 4", label: "Readiness", color: COLORS.amber, weekNum: 4 },
+                { week: "Week 5", label: "Strategic", color: COLORS.red, weekNum: 5 },
+                { week: "Week 6", label: "Strategic", color: COLORS.red, weekNum: 6 },
               ].map((item, index) => (
                 <Box
                   key={index}
+                  onClick={() => {
+                    setWeekFilter(item.weekNum);
+                    setActivitiesPage(1);
+                  }}
                   sx={{
                     flex: 1,
                     minWidth: 140,
@@ -2778,10 +2816,18 @@ const PlannerProjectWorkspace = () => {
                     flexDirection: "column",
                     alignItems: "center",
                     justifyContent: "center",
+                    cursor: "pointer",
+                    transition: "all 0.2s ease",
                     bgcolor:
-                      item.label !== "Committed"
-                        ? `${item.color}10`
-                        : "transparent",
+                      weekFilter === item.weekNum
+                        ? `${item.color}30`
+                        : item.label !== "Committed"
+                          ? `${item.color}10`
+                          : "transparent",
+                    boxShadow: weekFilter === item.weekNum ? `0 0 0 2px ${item.color}` : "none",
+                    "&:hover": {
+                      bgcolor: `${item.color}20`,
+                    },
                   }}
                 >
                   <Box
@@ -2789,7 +2835,7 @@ const PlannerProjectWorkspace = () => {
                     sx={{
                       color: item.color,
                       fontSize: "12px",
-                      fontWeight: 500,
+                      fontWeight: weekFilter === item.weekNum ? 700 : 500,
                     }}
                   >
                     {item.week}
@@ -2942,12 +2988,48 @@ const PlannerProjectWorkspace = () => {
                     </Box>
                   ) : (
                     (() => {
+                      // Calculate 6-week lookahead window from start of current week
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      // Get start of current week (Monday)
+                      const dayOfWeek = today.getDay();
+                      const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+                      const weekStart = new Date(today);
+                      weekStart.setDate(today.getDate() - daysToMonday);
+                      // End of 6th week (6 weeks from week start = 42 days)
+                      const sixWeekEnd = new Date(weekStart);
+                      sixWeekEnd.setDate(weekStart.getDate() + 42);
+
+                      // Calculate week boundaries for week filter
+                      const getWeekBoundaries = (weekNum: number) => {
+                        const start = new Date(weekStart);
+                        start.setDate(weekStart.getDate() + (weekNum - 1) * 7);
+                        const end = new Date(start);
+                        end.setDate(start.getDate() + 7);
+                        return { start, end };
+                      };
+
                       const filteredActivities = lookaheadData.activities
-                        .filter(
-                          (activity) =>
+                        .filter((activity) => {
+                          // Apply status filter
+                          const matchesStatus =
                             ragFilter === "all" ||
-                            activity.activityStatus === ragFilter,
-                        )
+                            activity.activityStatus === ragFilter;
+                          if (!matchesStatus) return false;
+
+                          // Apply 6-week lookahead filter based on start date
+                          const activityStart = parseDate(activity.startDate);
+                          if (!activityStart) return true; // Include if no start date
+
+                          // If specific week is selected, filter by that week
+                          if (weekFilter !== null) {
+                            const { start: weekStartDate, end: weekEndDate } = getWeekBoundaries(weekFilter);
+                            return activityStart >= weekStartDate && activityStart < weekEndDate;
+                          }
+
+                          // Show activities that start within the 6-week window
+                          return activityStart < sixWeekEnd;
+                        })
                         .sort((a, b) => {
                           const colorA = getRAGColor(a.startDate, a.finishDate);
                           const colorB = getRAGColor(b.startDate, b.finishDate);
@@ -3789,12 +3871,43 @@ const PlannerProjectWorkspace = () => {
               {lookaheadData?.activities &&
                 lookaheadData.activities.length > 0 &&
                 (() => {
+                  // Calculate 6-week lookahead window from start of current week
+                  const today = new Date();
+                  today.setHours(0, 0, 0, 0);
+                  const dayOfWeek = today.getDay();
+                  const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+                  const weekStart = new Date(today);
+                  weekStart.setDate(today.getDate() - daysToMonday);
+                  const sixWeekEnd = new Date(weekStart);
+                  sixWeekEnd.setDate(weekStart.getDate() + 42);
+
+                  // Calculate week boundaries for week filter
+                  const getWeekBoundaries = (weekNum: number) => {
+                    const start = new Date(weekStart);
+                    start.setDate(weekStart.getDate() + (weekNum - 1) * 7);
+                    const end = new Date(start);
+                    end.setDate(start.getDate() + 7);
+                    return { start, end };
+                  };
+
                   const filteredActivities = lookaheadData.activities
-                    .filter(
-                      (activity) =>
+                    .filter((activity) => {
+                      const matchesStatus =
                         ragFilter === "all" ||
-                        activity.activityStatus === ragFilter,
-                    )
+                        activity.activityStatus === ragFilter;
+                      if (!matchesStatus) return false;
+
+                      const activityStart = parseDate(activity.startDate);
+                      if (!activityStart) return true;
+
+                      // If specific week is selected, filter by that week
+                      if (weekFilter !== null) {
+                        const { start: weekStartDate, end: weekEndDate } = getWeekBoundaries(weekFilter);
+                        return activityStart >= weekStartDate && activityStart < weekEndDate;
+                      }
+
+                      return activityStart < sixWeekEnd;
+                    })
                     .sort((a, b) => {
                       const colorA = getRAGColor(a.startDate, a.finishDate);
                       const colorB = getRAGColor(b.startDate, b.finishDate);
@@ -5639,7 +5752,7 @@ const PlannerProjectWorkspace = () => {
                     console.error("Error unblocking activity:", error);
                   }
                 }}
-                onActionClick={() => setActiveTab(3)}
+                onActionIdClick={() => setActiveTab(3)}
                 isProjectEnded={weeklyControlData?.isProjectEnded}
                 cycleStatus={weeklyControlData?.stats?.cycleStatus}
               />

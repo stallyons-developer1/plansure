@@ -38,13 +38,30 @@ const ActivitiesLookahead = ({
   const [ragFilter, setRagFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [weekFilter, setWeekFilter] = useState<number | null>(null); // null = all weeks, 1-6 = specific week
   const [currentPage, setCurrentPage] = useState(1);
   const activitiesPerPage = 20;
 
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [ragFilter, statusFilter, searchQuery]);
+  }, [ragFilter, statusFilter, searchQuery, weekFilter]);
+
+  // Helper to check if activity belongs to a specific week based on ragZone
+  const activityMatchesWeek = (activity: Activity, weekNum: number): boolean => {
+    const ragZone = activity.ragZone?.toLowerCase() || "";
+
+    // Map week numbers to expected ragZone values
+    if (weekNum === 1 || weekNum === 2) {
+      // Weeks 1-2: Green zone, also includes Overdue and In Progress
+      return ragZone.includes("weeks 1-2") || ragZone === "overdue" || ragZone === "in progress";
+    } else if (weekNum === 3 || weekNum === 4) {
+      return ragZone.includes("weeks 3-4");
+    } else if (weekNum === 5 || weekNum === 6) {
+      return ragZone.includes("weeks 5-6");
+    }
+    return false;
+  };
 
   const filteredActivities = activities.filter((activity) => {
     const matchesRag = ragFilter === "all" || activity.ragColor === ragFilter;
@@ -55,7 +72,11 @@ const ActivitiesLookahead = ({
       searchQuery === "" ||
       activity.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       activity.id.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesRag && matchesStatus && matchesSearch;
+
+    // Week filter - if a specific week is selected, filter by that week
+    const matchesWeek = weekFilter === null || activityMatchesWeek(activity, weekFilter);
+
+    return matchesRag && matchesStatus && matchesSearch && matchesWeek;
   });
 
   const greenCount = activities.filter((a) => a.ragColor === "green").length;
@@ -286,79 +307,123 @@ const ActivitiesLookahead = ({
             "&::-webkit-scrollbar": { display: "none" },
           }}
         >
-          {weeks.map((week) => (
-            <Box
-              key={week.week}
+          {/* All Weeks Button */}
+          <Box
+            onClick={() => setWeekFilter(null)}
+            sx={{
+              minWidth: 70,
+              height: 87,
+              bgcolor: weekFilter === null ? COLORS.blueBgMedium : COLORS.bgPrimary,
+              border: `2px solid ${weekFilter === null ? COLORS.blue : COLORS.border}`,
+              borderRadius: "8px",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              transition: "all 0.2s ease",
+              "&:hover": {
+                borderColor: COLORS.blue,
+                bgcolor: COLORS.blueBgLight,
+              },
+            }}
+          >
+            <Typography
               sx={{
-                flex: 1,
-                minWidth: 150,
-                height: 87,
-                bgcolor: week.isCurrent ? COLORS.blueBgLight : COLORS.bgPrimary,
-                border: week.isCurrent
-                  ? `2px solid ${COLORS.blue}`
-                  : `1px solid ${COLORS.border}`,
-                borderRadius: "8px",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 0.1,
-                cursor: "pointer",
-                transition: "all 0.2s ease",
-                "&:hover": {
-                  opacity: 0.9,
-                },
+                color: weekFilter === null ? COLORS.blue : COLORS.textSecondary,
+                fontSize: "12px",
+                fontWeight: 600,
               }}
             >
-              <Typography
-                sx={{
-                  color: week.isCurrent ? COLORS.blue : COLORS.textPrimary,
-                  fontSize: "12px",
-                  fontWeight: 600,
-                }}
-              >
-                Week {week.week}
-              </Typography>
-              <Typography
-                sx={{
-                  color: week.isCurrent ? COLORS.blue : COLORS.textSecondary,
-                  fontSize: "12px",
-                  fontWeight: 400,
-                }}
-              >
-                {week.dateRange}
-              </Typography>
+              All
+            </Typography>
+          </Box>
+          {weeks.map((week) => {
+            const isSelected = weekFilter === week.week;
+            const weekColor = getColorValue(week.color);
+            return (
               <Box
+                key={week.week}
+                onClick={() => setWeekFilter(week.week)}
                 sx={{
+                  flex: 1,
+                  minWidth: 150,
+                  height: 87,
+                  bgcolor: isSelected
+                    ? `${weekColor}20`
+                    : week.isCurrent
+                      ? COLORS.blueBgLight
+                      : COLORS.bgPrimary,
+                  border: isSelected
+                    ? `2px solid ${weekColor}`
+                    : week.isCurrent
+                      ? `2px solid ${COLORS.blue}`
+                      : `1px solid ${COLORS.border}`,
+                  borderRadius: "8px",
                   display: "flex",
                   flexDirection: "column",
                   alignItems: "center",
-                  gap: 0.25,
+                  justifyContent: "center",
+                  gap: 0.1,
+                  cursor: "pointer",
+                  transition: "all 0.2s ease",
+                  boxShadow: isSelected ? `0 0 0 2px ${weekColor}40` : "none",
+                  "&:hover": {
+                    bgcolor: `${weekColor}15`,
+                    borderColor: weekColor,
+                  },
                 }}
               >
+                <Typography
+                  sx={{
+                    color: isSelected ? weekColor : week.isCurrent ? COLORS.blue : COLORS.textPrimary,
+                    fontSize: "12px",
+                    fontWeight: isSelected ? 700 : 600,
+                  }}
+                >
+                  Week {week.week}
+                </Typography>
+                <Typography
+                  sx={{
+                    color: isSelected ? weekColor : week.isCurrent ? COLORS.blue : COLORS.textSecondary,
+                    fontSize: "12px",
+                    fontWeight: 400,
+                  }}
+                >
+                  {week.dateRange}
+                </Typography>
                 <Box
                   sx={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: "50%",
-                    bgcolor: getColorValue(week.color),
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: 0.25,
                   }}
-                />
-                {week.isCurrent && (
-                  <Typography
+                >
+                  <Box
                     sx={{
-                      color: COLORS.blue,
-                      fontSize: "12px",
-                      fontWeight: 400,
-                      textTransform: "uppercase",
+                      width: 8,
+                      height: 8,
+                      borderRadius: "50%",
+                      bgcolor: weekColor,
                     }}
-                  >
-                    Current
-                  </Typography>
-                )}
+                  />
+                  {week.isCurrent && !isSelected && (
+                    <Typography
+                      sx={{
+                        color: COLORS.blue,
+                        fontSize: "12px",
+                        fontWeight: 400,
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      Current
+                    </Typography>
+                  )}
+                </Box>
               </Box>
-            </Box>
-          ))}
+            );
+          })}
         </Box>
       </Box>
 

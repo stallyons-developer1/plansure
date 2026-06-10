@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Box,
   Typography,
@@ -6,12 +7,19 @@ import {
   FormControl,
   Select,
   MenuItem,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  TextField,
+  IconButton,
 } from "@mui/material";
 import type { SelectChangeEvent } from "@mui/material/Select";
-import { KeyboardArrowDown as ArrowDownIcon } from "@mui/icons-material";
+import { KeyboardArrowDown as ArrowDownIcon, Close as CloseIcon } from "@mui/icons-material";
 import AdminLayout from "../../layouts/AdminLayout";
 import { COLORS } from "../../constants/colors";
-import { dashboardAPI, projectAPI, programmeAPI, actionAPI } from "../../services/api";
+import { dashboardAPI, projectAPI, programmeAPI, actionAPI, userAPI } from "../../services/api";
 import BlockedActivitiesTable from "../../components/BlockedActivitiesTable";
 import ClosureOverridePanel from "../../components/ClosureOverridePanel";
 import {
@@ -24,6 +32,7 @@ import {
   PieChart,
   Pie,
   Cell,
+  Tooltip,
 } from "recharts";
 
 interface Project {
@@ -72,6 +81,7 @@ interface WeeklyData {
     blockedByActions: number;
     openActions: number;
     overdueActions: number;
+    openRequiredActions: number;
     readyForClose: boolean;
   };
   ragDistribution: { green: number; amber: number; red: number };
@@ -82,7 +92,12 @@ interface WeeklyData {
     rag: "Red" | "Amber";
     owner: string;
     blocker: string;
-    linkedAction: string;
+    linkedAction: {
+      actionId: string;
+      title: string;
+      status: string;
+      assigneeName: string;
+    } | null;
     status: "Open" | "Overdue";
   }>;
   weeklyPlanPreview: Array<{
@@ -107,6 +122,7 @@ interface WeeklyData {
   }>;
   activitiesByWeek?: ActivityByWeek[];
   actionOwnership?: ActionOwnership[];
+  isProjectEnded?: boolean;
 }
 
 const CustomLegend = ({
@@ -153,7 +169,98 @@ const CustomLegend = ({
   </Box>
 );
 
+// Custom tooltip for Activities by Week chart
+const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number; dataKey: string }>; label?: string }) => {
+  if (active && payload && payload.length) {
+    const green = payload.find(p => p.dataKey === 'green')?.value || 0;
+    const amber = payload.find(p => p.dataKey === 'amber')?.value || 0;
+    const red = payload.find(p => p.dataKey === 'red')?.value || 0;
+
+    return (
+      <Box
+        sx={{
+          bgcolor: COLORS.bgSecondary,
+          border: `1px solid ${COLORS.border}`,
+          borderRadius: "8px",
+          p: 1.5,
+          minWidth: 100,
+        }}
+      >
+        <Typography sx={{ color: COLORS.textPrimary, fontWeight: 600, fontSize: "14px", mb: 0.5 }}>
+          {label?.replace('Week ', 'W')}
+        </Typography>
+        <Typography sx={{ color: COLORS.amber, fontSize: "13px" }}>
+          amber : {amber}
+        </Typography>
+        <Typography sx={{ color: COLORS.green, fontSize: "13px" }}>
+          green : {green}
+        </Typography>
+        <Typography sx={{ color: COLORS.red, fontSize: "13px" }}>
+          red : {red}
+        </Typography>
+      </Box>
+    );
+  }
+  return null;
+};
+
+// Custom tooltip for Actions by Status chart
+const ActionsTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number }>; label?: string }) => {
+  if (active && payload && payload.length) {
+    const value = payload[0]?.value || 0;
+    const color = label === "Open" ? COLORS.amber : label === "Closed" ? COLORS.green : COLORS.red;
+
+    return (
+      <Box
+        sx={{
+          bgcolor: COLORS.bgSecondary,
+          border: `1px solid ${COLORS.border}`,
+          borderRadius: "8px",
+          p: 1.5,
+          minWidth: 80,
+        }}
+      >
+        <Typography sx={{ color, fontSize: "13px", fontWeight: 600 }}>
+          {label}: {value}
+        </Typography>
+      </Box>
+    );
+  }
+  return null;
+};
+
+// Custom tooltip for RAG Distribution pie chart
+const RAGTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ name: string; value: number }> }) => {
+  if (active && payload && payload.length) {
+    const { name, value: _value } = payload[0];
+
+    const descriptions: Record<string, string> = {
+      Green: "Completed or On Track - Activity is completed or in progress",
+      Amber: "At Risk - Activity may be delayed or needs attention",
+      Red: "Behind Schedule - Activity is overdue or blocked",
+    };
+
+    return (
+      <Box
+        sx={{
+          bgcolor: COLORS.bgSecondary,
+          border: `1px solid ${COLORS.border}`,
+          borderRadius: "8px",
+          p: 1.5,
+          maxWidth: 220,
+        }}
+      >
+        <Typography sx={{ color: COLORS.textPrimary, fontSize: "13px" }}>
+          {descriptions[name] || name}
+        </Typography>
+      </Box>
+    );
+  }
+  return null;
+};
+
 const AdminWeeklyDashboard = () => {
+  const navigate = useNavigate();
   const amberColor = "#F59E0B";
   const [loading, setLoading] = useState(true);
   const [loadingData, setLoadingData] = useState(false);
@@ -165,6 +272,27 @@ const AdminWeeklyDashboard = () => {
   const [currentWeekNumber, setCurrentWeekNumber] = useState<number>(1);
   const [activitiesByWeekData, setActivitiesByWeekData] = useState<ActivityByWeek[]>([]);
   const [actionOwnershipData, setActionOwnershipData] = useState<ActionOwnership[]>([]);
+  const [isClosingWeek, setIsClosingWeek] = useState(false);
+  const [showOverrideModal, setShowOverrideModal] = useState(false);
+  const [overrideReason, setOverrideReason] = useState("");
+
+  // Assign action modal state
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [assigningActivity, setAssigningActivity] = useState<{
+    activityId: string;
+    activityName: string;
+  } | null>(null);
+  const [assignFormData, setAssignFormData] = useState({
+    title: "",
+    description: "",
+    type: "Required",
+    priority: "Medium",
+    assignee: "",
+    dueDate: "",
+  });
+  const [assignError, setAssignError] = useState("");
+  const [assignSaveLoading, setAssignSaveLoading] = useState(false);
+  const [teamMembers, setTeamMembers] = useState<Array<{ _id: string; name: string; email: string }>>([]);
 
   // Fetch projects on mount
   useEffect(() => {
@@ -233,14 +361,15 @@ const AdminWeeklyDashboard = () => {
         const response = await programmeAPI.getWeeksStatus(programmeId);
         if (response.success && response.weeks) {
           setWeeksStatus(response.weeks);
-          // Find the first open week (current closable week)
-          const openWeek = response.weeks.find((w: WeekStatus) => w.status === "open");
-          if (openWeek) {
-            setCurrentWeekNumber(openWeek.weekNumber);
+          // Find the first open week, or default to next week after last closed
+          const weeks = response.weeks;
+          const firstOpenWeek = weeks.find((w: WeekStatus) => w.status === "open");
+          if (firstOpenWeek) {
+            setCurrentWeekNumber(firstOpenWeek.weekNumber);
           } else {
-            // All weeks closed, show the last week
-            const lastWeek = response.weeks[response.weeks.length - 1];
-            setCurrentWeekNumber(lastWeek?.weekNumber || 1);
+            // All weeks are closed, show the last closed week + 1
+            const maxClosedWeek = Math.max(...weeks.filter((w: WeekStatus) => w.status === "closed").map((w: WeekStatus) => w.weekNumber), 0);
+            setCurrentWeekNumber(maxClosedWeek + 1);
           }
         }
       } catch (error) {
@@ -263,7 +392,7 @@ const AdminWeeklyDashboard = () => {
 
       try {
         setLoadingData(true);
-        const response = await dashboardAPI.getWeeklyDashboard(selectedProjectId);
+        const response = await dashboardAPI.getWeeklyDashboard(selectedProjectId, currentWeekNumber);
         if (response.success) {
           setData(response.weekly);
 
@@ -328,15 +457,17 @@ const AdminWeeklyDashboard = () => {
       try {
         const response = await actionAPI.getByProgramme(programmeId);
         if (response.success && response.actions) {
-          // Group actions by discipline/owner and status
-          const ownershipMap: { [key: string]: { open: number; closed: number; overdue: number } } = {};
+          // Group actions by action title and track activity name for tooltip
+          const ownershipMap: { [key: string]: { open: number; closed: number; overdue: number; activityName: string } } = {};
           const today = new Date();
           today.setHours(0, 0, 0, 0);
 
-          response.actions.forEach((action: { assignee?: { name?: string }; status?: string; dueDate?: string }) => {
-            const discipline = action.assignee?.name || "Unassigned";
+          response.actions.forEach((action: { title?: string; linkedActivity?: { activityName?: string }; status?: string; dueDate?: string }) => {
+            // Group by action title
+            const discipline = action.title || "Unassigned";
+            const activityName = action.linkedActivity?.activityName || "";
             if (!ownershipMap[discipline]) {
-              ownershipMap[discipline] = { open: 0, closed: 0, overdue: 0 };
+              ownershipMap[discipline] = { open: 0, closed: 0, overdue: 0, activityName };
             }
 
             if (action.status === "Closed" || action.status === "Completed") {
@@ -369,6 +500,189 @@ const AdminWeeklyDashboard = () => {
 
     fetchActionsData();
   }, [programmeId]);
+
+  // Handler for Close Week - closes only 1 week and switches to next week
+  const handleCloseWeek = async () => {
+    if (!programmeId || isClosingWeek) return;
+
+    setIsClosingWeek(true);
+    try {
+      // Close only 1 week (not 2 like in Weekly Control)
+      const response = await programmeAPI.closeWeek(
+        programmeId,
+        currentWeekNumber,
+        "Normal Close"
+      );
+
+      if (response.success) {
+        // Switch to next week's data
+        setCurrentWeekNumber((prev) => prev + 1);
+
+        // Refresh weeks status
+        const weeksResponse = await programmeAPI.getWeeksStatus(programmeId);
+        if (weeksResponse.success && weeksResponse.weeks) {
+          setWeeksStatus(weeksResponse.weeks);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to close week:", error);
+    } finally {
+      setIsClosingWeek(false);
+    }
+  };
+
+  // Handler for PM Override - closes 1 week with override reason and switches to next week
+  const handlePMOverride = async () => {
+    if (!programmeId || isClosingWeek || overrideReason.length < 10) return;
+
+    setIsClosingWeek(true);
+    try {
+      // Close only 1 week with PM Override
+      const response = await programmeAPI.closeWeek(
+        programmeId,
+        currentWeekNumber,
+        "PM Override",
+        overrideReason
+      );
+
+      if (response.success) {
+        // Switch to next week's data
+        setCurrentWeekNumber((prev) => prev + 1);
+
+        // Refresh weeks status
+        const weeksResponse = await programmeAPI.getWeeksStatus(programmeId);
+        if (weeksResponse.success && weeksResponse.weeks) {
+          setWeeksStatus(weeksResponse.weeks);
+        }
+
+        // Reset modal state
+        setShowOverrideModal(false);
+        setOverrideReason("");
+      }
+    } catch (error) {
+      console.error("Failed to close week with override:", error);
+    } finally {
+      setIsClosingWeek(false);
+    }
+  };
+
+  // Handler for Open Meeting
+  const handleOpenMeeting = async () => {
+    if (!programmeId) return;
+
+    try {
+      const response = await programmeAPI.updateCycleStatus(programmeId, "Meeting Open");
+      if (response.success) {
+        // Refresh dashboard data
+        const dashResponse = await dashboardAPI.getWeeklyDashboard(selectedProjectId, currentWeekNumber);
+        if (dashResponse.success) {
+          setData(dashResponse.weekly);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to open meeting:", error);
+    }
+  };
+
+  // Handler for Start Execution
+  const handleStartExecution = async () => {
+    if (!programmeId) return;
+
+    try {
+      const response = await programmeAPI.updateCycleStatus(programmeId, "Execution");
+      if (response.success) {
+        // Refresh dashboard data
+        const dashResponse = await dashboardAPI.getWeeklyDashboard(selectedProjectId, currentWeekNumber);
+        if (dashResponse.success) {
+          setData(dashResponse.weekly);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to start execution:", error);
+    }
+  };
+
+  // Fetch team members for assign modal (only active planners)
+  useEffect(() => {
+    const fetchTeamMembers = async () => {
+      try {
+        const response = await userAPI.getAll({ status: "active" });
+        if (response.success) {
+          const activeUsers = (response.users || []).filter(
+            (user: { role: string; status: string }) =>
+              user.role === "planner" && user.status === "active",
+          );
+          setTeamMembers(activeUsers);
+        }
+      } catch (error) {
+        console.error("Error fetching team members:", error);
+      }
+    };
+    fetchTeamMembers();
+  }, []);
+
+  // Assign modal handlers
+  const handleAssignClose = () => {
+    setAssignModalOpen(false);
+    setAssigningActivity(null);
+    setAssignFormData({
+      title: "",
+      description: "",
+      type: "Required",
+      priority: "Medium",
+      assignee: "",
+      dueDate: "",
+    });
+    setAssignError("");
+  };
+
+  const handleAssignSave = async () => {
+    if (!assigningActivity || !programmeId) return;
+
+    setAssignError("");
+
+    if (!assignFormData.title || !assignFormData.assignee || !assignFormData.dueDate) {
+      setAssignError("Please fill in all required fields (Title, Assignee, Due Date)");
+      return;
+    }
+
+    setAssignSaveLoading(true);
+    try {
+      const response = await actionAPI.create({
+        programmeId: programmeId,
+        linkedActivity: {
+          activityId: assigningActivity.activityId,
+          activityName: assigningActivity.activityName,
+        },
+        title: assignFormData.title,
+        description: assignFormData.description,
+        type: assignFormData.type,
+        priority: assignFormData.priority,
+        assignee: assignFormData.assignee,
+        dueDate: assignFormData.dueDate,
+      });
+
+      if (response.success) {
+        // Refresh dashboard data
+        const dashResponse = await dashboardAPI.getWeeklyDashboard(selectedProjectId, currentWeekNumber);
+        if (dashResponse.success) {
+          setData(dashResponse.weekly);
+        }
+        handleAssignClose();
+      }
+    } catch (error: unknown) {
+      console.error("Failed to create action:", error);
+      const err = error as { response?: { data?: { message?: string; error?: string } }; message?: string };
+      const errorMessage = err?.response?.data?.message || err?.response?.data?.error || err?.message || "Failed to create action. Please try again.";
+      setAssignError(errorMessage);
+    } finally {
+      setAssignSaveLoading(false);
+    }
+  };
+
+  const handleAssignChange = (field: string, value: string) => {
+    setAssignFormData({ ...assignFormData, [field]: value });
+  };
 
   const handleProjectChange = (event: SelectChangeEvent<string>) => {
     setSelectedProjectId(event.target.value);
@@ -848,7 +1162,7 @@ const AdminWeeklyDashboard = () => {
               mb: 1,
             }}
           >
-            Execution
+            {cycleStatus}
           </Typography>
           <Box
             sx={{
@@ -861,7 +1175,14 @@ const AdminWeeklyDashboard = () => {
           >
             <Box
               sx={{
-                width: "65%",
+                width: `${
+                  cycleStatus === "Draft" ? 15 :
+                  cycleStatus === "Uploaded" ? 30 :
+                  cycleStatus === "Meeting Open" ? 50 :
+                  cycleStatus === "Execution" ? 70 :
+                  cycleStatus === "Close-Out Eligible" ? 85 :
+                  cycleStatus === "Closed" ? 100 : 0
+                }%`,
                 height: "100%",
                 bgcolor: COLORS.blue,
                 borderRadius: "4px",
@@ -1159,6 +1480,8 @@ const AdminWeeklyDashboard = () => {
             border: `1px solid ${COLORS.border}`,
             borderRadius: "12px",
             p: { xs: 2, sm: 3 },
+            overflow: "hidden",
+            minWidth: 0,
           }}
         >
           <Typography
@@ -1178,60 +1501,75 @@ const AdminWeeklyDashboard = () => {
               { label: "Red", color: COLORS.red },
             ]}
           />
-          <Box sx={{ height: { xs: 220, sm: 280 }, mt: 2 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={activitiesByWeekData}
-                barCategoryGap="15%"
-                barGap={0}
-              >
-                <CartesianGrid
-                  strokeDasharray="0"
-                  stroke={COLORS.borderDark}
-                  horizontal={true}
-                  vertical={true}
-                  verticalCoordinatesGenerator={(props) => {
-                    const { offset, width } = props;
-                    const barCount = 6;
-                    const chartWidth = width - offset.left - offset.right;
-                    const step = chartWidth / barCount;
-                    const lines = [];
-                    for (let i = 0; i <= barCount; i++) {
-                      lines.push(offset.left + i * step);
-                    }
-                    return lines;
-                  }}
-                  horizontalCoordinatesGenerator={(props) => {
-                    const { offset, height } = props;
-                    const lineCount = 10;
-                    const chartHeight = height - offset.top - offset.bottom;
-                    const step = chartHeight / lineCount;
-                    const lines = [];
-                    for (let i = 0; i <= lineCount; i++) {
-                      lines.push(offset.top + i * step);
-                    }
-                    return lines;
-                  }}
-                />
-                <XAxis
-                  dataKey="week"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: COLORS.textSecondary, fontSize: 12 }}
-                />
-                <YAxis
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: COLORS.textSecondary, fontSize: 12 }}
-                  domain={[0, 50]}
-                  ticks={[0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50]}
-                  interval={0}
-                />
-                <Bar dataKey="green" stackId="a" fill={COLORS.green} />
-                <Bar dataKey="amber" stackId="a" fill={COLORS.amber} />
-                <Bar dataKey="red" stackId="a" fill={COLORS.red} />
-              </BarChart>
-            </ResponsiveContainer>
+          <Box
+            sx={{
+              overflowX: "auto",
+              overflowY: "hidden",
+              mt: 2,
+              "&::-webkit-scrollbar": {
+                height: "8px",
+              },
+              "&::-webkit-scrollbar-track": {
+                background: COLORS.bgTertiary,
+                borderRadius: "4px",
+              },
+              "&::-webkit-scrollbar-thumb": {
+                background: COLORS.blue,
+                borderRadius: "4px",
+                "&:hover": {
+                  background: "#4A90D9",
+                },
+              },
+            }}
+          >
+            <Box
+              sx={{
+                width: activitiesByWeekData.length > 8 ? `${activitiesByWeekData.length * 50}px` : "100%",
+                minWidth: "100%",
+                height: { xs: 220, sm: 280 },
+              }}
+            >
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={activitiesByWeekData}
+                  barCategoryGap="20%"
+                  barGap={0}
+                  margin={{ top: 10, right: 10, left: 5, bottom: 10 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="0"
+                    stroke={COLORS.borderDark}
+                    horizontal={true}
+                    vertical={false}
+                  />
+                  <XAxis
+                    dataKey="week"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: COLORS.textSecondary, fontSize: 11 }}
+                    tickFormatter={(value) => value.replace('Week ', 'W')}
+                    interval={0}
+                  />
+                  <YAxis
+                    axisLine={{ stroke: COLORS.borderDark }}
+                    tickLine={false}
+                    tick={{ fill: COLORS.textSecondary, fontSize: 12 }}
+                    domain={[0, (_dataMax: number) => {
+                      const maxTotal = Math.max(...activitiesByWeekData.map(d => d.green + d.amber + d.red), 1);
+                      // Round up to next even number + 2
+                      return Math.ceil((maxTotal + 2) / 2) * 2;
+                    }]}
+                    allowDecimals={false}
+                    width={30}
+                    tickCount={5}
+                  />
+                  <Tooltip content={<CustomTooltip />} cursor={false} isAnimationActive={false} />
+                  <Bar dataKey="green" stackId="a" fill={COLORS.green} radius={0} barSize={60} />
+                  <Bar dataKey="amber" stackId="a" fill={COLORS.amber} radius={0} barSize={60} />
+                  <Bar dataKey="red" stackId="a" fill={COLORS.red} radius={0} barSize={60} />
+                </BarChart>
+              </ResponsiveContainer>
+            </Box>
           </Box>
         </Box>
 
@@ -1290,6 +1628,7 @@ const AdminWeeklyDashboard = () => {
                   {amberPct > 0 && <Cell fill={COLORS.amber} />}
                   {redPct > 0 && <Cell fill={COLORS.red} />}
                 </Pie>
+                <Tooltip content={<RAGTooltip />} isAnimationActive={false} />
               </PieChart>
             </ResponsiveContainer>
           </Box>
@@ -1320,68 +1659,83 @@ const AdminWeeklyDashboard = () => {
           >
             Actions by Status
           </Typography>
-          <Box sx={{ height: { xs: 220, sm: 280 } }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={[
-                  { name: "Open", value: data?.actionsByStatus?.open || 0 },
-                  { name: "Closed", value: data?.actionsByStatus?.closed || 0 },
-                  {
-                    name: "Overdue",
-                    value: data?.actionsByStatus?.overdue || 0,
-                  },
-                ]}
-                barCategoryGap="40%"
-              >
-                <CartesianGrid
-                  strokeDasharray="0"
-                  stroke={COLORS.borderDark}
-                  horizontal={true}
-                  vertical={true}
-                  verticalCoordinatesGenerator={(props) => {
-                    const { offset, width } = props;
-                    const barCount = 3;
-                    const chartWidth = width - offset.left - offset.right;
-                    const step = chartWidth / barCount;
-                    const lines = [];
-                    for (let i = 0; i <= barCount; i++) {
-                      lines.push(offset.left + i * step);
-                    }
-                    return lines;
-                  }}
-                  horizontalCoordinatesGenerator={(props) => {
-                    const { offset, height } = props;
-                    const lineCount = 6;
-                    const chartHeight = height - offset.top - offset.bottom;
-                    const step = chartHeight / lineCount;
-                    const lines = [];
-                    for (let i = 0; i <= lineCount; i++) {
-                      lines.push(offset.top + i * step);
-                    }
-                    return lines;
-                  }}
-                />
-                <XAxis
-                  dataKey="name"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: COLORS.textSecondary, fontSize: 12 }}
-                />
-                <YAxis
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: COLORS.textSecondary, fontSize: 12 }}
-                  domain={[0, 30]}
-                  ticks={[0, 5, 10, 15, 20, 25, 30]}
-                />
-                <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                  <Cell fill={COLORS.amber} />
-                  <Cell fill={COLORS.green} />
-                  <Cell fill={COLORS.red} />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </Box>
+          {(data?.actionsByStatus?.open || 0) + (data?.actionsByStatus?.closed || 0) + (data?.actionsByStatus?.overdue || 0) === 0 ? (
+            <Box
+              sx={{
+                height: { xs: 220, sm: 280 },
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Typography sx={{ color: COLORS.textMuted, fontSize: "14px" }}>
+                No actions assigned
+              </Typography>
+            </Box>
+          ) : (
+            <Box sx={{ height: { xs: 220, sm: 280 } }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={[
+                    { name: "Open", value: data?.actionsByStatus?.open || 0 },
+                    { name: "Closed", value: data?.actionsByStatus?.closed || 0 },
+                    {
+                      name: "Overdue",
+                      value: data?.actionsByStatus?.overdue || 0,
+                    },
+                  ]}
+                  barCategoryGap="40%"
+                >
+                  <CartesianGrid
+                    strokeDasharray="0"
+                    stroke={COLORS.borderDark}
+                    horizontal={true}
+                    vertical={true}
+                    verticalCoordinatesGenerator={(props) => {
+                      const { offset, width } = props;
+                      const barCount = 3;
+                      const chartWidth = width - offset.left - offset.right;
+                      const step = chartWidth / barCount;
+                      const lines = [];
+                      for (let i = 0; i <= barCount; i++) {
+                        lines.push(offset.left + i * step);
+                      }
+                      return lines;
+                    }}
+                  />
+                  <XAxis
+                    dataKey="name"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: COLORS.textSecondary, fontSize: 12 }}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: COLORS.textSecondary, fontSize: 12 }}
+                    domain={[0, (_dataMax: number) => {
+                      const max = Math.max(
+                        data?.actionsByStatus?.open || 0,
+                        data?.actionsByStatus?.closed || 0,
+                        data?.actionsByStatus?.overdue || 0,
+                        1
+                      );
+                      return Math.max(max + 2, 3);
+                    }]}
+                    allowDecimals={false}
+                    tickCount={7}
+                  />
+                  <Tooltip content={<ActionsTooltip />} cursor={false} isAnimationActive={false} />
+                  <Bar dataKey="value" radius={[4, 4, 0, 0]} barSize={50}>
+                    <Cell fill={COLORS.amber} />
+                    <Cell fill={COLORS.green} />
+                    <Cell fill={COLORS.red} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </Box>
+          )}
         </Box>
 
         <Box
@@ -1402,94 +1756,636 @@ const AdminWeeklyDashboard = () => {
           >
             Action Ownership by Discipline
           </Typography>
-          <CustomLegend
-            items={[
-              { label: "Open", color: COLORS.amber },
-              { label: "Closed", color: COLORS.green },
-              { label: "Overdue", color: COLORS.red },
-            ]}
-          />
-          <Box sx={{ height: { xs: 200, sm: 250 }, mt: 2 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={actionOwnershipData.length > 0 ? actionOwnershipData : [
-                  { discipline: "No Data", open: 0, closed: 0, overdue: 0 },
+          {actionOwnershipData.length === 0 ? (
+            <Box
+              sx={{
+                height: { xs: 200, sm: 250 },
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Typography sx={{ color: COLORS.textMuted, fontSize: "14px" }}>
+                No actions assigned
+              </Typography>
+            </Box>
+          ) : (
+            <>
+              <CustomLegend
+                items={[
+                  { label: "Open", color: COLORS.amber },
+                  { label: "Closed", color: COLORS.green },
+                  { label: "Overdue", color: COLORS.red },
                 ]}
-                layout="vertical"
-                barCategoryGap="15%"
-              >
-                <CartesianGrid
-                  strokeDasharray="0"
-                  stroke={COLORS.borderDark}
-                  horizontal={true}
-                  vertical={true}
-                  horizontalCoordinatesGenerator={(props) => {
-                    const { offset, height } = props;
-                    const barCount = 5;
-                    const chartHeight = height - offset.top - offset.bottom;
-                    const step = chartHeight / barCount;
-                    const lines = [];
-                    for (let i = 0; i <= barCount; i++) {
-                      lines.push(offset.top + i * step);
-                    }
-                    return lines;
-                  }}
-                  verticalCoordinatesGenerator={(props) => {
-                    const { offset, width } = props;
-                    const lineCount = 7;
-                    const chartWidth = width - offset.left - offset.right;
-                    const step = chartWidth / lineCount;
-                    const lines = [];
-                    for (let i = 0; i <= lineCount; i++) {
-                      lines.push(offset.left + i * step);
-                    }
-                    return lines;
-                  }}
-                />
-                <XAxis
-                  type="number"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: COLORS.textSecondary, fontSize: 12 }}
-                  domain={[0, 14]}
-                  ticks={[0, 2, 4, 6, 8, 10, 12, 14]}
-                />
-                <YAxis
-                  type="category"
-                  dataKey="discipline"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: COLORS.textSecondary, fontSize: 12 }}
-                  width={80}
-                />
-                <Bar dataKey="open" stackId="a" fill={COLORS.amber} />
-                <Bar dataKey="closed" stackId="a" fill={COLORS.green} />
-                <Bar dataKey="overdue" stackId="a" fill={COLORS.red} />
-              </BarChart>
-            </ResponsiveContainer>
-          </Box>
+              />
+              <Box sx={{ height: { xs: 200, sm: 250 }, mt: 2 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={actionOwnershipData}
+                    layout="vertical"
+                    barCategoryGap="20%"
+                    margin={{ top: 5, right: 10, left: 0, bottom: 5 }}
+                  >
+                    <CartesianGrid
+                      strokeDasharray="0"
+                      stroke={COLORS.borderDark}
+                      horizontal={true}
+                      vertical={true}
+                    />
+                    <XAxis
+                      type="number"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: COLORS.textSecondary, fontSize: 12 }}
+                      domain={[0, (_dataMax: number) => {
+                        const max = Math.max(...actionOwnershipData.map(d => d.open + d.closed + d.overdue), 1);
+                        return Math.ceil((max + 2) / 2) * 2;
+                      }]}
+                      allowDecimals={false}
+                    />
+                    <YAxis
+                      type="category"
+                      dataKey="discipline"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: COLORS.textSecondary, fontSize: 12 }}
+                      width={80}
+                    />
+                    <Tooltip
+                      content={({ active, payload, label }) => {
+                        if (active && payload && payload.length) {
+                          const activityName = payload[0]?.payload?.activityName || "";
+                          return (
+                            <Box sx={{ bgcolor: COLORS.bgSecondary, border: `1px solid ${COLORS.border}`, borderRadius: "8px", p: 1.5 }}>
+                              <Typography sx={{ color: COLORS.textPrimary, fontWeight: 600, fontSize: "13px", mb: 0.5 }}>Action: {label}</Typography>
+                              {activityName && <Typography sx={{ color: COLORS.textSecondary, fontSize: "12px", mb: 0.5 }}>Activity: {activityName}</Typography>}
+                              <Typography sx={{ color: COLORS.amber, fontSize: "12px" }}>Open: {payload.find(p => p.dataKey === 'open')?.value || 0}</Typography>
+                              <Typography sx={{ color: COLORS.green, fontSize: "12px" }}>Closed: {payload.find(p => p.dataKey === 'closed')?.value || 0}</Typography>
+                              <Typography sx={{ color: COLORS.red, fontSize: "12px" }}>Overdue: {payload.find(p => p.dataKey === 'overdue')?.value || 0}</Typography>
+                            </Box>
+                          );
+                        }
+                        return null;
+                      }}
+                      cursor={false}
+                      isAnimationActive={false}
+                    />
+                    <Bar dataKey="open" stackId="a" fill={COLORS.amber} barSize={25} />
+                    <Bar dataKey="closed" stackId="a" fill={COLORS.green} barSize={25} />
+                    <Bar dataKey="overdue" stackId="a" fill={COLORS.red} barSize={25} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Box>
+            </>
+          )}
         </Box>
       </Box>
 
-      <Box sx={{ mt: { xs: 2, sm: 3 } }}>
+      <Box id="blocked-activities-section" sx={{ mt: { xs: 2, sm: 3 } }}>
         <BlockedActivitiesTable
           activities={data?.blockedActivities?.map(a => ({
             activityId: a.id,
             activityName: a.name,
             ragStatus: a.rag,
             activityStatus: a.status,
-            owner: a.owner,
-            blocker: a.blocker,
-            linkedAction: a.linkedAction ? { actionId: a.linkedAction, title: a.linkedAction, status: a.status } : null,
+            owner: a.linkedAction?.assigneeName || a.owner,
+            blocker: a.linkedAction?.title || a.blocker,
+            linkedAction: a.linkedAction ? { actionId: a.linkedAction.actionId, title: a.linkedAction.title, status: a.linkedAction.status } : null,
           }))}
           weeklyPlanPreview={data?.weeklyPlanPreview}
           plannerToDo={data?.plannerToDo}
+          isProjectEnded={data?.isProjectEnded || false}
+          cycleStatus={data?.cycle?.status || ""}
+          onAssignClick={(activity) => {
+            setAssigningActivity({
+              activityId: activity.activityId,
+              activityName: activity.activityName,
+            });
+            setAssignFormData({
+              title: "",
+              description: "",
+              type: "Required",
+              priority: "Medium",
+              assignee: "",
+              dueDate: "",
+            });
+            setAssignModalOpen(true);
+          }}
+          onActionIdClick={() => {
+            navigate("/admin/action");
+          }}
         />
       </Box>
 
       <Box sx={{ mt: { xs: 2, sm: 3 } }}>
-        <ClosureOverridePanel />
+        <ClosureOverridePanel
+          cycleStatus={data?.cycle?.status || ""}
+          overdueActions={data?.stats?.overdueActions || 0}
+          blockedActivities={data?.stats?.blockedByActions || 0}
+          outstandingActions={data?.stats?.openActions || 0}
+          openRequiredActions={data?.stats?.openRequiredActions || 0}
+          weekNumber={currentWeekNumber}
+          canClose={data?.stats?.readyForClose || false}
+          isProjectEnded={data?.isProjectEnded || false}
+          isWeekClosed={_weeksStatus.find(w => w.weekNumber === currentWeekNumber)?.status === "closed" || data?.cycle?.status === "Closed"}
+          isClosing={isClosingWeek}
+          onCloseWeek={handleCloseWeek}
+          onPMOverride={() => setShowOverrideModal(true)}
+          onGoToActions={() => {
+            navigate("/admin/action");
+          }}
+          onOpenMeeting={handleOpenMeeting}
+          onStartExecution={handleStartExecution}
+          showOverrideModal={showOverrideModal}
+          overrideReason={overrideReason}
+          onOverrideReasonChange={setOverrideReason}
+          onConfirmOverride={handlePMOverride}
+          onCancelOverride={() => {
+            setShowOverrideModal(false);
+            setOverrideReason("");
+          }}
+        />
       </Box>
+
+      {/* Assign Activity Modal */}
+      <Dialog
+        open={assignModalOpen}
+        onClose={handleAssignClose}
+        maxWidth="sm"
+        fullWidth
+        slotProps={{
+          backdrop: {
+            sx: {
+              bgcolor: "rgba(0, 0, 0, 0.8)",
+            },
+          },
+          paper: {
+            sx: {
+              bgcolor: COLORS.bgSecondary,
+              border: `1px solid ${COLORS.border}`,
+              borderRadius: "12px",
+              backgroundImage: "none",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
+              maxWidth: 500,
+            },
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            pb: 1,
+            pt: 2,
+            borderBottom: `1px solid ${COLORS.border}`,
+          }}
+        >
+          <Box>
+            <Typography
+              sx={{
+                color: COLORS.textPrimary,
+                fontSize: "18px",
+                fontWeight: 600,
+              }}
+            >
+              Assign Activity
+            </Typography>
+            <Typography
+              sx={{
+                color: COLORS.textSecondary,
+                fontSize: "12px",
+                fontWeight: 400,
+              }}
+            >
+              {assigningActivity?.activityId}
+            </Typography>
+          </Box>
+          <IconButton
+            onClick={handleAssignClose}
+            sx={{ color: COLORS.textMuted, p: 0.5 }}
+          >
+            <CloseIcon sx={{ fontSize: 20 }} />
+          </IconButton>
+        </DialogTitle>
+
+        <DialogContent sx={{ px: 3, py: 2 }}>
+          {/* Error Message */}
+          {assignError && (
+            <Box
+              sx={{
+                bgcolor: "rgba(239, 68, 68, 0.15)",
+                border: `1px solid ${COLORS.red}`,
+                borderRadius: "8px",
+                px: 2,
+                py: 1.5,
+                mb: 2,
+              }}
+            >
+              <Typography
+                sx={{
+                  color: COLORS.red,
+                  fontSize: "13px",
+                  fontWeight: 500,
+                }}
+              >
+                {assignError}
+              </Typography>
+            </Box>
+          )}
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 0 }}>
+            {/* Activity Name (Read-only) */}
+            <Box>
+              <Typography
+                sx={{
+                  color: COLORS.textSecondary,
+                  fontSize: "12px",
+                  fontWeight: 500,
+                  mb: 0.5,
+                  mt: 1,
+                }}
+              >
+                Activity
+              </Typography>
+              <Box
+                sx={{
+                  bgcolor: COLORS.bgPrimary,
+                  borderRadius: "8px",
+                  border: `1px solid ${COLORS.border}`,
+                  px: 1.5,
+                  py: 1.2,
+                }}
+              >
+                <Typography
+                  sx={{
+                    color: COLORS.textPrimary,
+                    fontSize: "14px",
+                  }}
+                >
+                  {assigningActivity?.activityName || "Unknown Activity"}
+                </Typography>
+              </Box>
+            </Box>
+
+            {/* Title */}
+            <Box>
+              <Typography
+                sx={{
+                  color: COLORS.textSecondary,
+                  fontSize: "12px",
+                  fontWeight: 500,
+                  mb: 0.5,
+                  mt: 2,
+                }}
+              >
+                Action Title <span style={{ color: COLORS.red }}>*</span>
+              </Typography>
+              <TextField
+                fullWidth
+                placeholder="Enter action title..."
+                value={assignFormData.title}
+                onChange={(e) => handleAssignChange("title", e.target.value)}
+                sx={{
+                  "& .MuiOutlinedInput-root": {
+                    bgcolor: COLORS.bgPrimary,
+                    borderRadius: "8px",
+                    "& fieldset": { borderColor: COLORS.border },
+                    "&:hover fieldset": { borderColor: COLORS.border },
+                    "&.Mui-focused fieldset": {
+                      borderColor: COLORS.blue,
+                      borderWidth: 1,
+                    },
+                  },
+                  "& .MuiOutlinedInput-input": {
+                    color: COLORS.textPrimary,
+                    fontSize: "14px",
+                    py: 1.2,
+                    "&::placeholder": {
+                      color: COLORS.textMuted,
+                      opacity: 1,
+                    },
+                  },
+                }}
+              />
+            </Box>
+
+            {/* Type | Priority row */}
+            <Box
+              sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}
+            >
+              <Box>
+                <Typography
+                  sx={{
+                    color: COLORS.textSecondary,
+                    fontSize: "12px",
+                    fontWeight: 500,
+                    mb: 0.5,
+                    mt: 2,
+                  }}
+                >
+                  Type
+                </Typography>
+                <Select
+                  fullWidth
+                  value={assignFormData.type}
+                  onChange={(e) => handleAssignChange("type", e.target.value)}
+                  IconComponent={ArrowDownIcon}
+                  sx={{
+                    bgcolor: COLORS.bgPrimary,
+                    borderRadius: "8px",
+                    "& .MuiOutlinedInput-notchedOutline": {
+                      borderColor: COLORS.border,
+                    },
+                    "&:hover .MuiOutlinedInput-notchedOutline": {
+                      borderColor: COLORS.border,
+                    },
+                    "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                      borderColor: COLORS.blue,
+                      borderWidth: 1,
+                    },
+                    "& .MuiSelect-select": {
+                      color: COLORS.textPrimary,
+                      fontSize: "14px",
+                      py: 1.2,
+                    },
+                    "& .MuiSvgIcon-root": { color: COLORS.textSecondary },
+                  }}
+                  MenuProps={{
+                    slotProps: {
+                      paper: {
+                        sx: {
+                          bgcolor: COLORS.bgSecondary,
+                          border: `1px solid ${COLORS.border}`,
+                          borderRadius: "8px",
+                          "& .MuiMenuItem-root": {
+                            color: COLORS.textPrimary,
+                            fontSize: "14px",
+                            "&:hover": { bgcolor: COLORS.bgTertiary },
+                            "&.Mui-selected": {
+                              bgcolor: COLORS.blueBgMedium,
+                            },
+                          },
+                        },
+                      },
+                    },
+                  }}
+                >
+                  <MenuItem value="Required">Required</MenuItem>
+                  <MenuItem value="Optional">Optional</MenuItem>
+                </Select>
+              </Box>
+              <Box>
+                <Typography
+                  sx={{
+                    color: COLORS.textSecondary,
+                    fontSize: "12px",
+                    fontWeight: 500,
+                    mb: 0.5,
+                    mt: 2,
+                  }}
+                >
+                  Priority
+                </Typography>
+                <Select
+                  fullWidth
+                  value={assignFormData.priority}
+                  onChange={(e) =>
+                    handleAssignChange("priority", e.target.value)
+                  }
+                  IconComponent={ArrowDownIcon}
+                  sx={{
+                    bgcolor: COLORS.bgPrimary,
+                    borderRadius: "8px",
+                    "& .MuiOutlinedInput-notchedOutline": {
+                      borderColor: COLORS.border,
+                    },
+                    "&:hover .MuiOutlinedInput-notchedOutline": {
+                      borderColor: COLORS.border,
+                    },
+                    "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                      borderColor: COLORS.blue,
+                      borderWidth: 1,
+                    },
+                    "& .MuiSelect-select": {
+                      color: COLORS.textPrimary,
+                      fontSize: "14px",
+                      py: 1.2,
+                    },
+                    "& .MuiSvgIcon-root": { color: COLORS.textSecondary },
+                  }}
+                  MenuProps={{
+                    slotProps: {
+                      paper: {
+                        sx: {
+                          bgcolor: COLORS.bgSecondary,
+                          border: `1px solid ${COLORS.border}`,
+                          borderRadius: "8px",
+                          "& .MuiMenuItem-root": {
+                            color: COLORS.textPrimary,
+                            fontSize: "14px",
+                            "&:hover": { bgcolor: COLORS.bgTertiary },
+                            "&.Mui-selected": {
+                              bgcolor: COLORS.blueBgMedium,
+                            },
+                          },
+                        },
+                      },
+                    },
+                  }}
+                >
+                  <MenuItem value="Low">Low</MenuItem>
+                  <MenuItem value="Medium">Medium</MenuItem>
+                  <MenuItem value="High">High</MenuItem>
+                  <MenuItem value="Critical">Critical</MenuItem>
+                </Select>
+              </Box>
+            </Box>
+
+            {/* Assignee | Due Date row */}
+            <Box
+              sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}
+            >
+              <Box>
+                <Typography
+                  sx={{
+                    color: COLORS.textSecondary,
+                    fontSize: "12px",
+                    fontWeight: 500,
+                    mb: 0.5,
+                    mt: 2,
+                  }}
+                >
+                  Assignee <span style={{ color: COLORS.red }}>*</span>
+                </Typography>
+                <Select
+                  fullWidth
+                  value={assignFormData.assignee}
+                  onChange={(e) =>
+                    handleAssignChange("assignee", e.target.value)
+                  }
+                  displayEmpty
+                  IconComponent={ArrowDownIcon}
+                  sx={{
+                    bgcolor: COLORS.bgPrimary,
+                    borderRadius: "8px",
+                    "& .MuiOutlinedInput-notchedOutline": {
+                      borderColor: COLORS.border,
+                    },
+                    "&:hover .MuiOutlinedInput-notchedOutline": {
+                      borderColor: COLORS.border,
+                    },
+                    "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                      borderColor: COLORS.blue,
+                      borderWidth: 1,
+                    },
+                    "& .MuiSelect-select": {
+                      color: assignFormData.assignee
+                        ? COLORS.textPrimary
+                        : COLORS.textMuted,
+                      fontSize: "14px",
+                      py: 1.2,
+                    },
+                    "& .MuiSvgIcon-root": { color: COLORS.textSecondary },
+                  }}
+                  MenuProps={{
+                    slotProps: {
+                      paper: {
+                        sx: {
+                          bgcolor: COLORS.bgSecondary,
+                          border: `1px solid ${COLORS.border}`,
+                          borderRadius: "8px",
+                          maxHeight: 200,
+                          "& .MuiMenuItem-root": {
+                            color: COLORS.textPrimary,
+                            fontSize: "14px",
+                            "&:hover": { bgcolor: COLORS.bgTertiary },
+                            "&.Mui-selected": {
+                              bgcolor: COLORS.blueBgMedium,
+                            },
+                          },
+                        },
+                      },
+                    },
+                  }}
+                >
+                  <MenuItem value="" disabled>
+                    {teamMembers.length === 0
+                      ? "No users available"
+                      : "Select assignee..."}
+                  </MenuItem>
+                  {teamMembers.map((u) => (
+                    <MenuItem key={u._id} value={u._id}>
+                      {u.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </Box>
+              <Box>
+                <Typography
+                  sx={{
+                    color: COLORS.textSecondary,
+                    fontSize: "12px",
+                    fontWeight: 500,
+                    mb: 0.5,
+                    mt: 2,
+                  }}
+                >
+                  Due Date <span style={{ color: COLORS.red }}>*</span>
+                </Typography>
+                <TextField
+                  fullWidth
+                  type="date"
+                  value={assignFormData.dueDate}
+                  onChange={(e) =>
+                    handleAssignChange("dueDate", e.target.value)
+                  }
+                  sx={{
+                    "& .MuiOutlinedInput-root": {
+                      bgcolor: COLORS.bgPrimary,
+                      borderRadius: "8px",
+                      "& fieldset": { borderColor: COLORS.border },
+                      "&:hover fieldset": { borderColor: COLORS.border },
+                      "&.Mui-focused fieldset": {
+                        borderColor: COLORS.blue,
+                        borderWidth: 1,
+                      },
+                    },
+                    "& .MuiOutlinedInput-input": {
+                      color: assignFormData.dueDate
+                        ? COLORS.textPrimary
+                        : COLORS.textMuted,
+                      fontSize: "14px",
+                      py: 1.2,
+                      "&::-webkit-calendar-picker-indicator": {
+                        filter: "invert(1)",
+                        cursor: "pointer",
+                        opacity: 0.6,
+                      },
+                    },
+                  }}
+                />
+              </Box>
+            </Box>
+          </Box>
+        </DialogContent>
+
+        <DialogActions
+          sx={{
+            px: 3,
+            py: 2,
+            borderTop: `1px solid ${COLORS.border}`,
+            gap: 1.5,
+          }}
+        >
+          <Button
+            onClick={handleAssignClose}
+            sx={{
+              color: COLORS.textSecondary,
+              bgcolor: "transparent",
+              border: `1px solid ${COLORS.border}`,
+              borderRadius: "8px",
+              textTransform: "none",
+              px: 2.5,
+              py: 1,
+              fontSize: "14px",
+              fontWeight: 500,
+              "&:hover": {
+                bgcolor: COLORS.bgTertiary,
+              },
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleAssignSave}
+            disabled={assignSaveLoading}
+            sx={{
+              color: "#fff",
+              bgcolor: COLORS.blue,
+              borderRadius: "8px",
+              textTransform: "none",
+              px: 2.5,
+              py: 1,
+              fontSize: "14px",
+              fontWeight: 500,
+              "&:hover": {
+                bgcolor: COLORS.blueHover,
+              },
+              "&:disabled": {
+                bgcolor: COLORS.blue,
+                opacity: 0.7,
+              },
+            }}
+          >
+            {assignSaveLoading ? (
+              <CircularProgress size={20} sx={{ color: "#fff" }} />
+            ) : (
+              "Assign"
+            )}
+          </Button>
+        </DialogActions>
+      </Dialog>
         </>
       )}
     </AdminLayout>

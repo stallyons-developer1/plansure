@@ -49,7 +49,7 @@ interface BlockedActivitiesTableProps {
   plannerToDo?: PlannerToDoItem[];
   onAssignClick?: (activity: { activityId: string; activityName: string }) => void;
   onUnblockClick?: (activityId: string) => void;
-  onActionClick?: () => void;
+  onActionIdClick?: (actionId: string) => void;
   isProjectEnded?: boolean;
   cycleStatus?: string;
 }
@@ -60,7 +60,7 @@ const BlockedActivitiesTable = ({
   plannerToDo = [],
   onAssignClick,
   onUnblockClick,
-  onActionClick,
+  onActionIdClick,
   isProjectEnded = false,
   cycleStatus = "",
 }: BlockedActivitiesTableProps) => {
@@ -339,7 +339,7 @@ const BlockedActivitiesTable = ({
                   <Box sx={{ display: "flex", justifyContent: "center" }}>
                     {activity.linkedAction?.actionId ? (
                       <Typography
-                        onClick={() => onActionClick?.()}
+                        onClick={() => onActionIdClick?.(activity.linkedAction!.actionId)}
                         sx={{
                           color: COLORS.blue,
                           fontSize: "11px",
@@ -719,7 +719,7 @@ const BlockedActivitiesTable = ({
                   <Box sx={{ display: "flex", justifyContent: "center" }}>
                     {item.actionId ? (
                       <Typography
-                        onClick={() => onActionClick?.()}
+                        onClick={() => onActionIdClick?.(item.actionId || "")}
                         sx={{
                           color: COLORS.blue,
                           fontSize: "11px",
