@@ -143,6 +143,17 @@ const getRAGPriority = (color: string): number => {
   return 3;
 };
 
+// Get sort priority based on RAG zone: Completed → In Progress → Weeks 1-2 → Weeks 3-4 → Weeks 5-6 → Overdue
+const getRAGZonePriority = (zone: string): number => {
+  if (zone === "Completed") return 1;
+  if (zone === "In Progress") return 2;
+  if (zone === "Weeks 1-2") return 3;
+  if (zone === "Weeks 3-4") return 4;
+  if (zone === "Weeks 5-6") return 5;
+  if (zone === "Overdue") return 6;
+  return 7; // Any other zones
+};
+
 // Convert date string to YYYY-MM-DD format for HTML date input
 const toDateInputFormat = (dateStr: string): string => {
   if (!dateStr) return "";
@@ -3044,11 +3055,49 @@ const PlannerProjectWorkspace = () => {
                           return true;
                         })
                         .sort((a, b) => {
-                          const colorA = getRAGColor(a.startDate, a.finishDate);
-                          const colorB = getRAGColor(b.startDate, b.finishDate);
-                          return (
-                            getRAGPriority(colorA) - getRAGPriority(colorB)
-                          );
+                          // Calculate RAG zone for sorting
+                          const getZone = (activity: typeof a) => {
+                            const start = parseDate(activity.startDate);
+                            const finish = parseDate(activity.finishDate);
+                            const todayDate = new Date();
+                            todayDate.setHours(0, 0, 0, 0);
+
+                            // Check if completed
+                            if (
+                              activity.activityStatus === "Complete" ||
+                              activity.activityStatus === "Completed" ||
+                              activity.startDate?.includes(" A") ||
+                              activity.finishDate?.includes(" A")
+                            ) {
+                              return "Completed";
+                            }
+
+                            if (!start) return "Unknown";
+
+                            // Check if overdue
+                            if (finish && finish < todayDate && start < todayDate) {
+                              return "Overdue";
+                            }
+
+                            // Check if in progress
+                            if (start < todayDate) {
+                              return "In Progress";
+                            }
+
+                            // Calculate week from current week
+                            const msPerDay = 1000 * 60 * 60 * 24;
+                            const daysFromStart = Math.floor(
+                              (start.getTime() - weekStart.getTime()) / msPerDay
+                            );
+                            const weekNum = Math.floor(daysFromStart / 7) + 1;
+
+                            if (weekNum <= 2) return "Weeks 1-2";
+                            if (weekNum <= 4) return "Weeks 3-4";
+                            if (weekNum <= 6) return "Weeks 5-6";
+                            return "Beyond";
+                          };
+
+                          return getRAGZonePriority(getZone(a)) - getRAGZonePriority(getZone(b));
                         });
                       const startIndex =
                         (activitiesPage - 1) * activitiesPerPage;
@@ -3933,9 +3982,45 @@ const PlannerProjectWorkspace = () => {
                       return true;
                     })
                     .sort((a, b) => {
-                      const colorA = getRAGColor(a.startDate, a.finishDate);
-                      const colorB = getRAGColor(b.startDate, b.finishDate);
-                      return getRAGPriority(colorA) - getRAGPriority(colorB);
+                      // Calculate RAG zone for sorting
+                      const getZone = (activity: typeof a) => {
+                        const start = parseDate(activity.startDate);
+                        const finish = parseDate(activity.finishDate);
+                        const todayDate = new Date();
+                        todayDate.setHours(0, 0, 0, 0);
+
+                        if (
+                          activity.activityStatus === "Complete" ||
+                          activity.activityStatus === "Completed" ||
+                          activity.startDate?.includes(" A") ||
+                          activity.finishDate?.includes(" A")
+                        ) {
+                          return "Completed";
+                        }
+
+                        if (!start) return "Unknown";
+
+                        if (finish && finish < todayDate && start < todayDate) {
+                          return "Overdue";
+                        }
+
+                        if (start < todayDate) {
+                          return "In Progress";
+                        }
+
+                        const msPerDay = 1000 * 60 * 60 * 24;
+                        const daysFromStart = Math.floor(
+                          (start.getTime() - weekStart.getTime()) / msPerDay
+                        );
+                        const weekNum = Math.floor(daysFromStart / 7) + 1;
+
+                        if (weekNum <= 2) return "Weeks 1-2";
+                        if (weekNum <= 4) return "Weeks 3-4";
+                        if (weekNum <= 6) return "Weeks 5-6";
+                        return "Beyond";
+                      };
+
+                      return getRAGZonePriority(getZone(a)) - getRAGZonePriority(getZone(b));
                     });
                   const totalPages = Math.ceil(
                     filteredActivities.length / activitiesPerPage,
