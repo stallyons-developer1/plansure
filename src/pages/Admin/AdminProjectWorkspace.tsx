@@ -3182,32 +3182,27 @@ const AdminProjectWorkspace = () => {
                     </Box>
                   ) : (
                     (() => {
-                      // Use Monday of current week for 6-week lookahead calculation
+                      // Use TODAY for 6-week lookahead calculation (not Monday)
                       const today = new Date();
                       today.setHours(0, 0, 0, 0);
-                      const dayOfWeek = today.getDay();
-                      const daysFromMonday =
-                        dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-                      const monday = new Date(today);
-                      monday.setDate(today.getDate() - daysFromMonday);
 
-                      // End of 6th week (6 weeks from Monday = 42 days)
-                      const sixWeekEnd = new Date(monday);
-                      sixWeekEnd.setDate(monday.getDate() + 42);
+                      // End of 6th week (6 weeks from today = 42 days)
+                      const sixWeekEnd = new Date(today);
+                      sixWeekEnd.setDate(today.getDate() + 42);
 
-                      // Helper to get which week an activity falls into (1-6) based on Monday
+                      // Helper to get which week an activity falls into (1-6) based on today
                       const getActivityWeek = (
                         startDate: string,
                       ): number | null => {
                         const activityStart = parseDate(startDate);
                         if (!activityStart) return null;
                         const msPerDay = 1000 * 60 * 60 * 24;
-                        const daysFromMonday = Math.floor(
-                          (activityStart.getTime() - monday.getTime()) /
+                        const daysFromToday = Math.floor(
+                          (activityStart.getTime() - today.getTime()) /
                             msPerDay,
                         );
-                        if (daysFromMonday < 0) return null; // Before Monday
-                        const weekNum = Math.floor(daysFromMonday / 7) + 1;
+                        if (daysFromToday < 0) return null; // Before today
+                        const weekNum = Math.floor(daysFromToday / 7) + 1;
                         if (weekNum > 6) return null; // Beyond 6 weeks
                         return weekNum;
                       };
@@ -3233,9 +3228,9 @@ const AdminProjectWorkspace = () => {
                           const activityStart = parseDate(activity.startDate);
                           if (!activityStart) return true; // Include if no start date
 
-                          // Only show activities from Monday to 6 weeks ahead
+                          // Only show activities from today to 6 weeks ahead
                           if (
-                            activityStart < monday ||
+                            activityStart < today ||
                             activityStart >= sixWeekEnd
                           )
                             return false;
@@ -3375,27 +3370,19 @@ const AdminProjectWorkspace = () => {
                             const start = parseDate(startDate);
                             const today = new Date();
                             today.setHours(0, 0, 0, 0);
-                            // Calculate Monday of current week
-                            const dayOfWeek = today.getDay();
-                            const daysFromMondayCalc =
-                              dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-                            const mondayDate = new Date(today);
-                            mondayDate.setDate(
-                              today.getDate() - daysFromMondayCalc,
-                            );
 
                             if (!start)
                               return { zone: "N/A", color: COLORS.textMuted };
 
-                            // Calculate which week from Monday
+                            // Calculate which week from today
                             const msPerDay = 1000 * 60 * 60 * 24;
-                            const daysFromMonday = Math.floor(
-                              (start.getTime() - mondayDate.getTime()) /
+                            const daysFromToday = Math.floor(
+                              (start.getTime() - today.getTime()) /
                                 msPerDay,
                             );
-                            const weekNum = Math.floor(daysFromMonday / 7) + 1;
+                            const weekNum = Math.floor(daysFromToday / 7) + 1;
 
-                            // Show week number based on Monday of current week
+                            // Show week number based on today
                             if (weekNum <= 2) {
                               return { zone: "Weeks 1-2", color: COLORS.green };
                             } else if (weekNum <= 4) {
@@ -4148,18 +4135,13 @@ const AdminProjectWorkspace = () => {
               {lookaheadData?.activities &&
                 lookaheadData.activities.length > 0 &&
                 (() => {
-                  // Use Monday of current week for 6-week lookahead calculation
+                  // Use TODAY for 6-week lookahead calculation (not Monday)
                   const today = new Date();
                   today.setHours(0, 0, 0, 0);
-                  const dayOfWeek = today.getDay();
-                  const daysFromMondayCalc =
-                    dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-                  const monday = new Date(today);
-                  monday.setDate(today.getDate() - daysFromMondayCalc);
 
-                  // End of 6th week (6 weeks from Monday = 42 days)
-                  const sixWeekEnd = new Date(monday);
-                  sixWeekEnd.setDate(monday.getDate() + 42);
+                  // End of 6th week (6 weeks from today = 42 days)
+                  const sixWeekEnd = new Date(today);
+                  sixWeekEnd.setDate(today.getDate() + 42);
 
                   const getActivityWeek = (
                     startDate: string,
@@ -4167,11 +4149,11 @@ const AdminProjectWorkspace = () => {
                     const activityStart = parseDate(startDate);
                     if (!activityStart) return null;
                     const msPerDay = 1000 * 60 * 60 * 24;
-                    const daysFromMonday = Math.floor(
-                      (activityStart.getTime() - monday.getTime()) / msPerDay,
+                    const daysFromToday = Math.floor(
+                      (activityStart.getTime() - today.getTime()) / msPerDay,
                     );
-                    if (daysFromMonday < 0) return null;
-                    const weekNum = Math.floor(daysFromMonday / 7) + 1;
+                    if (daysFromToday < 0) return null;
+                    const weekNum = Math.floor(daysFromToday / 7) + 1;
                     if (weekNum > 6) return null;
                     return weekNum;
                   };
@@ -4194,8 +4176,8 @@ const AdminProjectWorkspace = () => {
                       const activityStart = parseDate(activity.startDate);
                       if (!activityStart) return true;
 
-                      // Only show activities from Monday to 6 weeks ahead
-                      if (activityStart < monday || activityStart >= sixWeekEnd)
+                      // Only show activities from today to 6 weeks ahead
+                      if (activityStart < today || activityStart >= sixWeekEnd)
                         return false;
 
                       // Then apply week filter if selected
@@ -4402,17 +4384,13 @@ const AdminProjectWorkspace = () => {
             {(() => {
               const allActivities = lookaheadData?.activities || [];
 
-              // Use Monday of current week for 6-week lookahead calculation
+              // Use TODAY for 6-week lookahead calculation (not Monday)
               const today = new Date();
               today.setHours(0, 0, 0, 0);
-              const dayOfWeek = today.getDay();
-              const daysFromMondayCalc = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-              const monday = new Date(today);
-              monday.setDate(today.getDate() - daysFromMondayCalc);
 
-              // End of 6th week (6 weeks from Monday = 42 days)
-              const sixWeekEnd = new Date(monday);
-              sixWeekEnd.setDate(monday.getDate() + 42);
+              // End of 6th week (6 weeks from today = 42 days)
+              const sixWeekEnd = new Date(today);
+              sixWeekEnd.setDate(today.getDate() + 42);
 
               const getActivityWeekForSummary = (
                 startDate: string,
@@ -4420,11 +4398,11 @@ const AdminProjectWorkspace = () => {
                 const activityStart = parseDate(startDate);
                 if (!activityStart) return null;
                 const msPerDay = 1000 * 60 * 60 * 24;
-                const daysFromMonday = Math.floor(
-                  (activityStart.getTime() - monday.getTime()) / msPerDay,
+                const daysFromToday = Math.floor(
+                  (activityStart.getTime() - today.getTime()) / msPerDay,
                 );
-                if (daysFromMonday < 0) return null;
-                const weekNum = Math.floor(daysFromMonday / 7) + 1;
+                if (daysFromToday < 0) return null;
+                const weekNum = Math.floor(daysFromToday / 7) + 1;
                 if (weekNum > 6) return null;
                 return weekNum;
               };
@@ -4437,8 +4415,8 @@ const AdminProjectWorkspace = () => {
                 const activityStart = parseDate(activity.startDate);
                 if (!activityStart) return true;
 
-                // Only show activities from Monday to 6 weeks ahead
-                if (activityStart < monday || activityStart >= sixWeekEnd)
+                // Only show activities from today to 6 weeks ahead
+                if (activityStart < today || activityStart >= sixWeekEnd)
                   return false;
 
                 // Then apply week filter if selected

@@ -209,19 +209,14 @@ const calculateRagZone = (
   const start = parseDate(startDate);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  // Calculate Monday of current week
-  const dayOfWeek = today.getDay();
-  const daysFromMondayCalc = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-  const monday = new Date(today);
-  monday.setDate(today.getDate() - daysFromMondayCalc);
 
   if (!start) return { zone: "N/A", color: "muted" };
 
   const msPerDay = 1000 * 60 * 60 * 24;
 
-  // Calculate which week from Monday
-  const daysFromMonday = Math.floor((start.getTime() - monday.getTime()) / msPerDay);
-  const weeksUntilStart = Math.floor(daysFromMonday / 7) + 1;
+  // Calculate which week from today (not Monday)
+  const daysFromToday = Math.floor((start.getTime() - today.getTime()) / msPerDay);
+  const weeksUntilStart = Math.floor(daysFromToday / 7) + 1;
   if (weeksUntilStart <= 2) {
     return { zone: "Weeks 1-2", color: "green" };
   } else if (weeksUntilStart <= 4) {
