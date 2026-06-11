@@ -119,30 +119,6 @@ const parseDate = (dateStr: string): Date | null => {
   return isNaN(date.getTime()) ? null : date;
 };
 
-const getRAGColor = (startDate: string, endDate: string): string => {
-  if (!startDate || !endDate) return "green";
-
-  const start = parseDate(startDate);
-  const end = parseDate(endDate);
-
-  if (!start || !end) return "green";
-
-  const diffTime = end.getTime() - start.getTime();
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  const diffWeeks = Math.ceil(diffDays / 7);
-
-  if (diffWeeks <= 0) return "green";
-  if (diffWeeks <= 2) return "green";
-  if (diffWeeks <= 4) return "amber";
-  return "red";
-};
-
-const getRAGPriority = (color: string): number => {
-  if (color === "green") return 1;
-  if (color === "amber") return 2;
-  return 3;
-};
-
 // Get sort priority based on RAG zone: Completed → In Progress → Weeks 1-2 → Weeks 3-4 → Weeks 5-6 → Overdue
 const getRAGZonePriority = (zone: string): number => {
   if (zone === "Completed") return 1;
@@ -1656,7 +1632,12 @@ const PlannerProjectWorkspace = () => {
       // Update closure checklist based on real data - auto-check all
       setClosureChecklist({
         // Planner review complete: checked at Meeting Open and remains checked in subsequent stages
-        plannerReview: ["Meeting Open", "Execution", "Close-Out Eligible", "Closed"].includes(cycleStatus),
+        plannerReview: [
+          "Meeting Open",
+          "Execution",
+          "Close-Out Eligible",
+          "Closed",
+        ].includes(cycleStatus),
         // To-do list generated: checked when there are pending actions
         todoGenerated: outstandingActions > 0,
         // Overdue acknowledged: checked when no overdue actions
@@ -1679,7 +1660,9 @@ const PlannerProjectWorkspace = () => {
         lockedViewWeek ??
         closableWeek?.weekNumber ??
         weeksStatus?.currentWeekNumber;
-      const response = await exportAPI.generateWeeklyPlan(uploadedProgramme._id);
+      const response = await exportAPI.generateWeeklyPlan(
+        uploadedProgramme._id,
+      );
       const blob = new Blob([response.data], {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       });
@@ -1712,7 +1695,9 @@ const PlannerProjectWorkspace = () => {
         lockedViewWeek ??
         closableWeek?.weekNumber ??
         weeksStatus?.currentWeekNumber;
-      const response = await exportAPI.generatePlannerTodo(uploadedProgramme._id);
+      const response = await exportAPI.generatePlannerTodo(
+        uploadedProgramme._id,
+      );
       const blob = new Blob([response.data], {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       });
@@ -2783,7 +2768,8 @@ const PlannerProjectWorkspace = () => {
                   flexDirection: "column",
                   alignItems: "center",
                   justifyContent: "center",
-                  bgcolor: weekFilter === null ? COLORS.blueBgMedium : "transparent",
+                  bgcolor:
+                    weekFilter === null ? COLORS.blueBgMedium : "transparent",
                   cursor: "pointer",
                   transition: "all 0.2s ease",
                   "&:hover": {
@@ -2795,7 +2781,8 @@ const PlannerProjectWorkspace = () => {
                 <Box
                   component="span"
                   sx={{
-                    color: weekFilter === null ? COLORS.blue : COLORS.textSecondary,
+                    color:
+                      weekFilter === null ? COLORS.blue : COLORS.textSecondary,
                     fontSize: "12px",
                     fontWeight: 500,
                   }}
@@ -2804,12 +2791,42 @@ const PlannerProjectWorkspace = () => {
                 </Box>
               </Box>
               {[
-                { week: "Week 1", label: "Committed", color: COLORS.green, weekNum: 1 },
-                { week: "Week 2", label: "Committed", color: COLORS.green, weekNum: 2 },
-                { week: "Week 3", label: "Readiness", color: COLORS.amber, weekNum: 3 },
-                { week: "Week 4", label: "Readiness", color: COLORS.amber, weekNum: 4 },
-                { week: "Week 5", label: "Strategic", color: COLORS.red, weekNum: 5 },
-                { week: "Week 6", label: "Strategic", color: COLORS.red, weekNum: 6 },
+                {
+                  week: "Week 1",
+                  label: "Committed",
+                  color: COLORS.green,
+                  weekNum: 1,
+                },
+                {
+                  week: "Week 2",
+                  label: "Committed",
+                  color: COLORS.green,
+                  weekNum: 2,
+                },
+                {
+                  week: "Week 3",
+                  label: "Readiness",
+                  color: COLORS.amber,
+                  weekNum: 3,
+                },
+                {
+                  week: "Week 4",
+                  label: "Readiness",
+                  color: COLORS.amber,
+                  weekNum: 4,
+                },
+                {
+                  week: "Week 5",
+                  label: "Strategic",
+                  color: COLORS.red,
+                  weekNum: 5,
+                },
+                {
+                  week: "Week 6",
+                  label: "Strategic",
+                  color: COLORS.red,
+                  weekNum: 6,
+                },
               ].map((item, index) => (
                 <Box
                   key={index}
@@ -2835,7 +2852,10 @@ const PlannerProjectWorkspace = () => {
                         : item.label !== "Committed"
                           ? `${item.color}10`
                           : "transparent",
-                    boxShadow: weekFilter === item.weekNum ? `0 0 0 2px ${item.color}` : "none",
+                    boxShadow:
+                      weekFilter === item.weekNum
+                        ? `0 0 0 2px ${item.color}`
+                        : "none",
                     "&:hover": {
                       bgcolor: `${item.color}20`,
                     },
@@ -3014,11 +3034,16 @@ const PlannerProjectWorkspace = () => {
                       sixWeekEnd.setDate(weekStart.getDate() + 42);
 
                       // Helper to get which week an activity falls into (1-6) based on current week
-                      const getActivityWeek = (startDate: string): number | null => {
+                      const getActivityWeek = (
+                        startDate: string,
+                      ): number | null => {
                         const activityStart = parseDate(startDate);
                         if (!activityStart) return null;
                         const msPerDay = 1000 * 60 * 60 * 24;
-                        const daysFromStart = Math.floor((activityStart.getTime() - weekStart.getTime()) / msPerDay);
+                        const daysFromStart = Math.floor(
+                          (activityStart.getTime() - weekStart.getTime()) /
+                            msPerDay,
+                        );
                         if (daysFromStart < 0) return null; // Before current week
                         const weekNum = Math.floor(daysFromStart / 7) + 1;
                         if (weekNum > 6) return null; // Beyond 6 weeks
@@ -3026,7 +3051,10 @@ const PlannerProjectWorkspace = () => {
                       };
 
                       // Check if activity matches the selected week filter
-                      const activityMatchesWeek = (activityWeek: number | null, weekNum: number): boolean => {
+                      const activityMatchesWeek = (
+                        activityWeek: number | null,
+                        weekNum: number,
+                      ): boolean => {
                         if (activityWeek === null) return false;
                         return activityWeek === weekNum;
                       };
@@ -3044,12 +3072,21 @@ const PlannerProjectWorkspace = () => {
                           if (!activityStart) return true; // Include if no start date
 
                           // Only show activities from current week to 6 weeks ahead
-                          if (activityStart < weekStart || activityStart >= sixWeekEnd) return false;
+                          if (
+                            activityStart < weekStart ||
+                            activityStart >= sixWeekEnd
+                          )
+                            return false;
 
                           // Then apply week filter if selected
                           if (weekFilter !== null) {
-                            const activityWeek = getActivityWeek(activity.startDate);
-                            return activityMatchesWeek(activityWeek, weekFilter);
+                            const activityWeek = getActivityWeek(
+                              activity.startDate,
+                            );
+                            return activityMatchesWeek(
+                              activityWeek,
+                              weekFilter,
+                            );
                           }
 
                           return true;
@@ -3075,7 +3112,11 @@ const PlannerProjectWorkspace = () => {
                             if (!start) return "Unknown";
 
                             // Check if overdue
-                            if (finish && finish < todayDate && start < todayDate) {
+                            if (
+                              finish &&
+                              finish < todayDate &&
+                              start < todayDate
+                            ) {
                               return "Overdue";
                             }
 
@@ -3087,7 +3128,8 @@ const PlannerProjectWorkspace = () => {
                             // Calculate week from current week
                             const msPerDay = 1000 * 60 * 60 * 24;
                             const daysFromStart = Math.floor(
-                              (start.getTime() - weekStart.getTime()) / msPerDay
+                              (start.getTime() - weekStart.getTime()) /
+                                msPerDay,
                             );
                             const weekNum = Math.floor(daysFromStart / 7) + 1;
 
@@ -3097,7 +3139,10 @@ const PlannerProjectWorkspace = () => {
                             return "Beyond";
                           };
 
-                          return getRAGZonePriority(getZone(a)) - getRAGZonePriority(getZone(b));
+                          return (
+                            getRAGZonePriority(getZone(a)) -
+                            getRAGZonePriority(getZone(b))
+                          );
                         });
                       const startIndex =
                         (activitiesPage - 1) * activitiesPerPage;
@@ -3204,7 +3249,8 @@ const PlannerProjectWorkspace = () => {
                             // Calculate which week from current week (weekStart is today's Monday)
                             const msPerDay = 1000 * 60 * 60 * 24;
                             const daysFromStart = Math.floor(
-                              (start.getTime() - weekStart.getTime()) / msPerDay,
+                              (start.getTime() - weekStart.getTime()) /
+                                msPerDay,
                             );
                             const weekNum = Math.floor(daysFromStart / 7) + 1;
 
@@ -3563,7 +3609,9 @@ const PlannerProjectWorkspace = () => {
                                       );
                                     }
                                     // Enable assign only for activities with green RAG zone (Weeks 1-2 or In Progress)
-                                    const isGreenRagZone = ragZone.zone === "Weeks 1-2" || ragZone.zone === "In Progress";
+                                    const isGreenRagZone =
+                                      ragZone.zone === "Weeks 1-2" ||
+                                      ragZone.zone === "In Progress";
                                     const canAssign =
                                       isGreenRagZone &&
                                       !weeklyControlData?.isProjectEnded;
@@ -3652,7 +3700,9 @@ const PlannerProjectWorkspace = () => {
                                         whiteSpace: "nowrap",
                                       }}
                                     >
-                                      {activity.activityStatus === "Complete" ? "Completed" : (activity.activityStatus || "Ready")}
+                                      {activity.activityStatus === "Complete"
+                                        ? "Completed"
+                                        : activity.activityStatus || "Ready"}
                                     </Typography>
                                   </Box>
                                 </Box>
@@ -3944,18 +3994,26 @@ const PlannerProjectWorkspace = () => {
                   const sixWeekEnd = new Date(weekStart);
                   sixWeekEnd.setDate(weekStart.getDate() + 42);
 
-                  const getActivityWeek = (startDate: string): number | null => {
+                  const getActivityWeek = (
+                    startDate: string,
+                  ): number | null => {
                     const activityStart = parseDate(startDate);
                     if (!activityStart) return null;
                     const msPerDay = 1000 * 60 * 60 * 24;
-                    const daysFromStart = Math.floor((activityStart.getTime() - weekStart.getTime()) / msPerDay);
+                    const daysFromStart = Math.floor(
+                      (activityStart.getTime() - weekStart.getTime()) /
+                        msPerDay,
+                    );
                     if (daysFromStart < 0) return null;
                     const weekNum = Math.floor(daysFromStart / 7) + 1;
                     if (weekNum > 6) return null;
                     return weekNum;
                   };
 
-                  const activityMatchesWeek = (activityWeek: number | null, weekNum: number): boolean => {
+                  const activityMatchesWeek = (
+                    activityWeek: number | null,
+                    weekNum: number,
+                  ): boolean => {
                     if (activityWeek === null) return false;
                     return activityWeek === weekNum;
                   };
@@ -3971,11 +4029,17 @@ const PlannerProjectWorkspace = () => {
                       if (!activityStart) return true;
 
                       // Only show activities from current week to 6 weeks ahead
-                      if (activityStart < weekStart || activityStart >= sixWeekEnd) return false;
+                      if (
+                        activityStart < weekStart ||
+                        activityStart >= sixWeekEnd
+                      )
+                        return false;
 
                       // Then apply week filter if selected
                       if (weekFilter !== null) {
-                        const activityWeek = getActivityWeek(activity.startDate);
+                        const activityWeek = getActivityWeek(
+                          activity.startDate,
+                        );
                         return activityMatchesWeek(activityWeek, weekFilter);
                       }
 
@@ -4010,7 +4074,7 @@ const PlannerProjectWorkspace = () => {
 
                         const msPerDay = 1000 * 60 * 60 * 24;
                         const daysFromStart = Math.floor(
-                          (start.getTime() - weekStart.getTime()) / msPerDay
+                          (start.getTime() - weekStart.getTime()) / msPerDay,
                         );
                         const weekNum = Math.floor(daysFromStart / 7) + 1;
 
@@ -4020,7 +4084,10 @@ const PlannerProjectWorkspace = () => {
                         return "Beyond";
                       };
 
-                      return getRAGZonePriority(getZone(a)) - getRAGZonePriority(getZone(b));
+                      return (
+                        getRAGZonePriority(getZone(a)) -
+                        getRAGZonePriority(getZone(b))
+                      );
                     });
                   const totalPages = Math.ceil(
                     filteredActivities.length / activitiesPerPage,
@@ -4191,11 +4258,15 @@ const PlannerProjectWorkspace = () => {
               const sixWeekEnd = new Date(weekStart);
               sixWeekEnd.setDate(weekStart.getDate() + 42);
 
-              const getActivityWeekForSummary = (startDate: string): number | null => {
+              const getActivityWeekForSummary = (
+                startDate: string,
+              ): number | null => {
                 const activityStart = parseDate(startDate);
                 if (!activityStart) return null;
                 const msPerDay = 1000 * 60 * 60 * 24;
-                const daysFromStart = Math.floor((activityStart.getTime() - weekStart.getTime()) / msPerDay);
+                const daysFromStart = Math.floor(
+                  (activityStart.getTime() - weekStart.getTime()) / msPerDay,
+                );
                 if (daysFromStart < 0) return null;
                 const weekNum = Math.floor(daysFromStart / 7) + 1;
                 if (weekNum > 6) return null;
@@ -4204,19 +4275,21 @@ const PlannerProjectWorkspace = () => {
 
               const activities = allActivities.filter((activity) => {
                 const matchesStatus =
-                  ragFilter === "all" ||
-                  activity.activityStatus === ragFilter;
+                  ragFilter === "all" || activity.activityStatus === ragFilter;
                 if (!matchesStatus) return false;
 
                 const activityStart = parseDate(activity.startDate);
                 if (!activityStart) return true;
 
                 // Only show activities from current week to 6 weeks ahead
-                if (activityStart < weekStart || activityStart >= sixWeekEnd) return false;
+                if (activityStart < weekStart || activityStart >= sixWeekEnd)
+                  return false;
 
                 // Then apply week filter if selected
                 if (weekFilter !== null) {
-                  const activityWeek = getActivityWeekForSummary(activity.startDate);
+                  const activityWeek = getActivityWeekForSummary(
+                    activity.startDate,
+                  );
                   if (activityWeek === null) return false;
                   return activityWeek === weekFilter;
                 }
@@ -5130,7 +5203,11 @@ const PlannerProjectWorkspace = () => {
                   In Lookahead
                 </Typography>
                 <Typography
-                  sx={{ color: COLORS.blue, fontSize: { xs: "16px", sm: "20px" }, fontWeight: 700 }}
+                  sx={{
+                    color: COLORS.blue,
+                    fontSize: { xs: "16px", sm: "20px" },
+                    fontWeight: 700,
+                  }}
                 >
                   {weeklyControlData?.stats.inLookahead || 0}
                 </Typography>
@@ -5216,7 +5293,11 @@ const PlannerProjectWorkspace = () => {
                   Blocked
                 </Typography>
                 <Typography
-                  sx={{ color: COLORS.red, fontSize: { xs: "16px", sm: "20px" }, fontWeight: 700 }}
+                  sx={{
+                    color: COLORS.red,
+                    fontSize: { xs: "16px", sm: "20px" },
+                    fontWeight: 700,
+                  }}
                 >
                   {weeklyControlData?.stats.blocked || 0}
                 </Typography>
@@ -5242,7 +5323,11 @@ const PlannerProjectWorkspace = () => {
                   Open Actions
                 </Typography>
                 <Typography
-                  sx={{ color: COLORS.blue, fontSize: { xs: "16px", sm: "20px" }, fontWeight: 700 }}
+                  sx={{
+                    color: COLORS.blue,
+                    fontSize: { xs: "16px", sm: "20px" },
+                    fontWeight: 700,
+                  }}
                 >
                   {weeklyControlData?.stats.openActions || 0}
                 </Typography>
@@ -5268,7 +5353,11 @@ const PlannerProjectWorkspace = () => {
                   Overdue
                 </Typography>
                 <Typography
-                  sx={{ color: COLORS.red, fontSize: { xs: "16px", sm: "20px" }, fontWeight: 700 }}
+                  sx={{
+                    color: COLORS.red,
+                    fontSize: { xs: "16px", sm: "20px" },
+                    fontWeight: 700,
+                  }}
                 >
                   {weeklyControlData?.stats.overdue || 0}
                 </Typography>
@@ -6838,7 +6927,11 @@ const PlannerProjectWorkspace = () => {
                           alignItems: "center",
                         }}
                       >
-                        {exportGatingStatus.isGated ? "Gated" : weeklyActionStats.openRequired > 0 ? "Pending" : "Ready"}
+                        {exportGatingStatus.isGated
+                          ? "Gated"
+                          : weeklyActionStats.openRequired > 0
+                            ? "Pending"
+                            : "Ready"}
                       </Box>
                     </Box>
                     <Typography
@@ -6902,9 +6995,11 @@ const PlannerProjectWorkspace = () => {
                             ) : null
                           }
                           sx={{
-                            bgcolor: exportGatingStatus.isGated || weeklyActionStats.openRequired > 0
-                              ? COLORS.disabledBlue
-                              : COLORS.green,
+                            bgcolor:
+                              exportGatingStatus.isGated ||
+                              weeklyActionStats.openRequired > 0
+                                ? COLORS.disabledBlue
+                                : COLORS.green,
                             color: "#fff",
                             textTransform: "none",
                             py: 1.25,
@@ -6912,9 +7007,11 @@ const PlannerProjectWorkspace = () => {
                             fontSize: "13px",
                             fontWeight: 500,
                             "&:hover": {
-                              bgcolor: exportGatingStatus.isGated || weeklyActionStats.openRequired > 0
-                                ? COLORS.disabledBlue
-                                : "#16a34a",
+                              bgcolor:
+                                exportGatingStatus.isGated ||
+                                weeklyActionStats.openRequired > 0
+                                  ? COLORS.disabledBlue
+                                  : "#16a34a",
                             },
                             "&:disabled": {
                               bgcolor: COLORS.disabledBlue,
