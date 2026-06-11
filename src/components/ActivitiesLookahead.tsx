@@ -54,28 +54,22 @@ const ActivitiesLookahead = ({
     return isNaN(date.getTime()) ? null : date;
   };
 
-  // Use Monday of current week as the starting point for 6-week lookahead
+  // Use TODAY as the starting point for 6-week lookahead (not Monday)
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  // Calculate Monday of current week
-  const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
-  const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Sunday = 6 days from Monday
-  const monday = new Date(today);
-  monday.setDate(today.getDate() - daysFromMonday);
+  // End of 6th week (6 weeks from today = 42 days)
+  const sixWeekEnd = new Date(today);
+  sixWeekEnd.setDate(today.getDate() + 42);
 
-  // End of 6th week (6 weeks from Monday = 42 days)
-  const sixWeekEnd = new Date(monday);
-  sixWeekEnd.setDate(monday.getDate() + 42);
-
-  // Helper to get which week an activity falls into (1-6) based on Monday
+  // Helper to get which week an activity falls into (1-6) based on today
   const getActivityWeek = (startDate: string): number | null => {
     const activityStart = parseDate(startDate);
     if (!activityStart) return null;
     const msPerDay = 1000 * 60 * 60 * 24;
-    const daysFromMonday = Math.floor((activityStart.getTime() - monday.getTime()) / msPerDay);
-    if (daysFromMonday < 0) return null; // Before Monday = don't assign to any week filter
-    const weekNum = Math.floor(daysFromMonday / 7) + 1;
+    const daysFromToday = Math.floor((activityStart.getTime() - today.getTime()) / msPerDay);
+    if (daysFromToday < 0) return null; // Before today = don't assign to any week filter
+    const weekNum = Math.floor(daysFromToday / 7) + 1;
     if (weekNum > 6) return null; // Beyond 6 weeks
     return weekNum;
   };
@@ -117,10 +111,10 @@ const ActivitiesLookahead = ({
       activity.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       activity.id.toLowerCase().includes(searchQuery.toLowerCase());
 
-    // Apply 6-week lookahead filter: only show activities from Monday to 6 weeks ahead
+    // Apply 6-week lookahead filter: only show activities from TODAY to 6 weeks ahead
     const activityStart = parseDate(activity.startDate);
-    // Must be >= Monday AND < sixWeekEnd
-    const withinLookahead = !activityStart || (activityStart >= monday && activityStart < sixWeekEnd);
+    // Must be >= today AND < sixWeekEnd
+    const withinLookahead = !activityStart || (activityStart >= today && activityStart < sixWeekEnd);
 
     // Week filter - if a specific week is selected, filter by that week
     const matchesWeek = weekFilter === null || activityMatchesWeek(activity, weekFilter);
