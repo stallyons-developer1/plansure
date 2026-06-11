@@ -408,19 +408,15 @@ const AdminActivities = () => {
 
           setActivities(transformedActivities);
 
-          // Generate week zones from today's date (6-week lookahead from current week)
+          // Generate week zones from TODAY (6-week lookahead from current date)
           if (programmeActivities.length > 0) {
             const todayForWeeks = new Date();
             todayForWeeks.setHours(0, 0, 0, 0);
-            const dayOfWeekForWeeks = todayForWeeks.getDay();
-            const daysToMondayForWeeks = dayOfWeekForWeeks === 0 ? 6 : dayOfWeekForWeeks - 1;
-            const currentMonday = new Date(todayForWeeks);
-            currentMonday.setDate(todayForWeeks.getDate() - daysToMondayForWeeks);
 
             const generatedWeeks: WeekData[] = [];
             for (let i = 0; i < 6; i++) {
-              const weekStartDate = new Date(currentMonday);
-              weekStartDate.setDate(currentMonday.getDate() + i * 7);
+              const weekStartDate = new Date(todayForWeeks);
+              weekStartDate.setDate(todayForWeeks.getDate() + i * 7);
               const weekEnd = new Date(weekStartDate);
               weekEnd.setDate(weekStartDate.getDate() + 6);
 
