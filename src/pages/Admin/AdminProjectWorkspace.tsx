@@ -130,10 +130,7 @@ const getRAGZonePriority = (zone: string): number => {
 };
 
 // Calculate week date range from today (current date) for 2-week window
-const getWeekDateRangeFromToday = (
-  weekStart: number,
-  weekEnd: number,
-): string => {
+const getWeekDateRangeFromToday = (): string => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -3377,8 +3374,7 @@ const AdminProjectWorkspace = () => {
                             // Calculate which week from today
                             const msPerDay = 1000 * 60 * 60 * 24;
                             const daysFromToday = Math.floor(
-                              (start.getTime() - today.getTime()) /
-                                msPerDay,
+                              (start.getTime() - today.getTime()) / msPerDay,
                             );
                             const weekNum = Math.floor(daysFromToday / 7) + 1;
 
@@ -5258,11 +5254,7 @@ const AdminProjectWorkspace = () => {
                     <Typography
                       sx={{ color: COLORS.textSecondary, fontSize: "12px" }}
                     >
-                      {getWeekDateRangeFromToday(
-                        weeklyControlData.weekInfo.weekNumber,
-                        weeklyControlData.weekInfo.weekNumberEnd ||
-                          weeklyControlData.weekInfo.weekNumber + 1,
-                      )}{" "}
+                      {getWeekDateRangeFromToday()}{" "}
                       • {weeklyControlData.weekInfo.totalActivities} activities
                       these weeks
                     </Typography>
@@ -5602,8 +5594,7 @@ const AdminProjectWorkspace = () => {
                         {
                           value: ragData.red,
                           color: "#EF4444",
-                          tooltip:
-                            "Blocked - Activities that are blocked",
+                          tooltip: "Blocked - Activities that are blocked",
                         },
                       ].filter((d) => d.value > 0);
                       const total = data.reduce((sum, d) => sum + d.value, 0);
