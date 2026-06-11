@@ -92,7 +92,7 @@ const AdminProgramsUpload = () => {
                 uploadedBy?: { name: string };
                 createdAt: string;
                 cycleStatus?: string;
-                totalActivities?: number;
+                extractedData?: { totalActivities?: number };
                 fileUrl?: string;
               },
               index: number,
@@ -111,7 +111,7 @@ const AdminProgramsUpload = () => {
                 uploadedBy: prog.uploadedBy?.name || "Admin",
                 date: dateStr,
                 status: prog.cycleStatus || "Processed",
-                activities: prog.totalActivities || 0,
+                activities: prog.extractedData?.totalActivities || 0,
                 fileUrl: prog.fileUrl,
               };
             },
@@ -175,6 +175,10 @@ const AdminProgramsUpload = () => {
           year: "numeric",
         });
 
+        // Construct the API URL for PDF viewing (stored in MongoDB)
+        const baseUrl = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:4000';
+        const pdfUrl = `${baseUrl}/api/programmes/${programme._id}/pdf`;
+
         const newUpload: UploadedFile = {
           _id: programme._id,
           version: `v${versionNum}`,
@@ -183,7 +187,7 @@ const AdminProgramsUpload = () => {
           date: dateStr,
           status: "Processed",
           activities: programme.totalActivities || 0,
-          fileUrl: URL.createObjectURL(file),
+          fileUrl: pdfUrl,
         };
 
         setUploadHistory((prev) => [newUpload, ...prev]);
@@ -205,7 +209,7 @@ const AdminProgramsUpload = () => {
 
   const handleViewPdf = (fileUrl: string | undefined) => {
     if (fileUrl) {
-      setViewingPdf(fileUrl);
+      window.open(fileUrl, "_blank");
     }
   };
 
@@ -647,7 +651,7 @@ const AdminProgramsUpload = () => {
                   sx={{
                     display: "grid",
                     gridTemplateColumns:
-                      "80px 1fr 120px 120px 100px 100px 80px",
+                      "80px 1fr 120px 120px 130px 100px 80px",
                     gap: 2,
                     px: 3,
                     py: 1.5,
@@ -684,7 +688,7 @@ const AdminProgramsUpload = () => {
                     sx={{
                       display: "grid",
                       gridTemplateColumns:
-                        "80px 1fr 120px 120px 100px 100px 80px",
+                        "80px 1fr 120px 120px 130px 100px 80px",
                       gap: 2,
                       px: 3,
                       py: 2,
@@ -779,6 +783,7 @@ const AdminProgramsUpload = () => {
                           color: COLORS.green,
                           fontSize: "12px",
                           fontWeight: 500,
+                          whiteSpace: "nowrap",
                         }}
                       >
                         {item.status}

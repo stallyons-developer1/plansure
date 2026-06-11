@@ -187,12 +187,11 @@ const parseDate = (dateStr: string): Date | null => {
   return isNaN(date.getTime()) ? null : date;
 };
 
-// Helper to calculate RAG zone based on dates and programme start
+// Helper to calculate RAG zone based on dates (calculated from Monday of current week)
 const calculateRagZone = (
   startDate: string,
   finishDate: string,
-  activityStatus?: string,
-  weekStart?: Date // Monday of the week containing earliest activity start
+  activityStatus?: string
 ): { zone: string; color: "green" | "amber" | "red" | "muted" | "blue" } => {
   // Check if completed
   const isCompleted =
@@ -208,44 +207,21 @@ const calculateRagZone = (
   if (!startDate) return { zone: "N/A", color: "muted" };
 
   const start = parseDate(startDate);
-  const finish = parseDate(finishDate);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  // Calculate Monday of current week
+  const dayOfWeek = today.getDay();
+  const daysFromMondayCalc = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - daysFromMondayCalc);
 
   if (!start) return { zone: "N/A", color: "muted" };
 
   const msPerDay = 1000 * 60 * 60 * 24;
 
-  // Check if activity has already started (based on today)
-  const daysUntilStart = Math.ceil((start.getTime() - today.getTime()) / msPerDay);
-  if (daysUntilStart < 0) {
-    // Check if overdue (finish date passed)
-    if (finish && finish < today) {
-      return { zone: "Overdue", color: "red" };
-    }
-    return { zone: "In Progress", color: "green" };
-  }
-
-  // Calculate which week from programme start (not from today)
-  if (weekStart) {
-    const daysFromProgrammeStart = Math.floor(
-      (start.getTime() - weekStart.getTime()) / msPerDay
-    );
-    const weekNum = daysFromProgrammeStart < 0 ? 1 : Math.floor(daysFromProgrammeStart / 7) + 1;
-
-    if (weekNum <= 2) {
-      return { zone: "Weeks 1-2", color: "green" };
-    } else if (weekNum <= 4) {
-      return { zone: "Weeks 3-4", color: "amber" };
-    } else if (weekNum <= 6) {
-      return { zone: "Weeks 5-6", color: "red" };
-    } else {
-      return { zone: `Week ${weekNum}`, color: "muted" };
-    }
-  }
-
-  // Fallback to today-based calculation if no weekStart provided
-  const weeksUntilStart = Math.ceil(daysUntilStart / 7);
+  // Calculate which week from Monday
+  const daysFromMonday = Math.floor((start.getTime() - monday.getTime()) / msPerDay);
+  const weeksUntilStart = Math.floor(daysFromMonday / 7) + 1;
   if (weeksUntilStart <= 2) {
     return { zone: "Weeks 1-2", color: "green" };
   } else if (weeksUntilStart <= 4) {
@@ -408,12 +384,11 @@ const AdminActivities = () => {
           // Transform activities to match the Activity interface
           const transformedActivities: Activity[] = programmeActivities.map(
             (a, index) => {
-              // Calculate RAG zone based on dates and programme start
+              // Calculate RAG zone based on dates (from today)
               const ragZoneData = calculateRagZone(
                 a.startDate || "",
                 a.finishDate || "",
-                a.activityStatus,
-                weekStart
+                a.activityStatus
               );
 
               return {
@@ -591,12 +566,11 @@ const AdminActivities = () => {
 
           const transformedActivities: Activity[] = programmeActivities.map(
             (a, index) => {
-              // Calculate RAG zone based on dates and current week
+              // Calculate RAG zone based on dates (from today)
               const ragZoneData = calculateRagZone(
                 a.startDate || "",
                 a.finishDate || "",
-                a.activityStatus,
-                weekStartRefresh
+                a.activityStatus
               );
 
               const activityId = a.activityId || `ACT-${String(index + 1).padStart(3, "0")}`;

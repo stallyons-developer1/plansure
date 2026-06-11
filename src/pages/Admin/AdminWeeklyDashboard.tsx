@@ -235,9 +235,9 @@ const RAGTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ n
     const { name, value: _value } = payload[0];
 
     const descriptions: Record<string, string> = {
-      Green: "Completed or On Track - Activity is completed or in progress",
-      Amber: "At Risk - Activity may be delayed or needs attention",
-      Red: "Behind Schedule - Activity is overdue or blocked",
+      Green: "Ready - Activities that are ready to proceed",
+      Amber: "At Risk - Activities that are at risk or overdue",
+      Red: "Blocked - Activities that are blocked",
     };
 
     return (

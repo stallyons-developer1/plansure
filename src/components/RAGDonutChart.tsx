@@ -7,9 +7,9 @@ interface RAGDonutChartProps {
 }
 
 const RAG_DESCRIPTIONS = {
-  green: "Completed or On Track - Activity is completed, in progress, or starting within 2 weeks",
-  amber: "Needs Attention - Activity starting in 3-4 weeks",
-  red: "Overdue or At Risk - Activity is overdue or starting in 5-6 weeks",
+  green: "Ready - Activities that are ready to proceed",
+  amber: "At Risk - Activities that are at risk or overdue",
+  red: "Blocked - Activities that are blocked",
 };
 
 const RAGDonutChart = ({ data, title = "RAG Distribution" }: RAGDonutChartProps) => {

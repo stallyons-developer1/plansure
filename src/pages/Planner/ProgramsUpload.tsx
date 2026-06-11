@@ -103,7 +103,9 @@ const ProgramsUpload = () => {
   };
 
   const handleViewPdf = (fileUrl: string) => {
-    setViewingPdf(fileUrl);
+    if (fileUrl) {
+      window.open(fileUrl, "_blank");
+    }
   };
 
   const handleClosePdfViewer = () => {
@@ -449,7 +451,7 @@ const ProgramsUpload = () => {
                   sx={{
                     display: "grid",
                     gridTemplateColumns:
-                      "80px 1fr 120px 120px 100px 100px 80px",
+                      "80px 1fr 120px 120px 130px 100px 80px",
                     gap: 2,
                     px: 3,
                     py: 1.5,
@@ -581,6 +583,7 @@ const ProgramsUpload = () => {
                           color: COLORS.green,
                           fontSize: "12px",
                           fontWeight: 500,
+                          whiteSpace: "nowrap",
                         }}
                       >
                         {item.status}
