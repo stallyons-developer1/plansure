@@ -498,6 +498,16 @@ const AdminProjects = () => {
 
   const handleCreateProject = async () => {
     setFieldErrors({});
+
+    // Check if project name already exists (case-insensitive)
+    const duplicateProject = projects.find(
+      (p) => p.name.toLowerCase().trim() === projectName.toLowerCase().trim()
+    );
+    if (duplicateProject) {
+      setFieldErrors({ name: "A project with this name already exists" });
+      return;
+    }
+
     setIsCreating(true);
 
     try {

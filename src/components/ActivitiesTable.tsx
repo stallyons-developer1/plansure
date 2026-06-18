@@ -272,11 +272,15 @@ const ActivityRow = ({
   isFirst,
   onAssignClick,
   onActionClick,
+  onReassignClick,
+  isProjectEnded = false,
 }: {
   activity: Activity;
   isFirst?: boolean;
   onAssignClick?: (activity: Activity) => void;
   onActionClick?: () => void;
+  onReassignClick?: (action: { _id: string; title: string; currentAssignee?: string }) => void;
+  isProjectEnded?: boolean;
 }) => {
   const [open, setOpen] = useState(isFirst);
   const ragColor = getStatusColor(activity.ragColor);
@@ -531,9 +535,13 @@ const ActivityRow = ({
             })()
           ) : onAssignClick ? (
             (() => {
-              // Only allow assignment for green RAG zone activities (Weeks 1-2 or In Progress)
-              const isGreenRagZone = activity.ragZone === "Weeks 1-2" || activity.ragZone === "In Progress";
-              const canAssign = isGreenRagZone;
+              // Allow assignment for activities within 6 weeks (Weeks 1-2, 3-4, 5-6 or In Progress)
+              const isWithin6Weeks =
+                activity.ragZone === "Weeks 1-2" ||
+                activity.ragZone === "Weeks 3-4" ||
+                activity.ragZone === "Weeks 5-6" ||
+                activity.ragZone === "In Progress";
+              const canAssign = isWithin6Weeks && !isProjectEnded;
 
               return (
                 <Button
@@ -546,7 +554,9 @@ const ActivityRow = ({
                   disabled={!canAssign}
                   title={
                     !canAssign
-                      ? "Only green zone activities can be assigned"
+                      ? isProjectEnded
+                        ? "Project has ended - read only"
+                        : "Only activities within 6 weeks can be assigned"
                       : "Assign action"
                   }
                   sx={{
@@ -724,6 +734,11 @@ const ActivityRow = ({
                     <Box key={action._id} sx={{ mb: 0.75 }}>
                       <Button
                         disabled={action.status === "Completed"}
+                        onClick={() => onReassignClick?.({
+                          _id: action._id,
+                          title: action.title,
+                          currentAssignee: action.assignee?._id,
+                        })}
                         sx={{
                           fontSize: "10px",
                           fontWeight: 500,
@@ -781,22 +796,26 @@ interface ActivitiesTableProps {
   activities: Activity[];
   onAssignClick?: (activity: Activity) => void;
   onActionClick?: () => void;
+  onReassignClick?: (action: { _id: string; title: string; currentAssignee?: string }) => void;
   currentPage?: number;
   totalPages?: number;
   totalActivities?: number;
   onPageChange?: (page: number) => void;
   activitiesPerPage?: number;
+  isProjectEnded?: boolean;
 }
 
 const ActivitiesTable = ({
   activities,
   onAssignClick,
   onActionClick,
+  onReassignClick,
   currentPage = 1,
   totalPages = 1,
   totalActivities = 0,
   onPageChange,
   activitiesPerPage = 20,
+  isProjectEnded = false,
 }: ActivitiesTableProps) => {
   const startIndex = (currentPage - 1) * activitiesPerPage + 1;
   const endIndex = Math.min(currentPage * activitiesPerPage, totalActivities);
@@ -953,6 +972,8 @@ const ActivitiesTable = ({
                 isFirst={index === 0}
                 onAssignClick={onAssignClick}
                 onActionClick={onActionClick}
+                onReassignClick={onReassignClick}
+                isProjectEnded={isProjectEnded}
               />
             ))}
           </TableBody>

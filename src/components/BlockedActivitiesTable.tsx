@@ -1,5 +1,23 @@
-import { useState } from "react";
-import { Box, Typography, Button, Tooltip } from "@mui/material";
+import { useState, Fragment } from "react";
+import {
+  Box,
+  Typography,
+  Button,
+  Tooltip,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  IconButton,
+  Collapse,
+} from "@mui/material";
+import {
+  KeyboardArrowDown,
+  KeyboardArrowRight,
+  ChevronRight,
+} from "@mui/icons-material";
 import { COLORS } from "../constants/colors";
 
 interface BlockedActivity {
@@ -17,6 +35,18 @@ interface BlockedActivity {
   } | null;
 }
 
+interface LinkedAction {
+  _id?: string;
+  actionId: string;
+  title: string;
+  status: string;
+  priority?: string;
+  assignee?: string;
+  assigneeId?: string;
+  dueDate?: string;
+  isOverdue?: boolean;
+}
+
 interface WeeklyPlanActivity {
   activityId: string;
   activityName: string;
@@ -29,6 +59,8 @@ interface WeeklyPlanActivity {
   activityStatus: string;
   actionsCount?: number;
   openActionsCount?: number;
+  linkedActions?: LinkedAction[];
+  notes?: string;
 }
 
 interface PlannerToDoItem {
@@ -50,6 +82,7 @@ interface BlockedActivitiesTableProps {
   onAssignClick?: (activity: { activityId: string; activityName: string }) => void;
   onUnblockClick?: (activityId: string) => void;
   onActionIdClick?: (actionId: string) => void;
+  onReassignClick?: (action: { _id?: string; actionId: string; title: string; currentAssignee?: string }) => void;
   isProjectEnded?: boolean;
   cycleStatus?: string;
 }
@@ -61,11 +94,25 @@ const BlockedActivitiesTable = ({
   onAssignClick,
   onUnblockClick,
   onActionIdClick,
+  onReassignClick,
   isProjectEnded = false,
   cycleStatus = "",
 }: BlockedActivitiesTableProps) => {
   const canUnblock = cycleStatus === "Execution" || cycleStatus === "Close-Out Eligible";
   const [activeTab, setActiveTab] = useState(0);
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+
+  const toggleRow = (activityId: string) => {
+    setExpandedRows((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(activityId)) {
+        newSet.delete(activityId);
+      } else {
+        newSet.add(activityId);
+      }
+      return newSet;
+    });
+  };
 
   const tabs = [
     "Blocked / Risk Activities",
@@ -447,43 +494,6 @@ const BlockedActivitiesTable = ({
         {/* Weekly Plan Preview Tab - Activities with assigned actions */}
         {activeTab === 1 && (
           <>
-            <Box
-              sx={{
-                display: "grid",
-                gridTemplateColumns:
-                  "90px minmax(180px, 1fr) 90px 90px 80px 80px 90px 90px",
-                gap: 2,
-                px: 3,
-                py: 1.5,
-                borderBottom: `1px solid ${COLORS.border}`,
-                minWidth: 950,
-              }}
-            >
-              {[
-                "ACTIVITY ID",
-                "ACTIVITY NAME",
-                "START",
-                "END",
-                "DURATION",
-                "ACTIONS",
-                "RAG",
-                "STATUS",
-              ].map((header) => (
-                <Typography
-                  key={header}
-                  sx={{
-                    color: COLORS.textMuted,
-                    fontSize: "12px",
-                    fontWeight: 600,
-                    letterSpacing: "0.5px",
-                    textAlign: "center",
-                  }}
-                >
-                  {header}
-                </Typography>
-              ))}
-            </Box>
-
             {weeklyPlanPreview.length === 0 ? (
               <Box sx={{ p: 4, textAlign: "center" }}>
                 <Typography sx={{ color: COLORS.textMuted, fontSize: "14px" }}>
@@ -491,160 +501,217 @@ const BlockedActivitiesTable = ({
                 </Typography>
               </Box>
             ) : (
-              weeklyPlanPreview.map((activity, index) => (
-                <Box
-                  key={index}
-                  sx={{
-                    display: "grid",
-                    gridTemplateColumns:
-                      "90px minmax(180px, 1fr) 90px 90px 80px 80px 90px 90px",
-                    gap: 2,
-                    px: 3,
-                    py: 2,
-                    borderBottom:
-                      index < weeklyPlanPreview.length - 1
-                        ? `1px solid ${COLORS.border}`
-                        : "none",
-                    alignItems: "center",
-                    minWidth: 950,
-                    "&:hover": { bgcolor: COLORS.bgTertiary },
-                  }}
-                >
-                  <Typography
-                    sx={{
-                      color: COLORS.textMuted,
-                      fontSize: "12px",
-                      textAlign: "center",
-                    }}
-                  >
-                    {activity.activityId}
-                  </Typography>
-                  <Typography
-                    sx={{
-                      color: COLORS.textPrimary,
-                      fontSize: "14px",
-                      fontWeight: 400,
-                      textAlign: "center",
-                    }}
-                  >
-                    {activity.activityName}
-                  </Typography>
-                  <Typography
-                    sx={{
-                      color: COLORS.textSecondary,
-                      fontSize: "12px",
-                      textAlign: "center",
-                    }}
-                  >
-                    {formatDate(activity.startDate)}
-                  </Typography>
-                  <Typography
-                    sx={{
-                      color: COLORS.textSecondary,
-                      fontSize: "12px",
-                      textAlign: "center",
-                    }}
-                  >
-                    {formatDate(activity.finishDate)}
-                  </Typography>
-                  <Typography
-                    sx={{
-                      color: COLORS.textSecondary,
-                      fontSize: "12px",
-                      textAlign: "center",
-                    }}
-                  >
-                    {activity.duration || "-"}
-                  </Typography>
-                  <Box sx={{ display: "flex", justifyContent: "center" }}>
-                    <Box
-                      sx={{
-                        bgcolor: (activity.openActionsCount || 0) > 0 ? `${COLORS.amber}20` : `${COLORS.green}20`,
-                        color: (activity.openActionsCount || 0) > 0 ? COLORS.amber : COLORS.green,
-                        px: 1.5,
-                        py: 0.5,
-                        borderRadius: "20px",
-                        fontSize: "11px",
-                        fontWeight: 500,
-                      }}
-                    >
-                      {activity.openActionsCount || 0}/{activity.actionsCount || 0}
-                    </Box>
-                  </Box>
-                  <Box sx={{ display: "flex", justifyContent: "center" }}>
-                    <Box
-                      sx={{
-                        bgcolor: "#2a2a3e",
-                        border: `1px solid ${
-                          activity.ragStatus === "Green"
-                            ? COLORS.green
-                            : activity.ragStatus === "Amber"
-                              ? COLORS.amber
-                              : COLORS.red
-                        }40`,
-                        color:
-                          activity.ragStatus === "Green"
-                            ? COLORS.green
-                            : activity.ragStatus === "Amber"
-                              ? COLORS.amber
-                              : COLORS.red,
-                        px: 1.5,
-                        py: 0.5,
-                        borderRadius: "20px",
-                        fontSize: "12px",
-                        fontWeight: 500,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 0.75,
-                      }}
-                    >
-                      <Box
-                        sx={{
-                          width: 8,
-                          height: 8,
-                          borderRadius: "50%",
-                          bgcolor:
-                            activity.ragStatus === "Green"
-                              ? COLORS.green
-                              : activity.ragStatus === "Amber"
-                                ? COLORS.amber
-                                : COLORS.red,
-                        }}
-                      />
-                      {activity.ragStatus}
-                    </Box>
-                  </Box>
-                  <Box sx={{ display: "flex", justifyContent: "center" }}>
-                    <Box
-                      sx={{
-                        bgcolor:
-                          activity.activityStatus === "Complete"
-                            ? `${COLORS.blue}20`
-                            : activity.activityStatus === "Ready"
-                              ? `${COLORS.green}20`
-                              : activity.activityStatus === "At Risk"
-                                ? `${COLORS.amber}20`
-                                : `${COLORS.red}20`,
-                        color:
-                          activity.activityStatus === "Complete"
-                            ? COLORS.blue
-                            : activity.activityStatus === "Ready"
-                              ? COLORS.green
-                              : activity.activityStatus === "At Risk"
-                                ? COLORS.amber
-                                : COLORS.red,
-                        px: 1.5,
-                        py: 0.5,
-                        borderRadius: "20px",
-                        fontSize: "10px",
-                        fontWeight: 500,
-                      }}
-                    >
-                      {activity.activityStatus || "Ready"}
-                    </Box>
-                  </Box>
-                </Box>
-              ))
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: "transparent" }}>
+                      <TableCell sx={{ color: COLORS.textMuted, fontSize: "11px", fontWeight: 600, borderBottom: `1px solid ${COLORS.border}`, py: 1.5, pl: 2, letterSpacing: "0.05em" }}>
+                        ACTIVITY ID
+                      </TableCell>
+                      <TableCell sx={{ color: COLORS.textMuted, fontSize: "11px", fontWeight: 600, borderBottom: `1px solid ${COLORS.border}`, py: 1.5, letterSpacing: "0.05em" }}>
+                        ACTIVITY NAME
+                      </TableCell>
+                      <TableCell align="center" sx={{ color: COLORS.textMuted, fontSize: "11px", fontWeight: 600, borderBottom: `1px solid ${COLORS.border}`, py: 1.5, letterSpacing: "0.05em" }}>
+                        START
+                      </TableCell>
+                      <TableCell align="center" sx={{ color: COLORS.textMuted, fontSize: "11px", fontWeight: 600, borderBottom: `1px solid ${COLORS.border}`, py: 1.5, letterSpacing: "0.05em" }}>
+                        END
+                      </TableCell>
+                      <TableCell align="center" sx={{ color: COLORS.textMuted, fontSize: "11px", fontWeight: 600, borderBottom: `1px solid ${COLORS.border}`, py: 1.5, letterSpacing: "0.05em" }}>
+                        DURATION
+                      </TableCell>
+                      <TableCell align="center" sx={{ color: COLORS.textMuted, fontSize: "11px", fontWeight: 600, borderBottom: `1px solid ${COLORS.border}`, py: 1.5, letterSpacing: "0.05em" }}>
+                        ACTIONS
+                      </TableCell>
+                      <TableCell align="center" sx={{ color: COLORS.textMuted, fontSize: "11px", fontWeight: 600, borderBottom: `1px solid ${COLORS.border}`, py: 1.5, letterSpacing: "0.05em" }}>
+                        RAG
+                      </TableCell>
+                      <TableCell align="center" sx={{ color: COLORS.textMuted, fontSize: "11px", fontWeight: 600, borderBottom: `1px solid ${COLORS.border}`, py: 1.5, letterSpacing: "0.05em" }}>
+                        STATUS
+                      </TableCell>
+                      <TableCell align="center" sx={{ color: COLORS.textMuted, fontSize: "11px", fontWeight: 600, borderBottom: `1px solid ${COLORS.border}`, py: 1.5, letterSpacing: "0.05em" }}>
+                        OWNER
+                      </TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {weeklyPlanPreview.map((activity) => {
+                      const isExpanded = expandedRows.has(activity.activityId);
+                      const hasActions = (activity.linkedActions?.length || 0) > 0 || (activity.actionsCount || 0) > 0;
+                      const ragColor = activity.ragStatus === "Green" ? COLORS.green : activity.ragStatus === "Amber" ? COLORS.amber : COLORS.red;
+                      const statusColor = activity.activityStatus === "Ready" ? COLORS.green : activity.activityStatus === "Complete" ? COLORS.blue : COLORS.amber;
+
+                      return (
+                        <Fragment key={activity.activityId}>
+                          <TableRow
+                            key={activity.activityId}
+                            sx={{
+                              "&:hover": { bgcolor: "rgba(255,255,255,0.02)" },
+                              bgcolor: isExpanded ? "rgba(59, 130, 246, 0.05)" : "transparent",
+                              cursor: hasActions ? "pointer" : "default",
+                            }}
+                            onClick={() => hasActions && toggleRow(activity.activityId)}
+                          >
+                            <TableCell sx={{ color: COLORS.blue, fontSize: "13px", fontWeight: 500, borderBottom: isExpanded ? `1px solid ${COLORS.border}` : "none", py: 1.5, pl: 2 }}>
+                              {activity.activityId}
+                            </TableCell>
+                            <TableCell sx={{ color: COLORS.textPrimary, fontSize: "13px", borderBottom: isExpanded ? `1px solid ${COLORS.border}` : "none", py: 1.5 }}>
+                              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                                {hasActions && (
+                                  <IconButton size="small" sx={{ color: COLORS.textSecondary, p: 0.25 }}>
+                                    {isExpanded ? <KeyboardArrowDown fontSize="small" /> : <KeyboardArrowRight fontSize="small" />}
+                                  </IconButton>
+                                )}
+                                {activity.activityName}
+                              </Box>
+                            </TableCell>
+                            <TableCell align="center" sx={{ color: COLORS.textSecondary, fontSize: "13px", borderBottom: isExpanded ? `1px solid ${COLORS.border}` : "none", py: 1.5 }}>
+                              {formatDate(activity.startDate)}
+                            </TableCell>
+                            <TableCell align="center" sx={{ color: COLORS.textSecondary, fontSize: "13px", borderBottom: isExpanded ? `1px solid ${COLORS.border}` : "none", py: 1.5 }}>
+                              {formatDate(activity.finishDate)}
+                            </TableCell>
+                            <TableCell align="center" sx={{ color: COLORS.textSecondary, fontSize: "13px", borderBottom: isExpanded ? `1px solid ${COLORS.border}` : "none", py: 1.5 }}>
+                              {activity.duration || "-"}
+                            </TableCell>
+                            <TableCell align="center" sx={{ borderBottom: isExpanded ? `1px solid ${COLORS.border}` : "none", py: 1.5 }}>
+                              <Typography
+                                sx={{
+                                  fontSize: "12px",
+                                  color: COLORS.blue,
+                                  cursor: "pointer",
+                                  "&:hover": { textDecoration: "underline" },
+                                }}
+                              >
+                                {activity.actionsCount || 0} action{(activity.actionsCount || 0) !== 1 ? "s" : ""}
+                              </Typography>
+                            </TableCell>
+                            <TableCell align="center" sx={{ borderBottom: isExpanded ? `1px solid ${COLORS.border}` : "none", py: 1.5 }}>
+                              <Box
+                                sx={{
+                                  bgcolor: `${ragColor}20`,
+                                  color: ragColor,
+                                  px: 1.5,
+                                  py: 0.5,
+                                  borderRadius: "6px",
+                                  fontSize: "12px",
+                                  fontWeight: 500,
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 0.75,
+                                }}
+                              >
+                                <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: ragColor }} />
+                                {activity.ragStatus}
+                              </Box>
+                            </TableCell>
+                            <TableCell align="center" sx={{ borderBottom: isExpanded ? `1px solid ${COLORS.border}` : "none", py: 1.5 }}>
+                              <Box
+                                sx={{
+                                  bgcolor: `${statusColor}20`,
+                                  color: statusColor,
+                                  px: 1.5,
+                                  py: 0.5,
+                                  borderRadius: "6px",
+                                  fontSize: "12px",
+                                  fontWeight: 500,
+                                  display: "inline-block",
+                                }}
+                              >
+                                {activity.activityStatus || "Ready"}
+                              </Box>
+                            </TableCell>
+                            <TableCell align="center" sx={{ color: COLORS.textSecondary, fontSize: "13px", borderBottom: isExpanded ? `1px solid ${COLORS.border}` : "none", py: 1.5 }}>
+                              {activity.owner || "-"}
+                            </TableCell>
+                          </TableRow>
+
+                          {/* Expanded Section - Linked Actions */}
+                          {activity.linkedActions && activity.linkedActions.length > 0 && (
+                            <TableRow>
+                              <TableCell colSpan={9} sx={{ py: 0, px: 0, borderBottom: isExpanded ? `1px solid ${COLORS.border}` : "none", bgcolor: COLORS.bgPrimary }}>
+                                <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                                  <Box sx={{ py: 2, px: 3, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 4 }}>
+                                    <Box>
+                                      <Typography sx={{ color: COLORS.textMuted, fontSize: "11px", fontWeight: 600, mb: 1.5, letterSpacing: "0.05em" }}>
+                                        LINKED ACTIONS
+                                      </Typography>
+                                      {activity.linkedActions.map((action, actionIndex) => (
+                                        <Box key={actionIndex} sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.75 }}>
+                                          <ChevronRight sx={{ color: COLORS.blue, fontSize: "1rem" }} />
+                                          <Typography
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              onActionIdClick?.(action.actionId);
+                                            }}
+                                            sx={{
+                                              color: COLORS.textLight,
+                                              fontSize: "13px",
+                                              cursor: "pointer",
+                                              "&:hover": { color: COLORS.blue, textDecoration: "underline" },
+                                            }}
+                                          >
+                                            {action.title || action.actionId}
+                                          </Typography>
+                                        </Box>
+                                      ))}
+                                    </Box>
+                                    <Box>
+                                      <Typography sx={{ color: COLORS.textMuted, fontSize: "11px", fontWeight: 600, mb: 1.5, letterSpacing: "0.05em" }}>
+                                        REASSIGN
+                                      </Typography>
+                                      {activity.linkedActions.map((action, actionIndex) => (
+                                        <Box key={actionIndex} sx={{ mb: 0.75 }}>
+                                          <Button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              onReassignClick?.({
+                                                _id: action._id,
+                                                actionId: action.actionId,
+                                                title: action.title,
+                                                currentAssignee: action.assigneeId,
+                                              });
+                                            }}
+                                            disabled={isProjectEnded || action.status === "Completed"}
+                                            sx={{
+                                              fontSize: "10px",
+                                              fontWeight: 500,
+                                              color: COLORS.amber,
+                                              textTransform: "none",
+                                              bgcolor: "rgba(245, 158, 11, 0.15)",
+                                              border: `1px solid ${COLORS.amber}30`,
+                                              borderRadius: "6px",
+                                              px: 1.5,
+                                              py: 0.3,
+                                              minWidth: "auto",
+                                              "&:hover": { bgcolor: "rgba(245, 158, 11, 0.25)" },
+                                              "&.Mui-disabled": { color: COLORS.textMuted, bgcolor: COLORS.bgTertiary, borderColor: COLORS.border },
+                                            }}
+                                          >
+                                            Reassign
+                                          </Button>
+                                        </Box>
+                                      ))}
+                                    </Box>
+                                    <Box>
+                                      <Typography sx={{ color: COLORS.textMuted, fontSize: "11px", fontWeight: 600, mb: 1.5, letterSpacing: "0.05em" }}>
+                                        NOTES
+                                      </Typography>
+                                      <Typography sx={{ color: COLORS.textLight, fontSize: "13px" }}>
+                                        {activity.notes || "-"}
+                                      </Typography>
+                                    </Box>
+                                  </Box>
+                                </Collapse>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </Fragment>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
             )}
           </>
         )}

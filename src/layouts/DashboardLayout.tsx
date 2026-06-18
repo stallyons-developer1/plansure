@@ -256,7 +256,10 @@ const DashboardLayout = ({
                     slotProps={{
                       primary: {
                         sx: {
-                          fontSize: "14px",
+                          fontSize: "12px",
+                          "@media (min-width: 1920px)": {
+                            fontSize: "14px",
+                          },
                           fontWeight: isActive(item.path) ? 500 : 500,
                           color: isActive(item.path)
                             ? COLORS.blue
@@ -316,7 +319,10 @@ const DashboardLayout = ({
                     slotProps={{
                       primary: {
                         sx: {
-                          fontSize: "14px",
+                          fontSize: "12px",
+                          "@media (min-width: 1920px)": {
+                            fontSize: "14px",
+                          },
                           fontWeight: isActive(item.path) ? 500 : 500,
                           color: isActive(item.path)
                             ? COLORS.blue

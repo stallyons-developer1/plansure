@@ -46,6 +46,12 @@ interface Project {
   createdAt: string;
 }
 
+interface FieldErrors {
+  name?: string;
+  phase?: string;
+  startDate?: string;
+}
+
 const GovernanceScoreIcon = ({ color }: { color: string }) => {
   const getFilter = () => {
     if (color === COLORS.green) {
@@ -429,6 +435,7 @@ const PlannerProjects = () => {
   const [phase, setPhase] = useState("");
   const [description, setDescription] = useState("");
   const [startDate, setStartDate] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
   useEffect(() => {
     fetchProjects();
@@ -477,10 +484,22 @@ const PlannerProjects = () => {
     setPhase("");
     setDescription("");
     setStartDate("");
+    setFieldErrors({});
   };
 
   const handleCreateProject = async () => {
+    setFieldErrors({});
+
     if (!projectName || !phase || !startDate) return;
+
+    // Check if project name already exists (case-insensitive)
+    const duplicateProject = projects.find(
+      (p) => p.name.toLowerCase().trim() === projectName.toLowerCase().trim()
+    );
+    if (duplicateProject) {
+      setFieldErrors({ name: "A project with this name already exists" });
+      return;
+    }
 
     try {
       const response = await projectAPI.create({
@@ -784,19 +803,26 @@ const PlannerProjects = () => {
                 fullWidth
                 placeholder="e.g. Crossrail Phase 3"
                 value={projectName}
-                onChange={(e) => setProjectName(e.target.value)}
+                onChange={(e) => {
+                  setProjectName(e.target.value);
+                  if (fieldErrors.name) {
+                    setFieldErrors((prev) => ({ ...prev, name: undefined }));
+                  }
+                }}
+                error={!!fieldErrors.name}
+                helperText={fieldErrors.name}
                 sx={{
                   "& .MuiOutlinedInput-root": {
                     bgcolor: COLORS.bgPrimary,
                     borderRadius: "8px",
                     "& fieldset": {
-                      borderColor: COLORS.white,
+                      borderColor: fieldErrors.name ? COLORS.red : COLORS.white,
                     },
                     "&:hover fieldset": {
-                      borderColor: COLORS.white,
+                      borderColor: fieldErrors.name ? COLORS.red : COLORS.white,
                     },
                     "&.Mui-focused fieldset": {
-                      borderColor: COLORS.white,
+                      borderColor: fieldErrors.name ? COLORS.red : COLORS.white,
                       borderWidth: 1,
                     },
                   },
@@ -808,6 +834,11 @@ const PlannerProjects = () => {
                       color: COLORS.textMuted,
                       opacity: 1,
                     },
+                  },
+                  "& .MuiFormHelperText-root": {
+                    color: COLORS.red,
+                    fontSize: "12px",
+                    mt: 0.5,
                   },
                 }}
               />

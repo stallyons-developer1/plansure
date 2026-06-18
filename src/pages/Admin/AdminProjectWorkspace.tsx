@@ -2344,18 +2344,38 @@ const AdminProjectWorkspace = () => {
                   {(() => {
                     // Show all activities from the full PDF
                     const activities = lookaheadData?.activities || [];
-                    const readyCount = activities.filter(
+
+                    // Helper to parse date string
+                    const parseDateStr = (dateStr: string): Date | null => {
+                      if (!dateStr) return null;
+                      const date = new Date(dateStr);
+                      return isNaN(date.getTime()) ? null : date;
+                    };
+
+                    // Filter activities within 6 weeks from today
+                    const todayDate = new Date();
+                    todayDate.setHours(0, 0, 0, 0);
+                    const sixWeekEnd = new Date(todayDate);
+                    sixWeekEnd.setDate(todayDate.getDate() + 42); // 6 weeks = 42 days
+
+                    const activitiesIn6Weeks = activities.filter((a) => {
+                      const activityStart = parseDateStr(a.startDate || "");
+                      if (!activityStart) return false; // Exclude activities without start date
+                      return activityStart >= todayDate && activityStart < sixWeekEnd;
+                    });
+
+                    const readyCount = activitiesIn6Weeks.filter(
                       (a) =>
                         a.activityStatus === "Ready" ||
                         (!a.activityStatus && a.ragStatus !== "Blocked"),
                     ).length;
-                    const atRiskCount = activities.filter(
+                    const atRiskCount = activitiesIn6Weeks.filter(
                       (a) => a.activityStatus === "At Risk",
                     ).length;
-                    const completeCount = activities.filter(
+                    const completeCount = activitiesIn6Weeks.filter(
                       (a) => a.activityStatus === "Complete",
                     ).length;
-                    const blockedCount = activities.filter(
+                    const blockedCount = activitiesIn6Weeks.filter(
                       (a) =>
                         a.activityStatus === "Blocked" ||
                         a.ragStatus === "Blocked",
@@ -3768,12 +3788,14 @@ const AdminProjectWorkspace = () => {
                                         </Box>
                                       );
                                     }
-                                    // Enable assign only for activities with green RAG zone (Weeks 1-2 or In Progress)
-                                    const isGreenRagZone =
+                                    // Enable assign for activities within 6 weeks (Weeks 1-2, 3-4, 5-6 or In Progress)
+                                    const isWithin6Weeks =
                                       ragZone.zone === "Weeks 1-2" ||
+                                      ragZone.zone === "Weeks 3-4" ||
+                                      ragZone.zone === "Weeks 5-6" ||
                                       ragZone.zone === "In Progress";
                                     const canAssign =
-                                      isGreenRagZone &&
+                                      isWithin6Weeks &&
                                       !weeklyControlData?.isProjectEnded;
 
                                     return (
@@ -3808,7 +3830,9 @@ const AdminProjectWorkspace = () => {
                                         disabled={!canAssign}
                                         title={
                                           !canAssign
-                                            ? "Only green zone activities can be assigned"
+                                            ? weeklyControlData?.isProjectEnded
+                                              ? "Project has ended - read only"
+                                              : "Only activities within 6 weeks can be assigned"
                                             : "Assign action"
                                         }
                                         sx={{
@@ -6143,6 +6167,19 @@ const AdminProjectWorkspace = () => {
                   }
                 }}
                 onActionIdClick={() => setActiveTab(3)}
+                onReassignClick={(action) => {
+                  // Find the assignee name from users list
+                  const assigneeUser = users.find(u => u._id === action.currentAssignee);
+                  setReassigningAction({
+                    _id: action._id || "",
+                    title: action.title,
+                    currentAssignee: action.currentAssignee,
+                    currentAssigneeName: assigneeUser?.name || "Unknown",
+                  });
+                  setReassignAssignee("");
+                  setReassignError("");
+                  setReassignModalOpen(true);
+                }}
                 isProjectEnded={weeklyControlData?.isProjectEnded}
                 cycleStatus={weeklyControlData?.stats?.cycleStatus}
               />
@@ -9233,13 +9270,13 @@ const AdminProjectWorkspace = () => {
             )}
 
             {/* Current Assignee */}
-            <Box sx={{ mb: 2 }}>
+            <Box sx={{ mb: 2, mt: 1 }}>
               <Typography
                 sx={{
                   color: COLORS.textSecondary,
                   fontSize: "12px",
                   fontWeight: 500,
-                  mb: 0.5,
+                  mb: 1,
                 }}
               >
                 Current Assignee

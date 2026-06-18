@@ -14,6 +14,7 @@ import {
   Button,
   TextField,
   IconButton,
+  Avatar,
 } from "@mui/material";
 import type { SelectChangeEvent } from "@mui/material/Select";
 import {
@@ -239,6 +240,7 @@ const PlannerActivities = () => {
   const [lastUpdated, setLastUpdated] = useState<string>("");
   const [programmeId, setProgrammeId] = useState<string>("");
   const [programmeActions, setProgrammeActions] = useState<Action[]>([]);
+  const [isProjectEnded, setIsProjectEnded] = useState(false);
 
   // Assign modal state
   const [assignModalOpen, setAssignModalOpen] = useState(false);
@@ -253,6 +255,18 @@ const PlannerActivities = () => {
   });
   const [assignSaveLoading, setAssignSaveLoading] = useState(false);
   const [assignError, setAssignError] = useState("");
+
+  // Reassign modal state
+  const [reassignModalOpen, setReassignModalOpen] = useState(false);
+  const [reassigningAction, setReassigningAction] = useState<{
+    _id: string;
+    title: string;
+    currentAssignee?: string;
+    currentAssigneeName?: string;
+  } | null>(null);
+  const [reassignAssignee, setReassignAssignee] = useState("");
+  const [reassignLoading, setReassignLoading] = useState(false);
+  const [reassignError, setReassignError] = useState("");
 
   // Fetch projects on mount
   useEffect(() => {
@@ -318,6 +332,28 @@ const PlannerActivities = () => {
     };
 
     fetchActions();
+  }, [programmeId]);
+
+  // Fetch isProjectEnded status when programmeId changes
+  useEffect(() => {
+    const fetchProjectStatus = async () => {
+      if (!programmeId) {
+        setIsProjectEnded(false);
+        return;
+      }
+
+      try {
+        const response = await programmeAPI.getWeeklyControl(programmeId);
+        if (response.success) {
+          setIsProjectEnded(response.isProjectEnded || false);
+        }
+      } catch (error) {
+        console.error("Error fetching project status:", error);
+        setIsProjectEnded(false);
+      }
+    };
+
+    fetchProjectStatus();
   }, [programmeId]);
 
   // Helper to get actions for a specific activity
@@ -501,6 +537,66 @@ const PlannerActivities = () => {
 
   const handleActionClick = () => {
     navigate("/planner/action");
+  };
+
+  // Reassign modal handlers
+  const handleOpenReassign = (action: { _id: string; title: string; currentAssignee?: string }) => {
+    const assigneeUser = users.find(u => u._id === action.currentAssignee);
+    setReassigningAction({
+      _id: action._id,
+      title: action.title,
+      currentAssignee: action.currentAssignee,
+      currentAssigneeName: assigneeUser?.name || "Unknown",
+    });
+    setReassignAssignee("");
+    setReassignError("");
+    setReassignModalOpen(true);
+  };
+
+  const handleCloseReassign = () => {
+    setReassignModalOpen(false);
+    setReassigningAction(null);
+    setReassignAssignee("");
+    setReassignError("");
+  };
+
+  const handleReassignSave = async () => {
+    if (!reassigningAction || !reassignAssignee) {
+      setReassignError("Please select a new assignee");
+      return;
+    }
+
+    if (reassignAssignee === reassigningAction.currentAssignee) {
+      setReassignError("Please select a different assignee");
+      return;
+    }
+
+    setReassignLoading(true);
+    setReassignError("");
+
+    try {
+      const response = await actionAPI.update(reassigningAction._id, {
+        assignee: reassignAssignee,
+      });
+
+      if (response.success) {
+        // Refresh actions data
+        if (programmeId) {
+          const actionsResponse = await actionAPI.getByProgramme(programmeId);
+          if (actionsResponse.success && actionsResponse.actions) {
+            setProgrammeActions(actionsResponse.actions);
+          }
+        }
+        handleCloseReassign();
+      }
+    } catch (error: unknown) {
+      console.error("Failed to reassign action:", error);
+      const err = error as { response?: { data?: { message?: string } }; message?: string };
+      const errorMessage = err?.response?.data?.message || err?.message || "Failed to reassign action. Please try again.";
+      setReassignError(errorMessage);
+    } finally {
+      setReassignLoading(false);
+    }
   };
 
   const handleAssignChange = (field: string, value: string) => {
@@ -751,6 +847,8 @@ const PlannerActivities = () => {
           lastUpdated={lastUpdated}
           onAssignClick={handleAssignClick}
           onActionClick={handleActionClick}
+          onReassignClick={handleOpenReassign}
+          isProjectEnded={isProjectEnded}
         />
       )}
 
@@ -1219,6 +1317,275 @@ const PlannerActivities = () => {
               <CircularProgress size={20} sx={{ color: "#fff" }} />
             ) : (
               "Assign"
+            )}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Reassign Action Modal */}
+      <Dialog
+        open={reassignModalOpen}
+        onClose={handleCloseReassign}
+        maxWidth="sm"
+        fullWidth
+        slotProps={{
+          backdrop: {
+            sx: {
+              bgcolor: "rgba(0, 0, 0, 0.8)",
+            },
+          },
+          paper: {
+            sx: {
+              bgcolor: COLORS.bgSecondary,
+              border: `1px solid ${COLORS.border}`,
+              borderRadius: "12px",
+              backgroundImage: "none",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
+              maxWidth: 450,
+            },
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            pb: 1,
+            pt: 2,
+            borderBottom: `1px solid ${COLORS.border}`,
+          }}
+        >
+          <Box>
+            <Typography
+              sx={{
+                color: COLORS.textPrimary,
+                fontSize: "18px",
+                fontWeight: 600,
+              }}
+            >
+              Reassign Action
+            </Typography>
+            <Typography
+              sx={{
+                color: COLORS.textSecondary,
+                fontSize: "12px",
+                fontWeight: 400,
+                mt: 0.5,
+              }}
+            >
+              {reassigningAction?.title}
+            </Typography>
+          </Box>
+          <IconButton
+            onClick={handleCloseReassign}
+            sx={{ color: COLORS.textMuted, p: 0.5 }}
+          >
+            <CloseIcon sx={{ fontSize: 20 }} />
+          </IconButton>
+        </DialogTitle>
+
+        <DialogContent sx={{ px: 3, py: 2 }}>
+          {/* Error Message */}
+          {reassignError && (
+            <Box
+              sx={{
+                bgcolor: "rgba(239, 68, 68, 0.15)",
+                border: `1px solid ${COLORS.red}`,
+                borderRadius: "8px",
+                px: 2,
+                py: 1.5,
+                mb: 2,
+              }}
+            >
+              <Typography
+                sx={{
+                  color: COLORS.red,
+                  fontSize: "13px",
+                  fontWeight: 500,
+                }}
+              >
+                {reassignError}
+              </Typography>
+            </Box>
+          )}
+
+          {/* Current Assignee */}
+          <Box sx={{ mb: 2, mt: 1 }}>
+            <Typography
+              sx={{
+                color: COLORS.textSecondary,
+                fontSize: "12px",
+                fontWeight: 500,
+                mb: 1,
+              }}
+            >
+              Current Assignee
+            </Typography>
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 1,
+                bgcolor: COLORS.bgPrimary,
+                borderRadius: "8px",
+                border: `1px solid ${COLORS.border}`,
+                px: 1.5,
+                py: 1,
+              }}
+            >
+              <Avatar
+                sx={{
+                  width: 24,
+                  height: 24,
+                  fontSize: "10px",
+                  fontWeight: 600,
+                  bgcolor: COLORS.blue,
+                }}
+              >
+                {reassigningAction?.currentAssigneeName
+                  ?.split(" ")
+                  .map((n) => n[0])
+                  .join("")
+                  .toUpperCase()
+                  .slice(0, 2) || "?"}
+              </Avatar>
+              <Typography
+                sx={{
+                  color: COLORS.textPrimary,
+                  fontSize: "14px",
+                }}
+              >
+                {reassigningAction?.currentAssigneeName || "Unknown"}
+              </Typography>
+            </Box>
+          </Box>
+
+          {/* New Assignee */}
+          <Box>
+            <Typography
+              sx={{
+                color: COLORS.textSecondary,
+                fontSize: "12px",
+                fontWeight: 500,
+                mb: 0.5,
+              }}
+            >
+              Reassign To <span style={{ color: COLORS.red }}>*</span>
+            </Typography>
+            <Select
+              fullWidth
+              value={reassignAssignee}
+              onChange={(e) => setReassignAssignee(e.target.value)}
+              displayEmpty
+              IconComponent={ArrowDownIcon}
+              sx={{
+                bgcolor: COLORS.bgPrimary,
+                borderRadius: "8px",
+                "& .MuiOutlinedInput-notchedOutline": {
+                  borderColor: COLORS.border,
+                },
+                "&:hover .MuiOutlinedInput-notchedOutline": {
+                  borderColor: COLORS.border,
+                },
+                "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                  borderColor: COLORS.blue,
+                  borderWidth: 1,
+                },
+                "& .MuiSelect-select": {
+                  color: reassignAssignee ? COLORS.textPrimary : COLORS.textMuted,
+                  fontSize: "14px",
+                  py: 1.2,
+                },
+                "& .MuiSvgIcon-root": { color: COLORS.textSecondary },
+              }}
+              MenuProps={{
+                slotProps: {
+                  paper: {
+                    sx: {
+                      bgcolor: COLORS.bgSecondary,
+                      border: `1px solid ${COLORS.border}`,
+                      borderRadius: "8px",
+                      maxHeight: 200,
+                      "& .MuiMenuItem-root": {
+                        color: COLORS.textPrimary,
+                        fontSize: "14px",
+                        "&:hover": { bgcolor: COLORS.bgTertiary },
+                        "&.Mui-selected": {
+                          bgcolor: COLORS.blueBgMedium,
+                        },
+                      },
+                    },
+                  },
+                },
+              }}
+            >
+              <MenuItem value="" disabled>
+                Select new assignee...
+              </MenuItem>
+              {users
+                .filter((u) => u._id !== reassigningAction?.currentAssignee)
+                .map((u) => (
+                  <MenuItem key={u._id} value={u._id}>
+                    {u.name}
+                  </MenuItem>
+                ))}
+            </Select>
+          </Box>
+        </DialogContent>
+
+        <DialogActions
+          sx={{
+            px: 3,
+            py: 2,
+            borderTop: `1px solid ${COLORS.border}`,
+            gap: 1.5,
+          }}
+        >
+          <Button
+            onClick={handleCloseReassign}
+            sx={{
+              color: COLORS.textSecondary,
+              bgcolor: "transparent",
+              border: `1px solid ${COLORS.border}`,
+              borderRadius: "8px",
+              textTransform: "none",
+              px: 2.5,
+              py: 1,
+              fontSize: "14px",
+              fontWeight: 500,
+              "&:hover": {
+                bgcolor: COLORS.bgTertiary,
+              },
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleReassignSave}
+            disabled={reassignLoading || !reassignAssignee}
+            sx={{
+              color: "#fff",
+              bgcolor: COLORS.amber,
+              borderRadius: "8px",
+              textTransform: "none",
+              px: 2.5,
+              py: 1,
+              fontSize: "14px",
+              fontWeight: 500,
+              "&:hover": {
+                bgcolor: "#d97706",
+              },
+              "&.Mui-disabled": {
+                bgcolor: COLORS.textMuted,
+                color: COLORS.bgPrimary,
+              },
+            }}
+          >
+            {reassignLoading ? (
+              <CircularProgress size={20} sx={{ color: "#fff" }} />
+            ) : (
+              "Reassign"
             )}
           </Button>
         </DialogActions>

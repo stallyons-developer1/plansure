@@ -326,7 +326,10 @@ const PlannerLayout = ({
                 slotProps={{
                   primary: {
                     sx: {
-                      fontSize: "14px",
+                      fontSize: "12px",
+                      "@media (min-width: 1920px)": {
+                        fontSize: "14px",
+                      },
                       fontWeight: 500,
                       color: isActive(item.path) ? COLORS.blue : COLORS.border,
                       whiteSpace: "nowrap",

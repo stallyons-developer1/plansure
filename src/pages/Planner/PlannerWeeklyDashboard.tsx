@@ -14,6 +14,7 @@ import {
   Button,
   TextField,
   IconButton,
+  Avatar,
 } from "@mui/material";
 import type { SelectChangeEvent } from "@mui/material/Select";
 import { KeyboardArrowDown as ArrowDownIcon, Close as CloseIcon } from "@mui/icons-material";
@@ -48,6 +49,9 @@ interface WeekStatus {
   closedAt?: string;
   closedBy?: string;
   closeType?: string;
+  canClose?: boolean;
+  canCloseReason?: string;
+  isClosed?: boolean;
 }
 
 interface ActivityByWeek {
@@ -87,18 +91,18 @@ interface WeeklyData {
   ragDistribution: { green: number; amber: number; red: number };
   actionsByStatus: { open: number; closed: number; overdue: number };
   blockedActivities: Array<{
-    id: string;
-    name: string;
-    rag: "Red" | "Amber";
+    activityId: string;
+    activityName: string;
+    ragStatus: string;
+    activityStatus: string;
+    isBlocked?: boolean;
     owner: string;
     blocker: string;
     linkedAction: {
       actionId: string;
       title: string;
       status: string;
-      assigneeName: string;
     } | null;
-    status: "Open" | "Overdue";
   }>;
   weeklyPlanPreview: Array<{
     activityId: string;
@@ -110,6 +114,8 @@ interface WeeklyData {
     ragStatus: string;
     owner: string;
     activityStatus: string;
+    actionsCount?: number;
+    openActionsCount?: number;
   }>;
   plannerToDo: Array<{
     activityId: string;
@@ -117,6 +123,8 @@ interface WeeklyData {
     ragStatus: string;
     owner: string;
     todoItem: string;
+    actionId?: string;
+    actionStatus?: string;
     priority: string;
     dueDate: string;
   }>;
@@ -293,6 +301,20 @@ const PlannerWeeklyDashboard = () => {
   const [assignError, setAssignError] = useState("");
   const [assignSaveLoading, setAssignSaveLoading] = useState(false);
   const [teamMembers, setTeamMembers] = useState<Array<{ _id: string; name: string; email: string }>>([]);
+
+  // Reassign action modal state
+  const [reassignModalOpen, setReassignModalOpen] = useState(false);
+  const [reassigningAction, setReassigningAction] = useState<{
+    _id?: string;
+    actionId: string;
+    title: string;
+    currentAssignee?: string;
+    currentAssigneeName?: string;
+  } | null>(null);
+  const [reassignAssignee, setReassignAssignee] = useState("");
+  const [reassignLoading, setReassignLoading] = useState(false);
+  const [reassignError, setReassignError] = useState("");
+  const [users, setUsers] = useState<Array<{ _id: string; name: string; email: string; role: string }>>([]);
 
   // Fetch projects on mount
   useEffect(() => {
@@ -502,26 +524,45 @@ const PlannerWeeklyDashboard = () => {
   }, [programmeId]);
 
   // Handler for Close Week - closes only 1 week and switches to next week
+  // Handler for Close Week - closes 2 weeks and switches to next closable week
   const handleCloseWeek = async () => {
     if (!programmeId || isClosingWeek) return;
 
     setIsClosingWeek(true);
     try {
-      // Close only 1 week (not 2 like in Weekly Control)
-      const response = await programmeAPI.closeWeek(
+      // Close first week
+      const response1 = await programmeAPI.closeWeek(
         programmeId,
         currentWeekNumber,
         "Normal Close"
       );
 
-      if (response.success) {
-        // Switch to next week's data
-        setCurrentWeekNumber((prev) => prev + 1);
+      if (response1.success && !response1.isFullyClosed) {
+        // Close the second week - pass isSecondOfPair=true to skip date validation
+        await programmeAPI.closeWeek(
+          programmeId,
+          currentWeekNumber + 1,
+          "Normal Close",
+          undefined,
+          true // isSecondOfPair - skip date check for second week
+        );
+      }
 
+      if (response1.success) {
         // Refresh weeks status
         const weeksResponse = await programmeAPI.getWeeksStatus(programmeId);
         if (weeksResponse.success && weeksResponse.weeks) {
           setWeeksStatus(weeksResponse.weeks);
+
+          // Find the next closable week or default to currentWeekNumber + 2
+          const nextClosableWeek = weeksResponse.weeks.find(
+            (w: WeekStatus) => w.canClose
+          );
+          const nextWeekNumber = nextClosableWeek?.weekNumber || currentWeekNumber + 2;
+          setCurrentWeekNumber(nextWeekNumber);
+        } else {
+          // Fallback: increment by 2 since we closed 2 weeks
+          setCurrentWeekNumber((prev) => prev + 2);
         }
       }
     } catch (error) {
@@ -531,28 +572,46 @@ const PlannerWeeklyDashboard = () => {
     }
   };
 
-  // Handler for PM Override - closes 1 week with override reason and switches to next week
+  // Handler for PM Override - closes 2 weeks with override reason and switches to next closable week
   const handlePMOverride = async () => {
     if (!programmeId || isClosingWeek || overrideReason.length < 10) return;
 
     setIsClosingWeek(true);
     try {
-      // Close only 1 week with PM Override
-      const response = await programmeAPI.closeWeek(
+      // Close first week with PM Override
+      const response1 = await programmeAPI.closeWeek(
         programmeId,
         currentWeekNumber,
         "PM Override",
         overrideReason
       );
 
-      if (response.success) {
-        // Switch to next week's data
-        setCurrentWeekNumber((prev) => prev + 1);
+      if (response1.success && !response1.isFullyClosed) {
+        // Close the second week with PM Override - pass isSecondOfPair=true to skip date validation
+        await programmeAPI.closeWeek(
+          programmeId,
+          currentWeekNumber + 1,
+          "PM Override",
+          overrideReason,
+          true // isSecondOfPair - skip date check for second week
+        );
+      }
 
+      if (response1.success) {
         // Refresh weeks status
         const weeksResponse = await programmeAPI.getWeeksStatus(programmeId);
         if (weeksResponse.success && weeksResponse.weeks) {
           setWeeksStatus(weeksResponse.weeks);
+
+          // Find the next closable week or default to currentWeekNumber + 2
+          const nextClosableWeek = weeksResponse.weeks.find(
+            (w: WeekStatus) => w.canClose
+          );
+          const nextWeekNumber = nextClosableWeek?.weekNumber || currentWeekNumber + 2;
+          setCurrentWeekNumber(nextWeekNumber);
+        } else {
+          // Fallback: increment by 2 since we closed 2 weeks
+          setCurrentWeekNumber((prev) => prev + 2);
         }
 
         // Reset modal state
@@ -621,6 +680,25 @@ const PlannerWeeklyDashboard = () => {
     fetchTeamMembers();
   }, []);
 
+  // Fetch all users for reassign modal (only planners, exclude admins)
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const response = await userAPI.getAll({ status: "active" });
+        if (response.success) {
+          const plannerUsers = (response.users || []).filter(
+            (user: { role: string; status: string }) =>
+              user.role === "planner" && user.status === "active"
+          );
+          setUsers(plannerUsers);
+        }
+      } catch (error) {
+        console.error("Error fetching users:", error);
+      }
+    };
+    fetchUsers();
+  }, []);
+
   const handleAssignClose = () => {
     setAssignModalOpen(false);
     setAssigningActivity(null);
@@ -681,6 +759,70 @@ const PlannerWeeklyDashboard = () => {
 
   const handleAssignChange = (field: string, value: string) => {
     setAssignFormData({ ...assignFormData, [field]: value });
+  };
+
+  // Reassign modal handlers
+  const handleOpenReassign = (action: {
+    _id?: string;
+    actionId: string;
+    title: string;
+    currentAssignee?: string;
+  }) => {
+    const assigneeUser = users.find(u => u._id === action.currentAssignee) ||
+                         teamMembers.find(u => u._id === action.currentAssignee);
+    setReassigningAction({
+      _id: action._id,
+      actionId: action.actionId,
+      title: action.title,
+      currentAssignee: action.currentAssignee,
+      currentAssigneeName: assigneeUser?.name || action.currentAssignee || "Unknown",
+    });
+    setReassignAssignee("");
+    setReassignError("");
+    setReassignModalOpen(true);
+  };
+
+  const handleCloseReassign = () => {
+    setReassignModalOpen(false);
+    setReassigningAction(null);
+    setReassignAssignee("");
+    setReassignError("");
+  };
+
+  const handleReassignSave = async () => {
+    if (!reassigningAction || !reassignAssignee) {
+      setReassignError("Please select a new assignee");
+      return;
+    }
+
+    if (reassignAssignee === reassigningAction.currentAssignee) {
+      setReassignError("Please select a different assignee");
+      return;
+    }
+
+    setReassignLoading(true);
+    setReassignError("");
+
+    try {
+      const response = await actionAPI.update(reassigningAction._id || "", {
+        assignee: reassignAssignee,
+      });
+
+      if (response.success) {
+        const dashResponse = await dashboardAPI.getWeeklyDashboard(selectedProjectId, currentWeekNumber);
+        if (dashResponse.success) {
+          setData(dashResponse.weekly);
+        }
+        handleCloseReassign();
+      }
+    } catch (error: unknown) {
+      console.error("Failed to reassign action:", error);
+      const err = error as { response?: { data?: { message?: string } }; message?: string };
+      const errorMessage = err?.response?.data?.message || err?.message || "Failed to reassign action. Please try again.";
+      setReassignError(errorMessage);
+    } finally {
+      setReassignLoading(false);
+    }
   };
 
   const handleProjectChange = (event: SelectChangeEvent<string>) => {
@@ -1843,17 +1985,9 @@ const PlannerWeeklyDashboard = () => {
 
       <Box id="blocked-activities-section" sx={{ mt: { xs: 2, sm: 3 } }}>
         <BlockedActivitiesTable
-          activities={data?.blockedActivities?.map(a => ({
-            activityId: a.id,
-            activityName: a.name,
-            ragStatus: a.rag,
-            activityStatus: a.status,
-            owner: a.linkedAction?.assigneeName || a.owner,
-            blocker: a.linkedAction?.title || a.blocker,
-            linkedAction: a.linkedAction ? { actionId: a.linkedAction.actionId, title: a.linkedAction.title, status: a.linkedAction.status } : null,
-          }))}
-          weeklyPlanPreview={data?.weeklyPlanPreview}
-          plannerToDo={data?.plannerToDo}
+          activities={data?.blockedActivities || []}
+          weeklyPlanPreview={data?.weeklyPlanPreview || []}
+          plannerToDo={data?.plannerToDo || []}
           isProjectEnded={data?.isProjectEnded || false}
           cycleStatus={data?.cycle?.status || ""}
           onAssignClick={(activity) => {
@@ -1871,8 +2005,27 @@ const PlannerWeeklyDashboard = () => {
             });
             setAssignModalOpen(true);
           }}
+          onUnblockClick={async (activityId) => {
+            if (!programmeId) return;
+            try {
+              await programmeAPI.updateActivity(programmeId, activityId, {
+                isBlocked: false,
+                activityStatus: "Ready",
+              });
+              // Refresh dashboard data
+              const dashResponse = await dashboardAPI.getWeeklyDashboard(selectedProjectId, currentWeekNumber);
+              if (dashResponse.success) {
+                setData(dashResponse.weekly);
+              }
+            } catch (error) {
+              console.error("Error unblocking activity:", error);
+            }
+          }}
           onActionIdClick={() => {
             navigate("/planner/action");
+          }}
+          onReassignClick={(action) => {
+            handleOpenReassign(action);
           }}
         />
       </Box>
@@ -1885,7 +2038,12 @@ const PlannerWeeklyDashboard = () => {
           outstandingActions={data?.stats?.openActions || 0}
           openRequiredActions={data?.stats?.openRequiredActions || 0}
           weekNumber={currentWeekNumber}
-          canClose={data?.stats?.readyForClose || false}
+          canClose={
+            // Check both readyForClose (no blockers) and date-based canClose from weeks status
+            (data?.stats?.readyForClose || false) &&
+            (_weeksStatus.find(w => w.weekNumber === currentWeekNumber)?.canClose ?? true)
+          }
+          canCloseReason={_weeksStatus.find(w => w.weekNumber === currentWeekNumber)?.canCloseReason || ""}
           isProjectEnded={data?.isProjectEnded || false}
           isWeekClosed={_weeksStatus.find(w => w.weekNumber === currentWeekNumber)?.status === "closed" || data?.cycle?.status === "Closed"}
           isClosing={isClosingWeek}
@@ -2381,6 +2539,271 @@ const PlannerWeeklyDashboard = () => {
               <CircularProgress size={20} sx={{ color: "#fff" }} />
             ) : (
               "Assign"
+            )}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Reassign Action Modal */}
+      <Dialog
+        open={reassignModalOpen}
+        onClose={handleCloseReassign}
+        maxWidth="xs"
+        fullWidth
+        slotProps={{
+          backdrop: {
+            sx: {
+              bgcolor: "rgba(0, 0, 0, 0.8)",
+            },
+          },
+          paper: {
+            sx: {
+              bgcolor: COLORS.bgSecondary,
+              border: `1px solid ${COLORS.border}`,
+              borderRadius: "12px",
+              backgroundImage: "none",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
+            },
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            pb: 1,
+            pt: 2,
+            borderBottom: `1px solid ${COLORS.border}`,
+          }}
+        >
+          <Box>
+            <Typography
+              sx={{
+                color: COLORS.textPrimary,
+                fontSize: "18px",
+                fontWeight: 600,
+              }}
+            >
+              Reassign Action
+            </Typography>
+            <Typography
+              sx={{
+                color: COLORS.textSecondary,
+                fontSize: "12px",
+                fontWeight: 400,
+                mt: 0.5,
+              }}
+            >
+              {reassigningAction?.title}
+            </Typography>
+          </Box>
+          <IconButton
+            onClick={handleCloseReassign}
+            sx={{ color: COLORS.textMuted, p: 0.5 }}
+          >
+            <CloseIcon sx={{ fontSize: 20 }} />
+          </IconButton>
+        </DialogTitle>
+
+        <DialogContent sx={{ px: 3, py: 2 }}>
+          {reassignError && (
+            <Box
+              sx={{
+                bgcolor: "rgba(239, 68, 68, 0.15)",
+                border: `1px solid ${COLORS.red}`,
+                borderRadius: "8px",
+                px: 2,
+                py: 1.5,
+                mb: 2,
+              }}
+            >
+              <Typography
+                sx={{
+                  color: COLORS.red,
+                  fontSize: "13px",
+                  fontWeight: 500,
+                }}
+              >
+                {reassignError}
+              </Typography>
+            </Box>
+          )}
+
+          <Box sx={{ mb: 2, mt: 1 }}>
+            <Typography
+              sx={{
+                color: COLORS.textSecondary,
+                fontSize: "12px",
+                fontWeight: 500,
+                mb: 1,
+              }}
+            >
+              Current Assignee
+            </Typography>
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 1,
+                bgcolor: COLORS.bgPrimary,
+                borderRadius: "8px",
+                border: `1px solid ${COLORS.border}`,
+                px: 1.5,
+                py: 1,
+              }}
+            >
+              <Avatar
+                sx={{
+                  width: 24,
+                  height: 24,
+                  fontSize: "10px",
+                  fontWeight: 600,
+                  bgcolor: COLORS.blue,
+                }}
+              >
+                {reassigningAction?.currentAssigneeName
+                  ?.split(" ")
+                  .map((n) => n[0])
+                  .join("")
+                  .toUpperCase()
+                  .slice(0, 2) || "?"}
+              </Avatar>
+              <Typography
+                sx={{
+                  color: COLORS.textPrimary,
+                  fontSize: "14px",
+                }}
+              >
+                {reassigningAction?.currentAssigneeName || "Unknown"}
+              </Typography>
+            </Box>
+          </Box>
+
+          <Box>
+            <Typography
+              sx={{
+                color: COLORS.textSecondary,
+                fontSize: "12px",
+                fontWeight: 500,
+                mb: 0.5,
+              }}
+            >
+              Reassign To <span style={{ color: COLORS.red }}>*</span>
+            </Typography>
+            <Select
+              fullWidth
+              value={reassignAssignee}
+              onChange={(e) => setReassignAssignee(e.target.value)}
+              displayEmpty
+              IconComponent={ArrowDownIcon}
+              sx={{
+                bgcolor: COLORS.bgPrimary,
+                borderRadius: "8px",
+                "& .MuiOutlinedInput-notchedOutline": {
+                  borderColor: COLORS.border,
+                },
+                "&:hover .MuiOutlinedInput-notchedOutline": {
+                  borderColor: COLORS.border,
+                },
+                "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                  borderColor: COLORS.blue,
+                  borderWidth: 1,
+                },
+                "& .MuiSelect-select": {
+                  color: reassignAssignee ? COLORS.textPrimary : COLORS.textMuted,
+                  fontSize: "14px",
+                  py: 1.2,
+                },
+                "& .MuiSvgIcon-root": { color: COLORS.textSecondary },
+              }}
+              MenuProps={{
+                slotProps: {
+                  paper: {
+                    sx: {
+                      bgcolor: COLORS.bgSecondary,
+                      border: `1px solid ${COLORS.border}`,
+                      borderRadius: "8px",
+                      maxHeight: 200,
+                      "& .MuiMenuItem-root": {
+                        color: COLORS.textPrimary,
+                        fontSize: "14px",
+                        "&:hover": { bgcolor: COLORS.bgTertiary },
+                        "&.Mui-selected": {
+                          bgcolor: COLORS.blueBgMedium,
+                        },
+                      },
+                    },
+                  },
+                },
+              }}
+            >
+              <MenuItem value="" disabled>
+                Select new assignee...
+              </MenuItem>
+              {users
+                .filter((u) => u._id !== reassigningAction?.currentAssignee)
+                .map((u) => (
+                  <MenuItem key={u._id} value={u._id}>
+                    {u.name}
+                  </MenuItem>
+                ))}
+            </Select>
+          </Box>
+        </DialogContent>
+
+        <DialogActions
+          sx={{
+            px: 3,
+            py: 2,
+            borderTop: `1px solid ${COLORS.border}`,
+            gap: 1.5,
+          }}
+        >
+          <Button
+            onClick={handleCloseReassign}
+            sx={{
+              color: COLORS.textSecondary,
+              bgcolor: "transparent",
+              border: `1px solid ${COLORS.border}`,
+              borderRadius: "8px",
+              textTransform: "none",
+              px: 2.5,
+              py: 1,
+              fontSize: "14px",
+              fontWeight: 500,
+              "&:hover": {
+                bgcolor: COLORS.bgTertiary,
+              },
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleReassignSave}
+            disabled={reassignLoading || !reassignAssignee}
+            sx={{
+              color: "#fff",
+              bgcolor: COLORS.amber,
+              borderRadius: "8px",
+              textTransform: "none",
+              px: 2.5,
+              py: 1,
+              fontSize: "14px",
+              fontWeight: 500,
+              "&:hover": {
+                bgcolor: "#d97706",
+              },
+              "&.Mui-disabled": {
+                bgcolor: COLORS.textMuted,
+                color: COLORS.bgPrimary,
+              },
+            }}
+          >
+            {reassignLoading ? (
+              <CircularProgress size={20} sx={{ color: "#fff" }} />
+            ) : (
+              "Reassign"
             )}
           </Button>
         </DialogActions>

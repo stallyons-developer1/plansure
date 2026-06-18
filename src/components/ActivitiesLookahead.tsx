@@ -26,6 +26,8 @@ interface ActivitiesLookaheadProps {
   lastUpdated: string;
   onAssignClick?: (activity: Activity) => void;
   onActionClick?: () => void;
+  onReassignClick?: (action: { _id: string; title: string; currentAssignee?: string }) => void;
+  isProjectEnded?: boolean;
 }
 
 const ActivitiesLookahead = ({
@@ -34,6 +36,8 @@ const ActivitiesLookahead = ({
   lastUpdated,
   onAssignClick,
   onActionClick,
+  onReassignClick,
+  isProjectEnded = false,
 }: ActivitiesLookaheadProps) => {
   const [ragFilter, setRagFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -122,11 +126,44 @@ const ActivitiesLookahead = ({
     return matchesRag && matchesStatus && matchesSearch && withinLookahead && matchesWeek;
   });
 
-  // Calculate counts from filtered activities (dynamic based on filters)
-  const greenCount = filteredActivities.filter((a) => a.ragColor === "green").length;
-  const amberCount = filteredActivities.filter((a) => a.ragColor === "amber").length;
-  const redCount = filteredActivities.filter((a) => a.ragColor === "red").length;
-  const blockedCount = filteredActivities.filter((a) => a.status === "Blocked").length;
+  // Sort activities by RAG zone order: Weeks 1-2, Weeks 3-4, Weeks 5-6, In Progress, then others
+  const getRagZoneSortOrder = (ragZone: string): number => {
+    switch (ragZone) {
+      case "Weeks 1-2":
+        return 1;
+      case "Weeks 3-4":
+        return 2;
+      case "Weeks 5-6":
+        return 3;
+      case "In Progress":
+        return 4;
+      case "Completed":
+        return 5;
+      default:
+        return 6; // Any other zone goes last
+    }
+  };
+
+  const sortedActivities = [...filteredActivities].sort((a, b) => {
+    const orderA = getRagZoneSortOrder(a.ragZone);
+    const orderB = getRagZoneSortOrder(b.ragZone);
+    if (orderA !== orderB) {
+      return orderA - orderB;
+    }
+    // Secondary sort by start date within the same RAG zone
+    const dateA = parseDate(a.startDate);
+    const dateB = parseDate(b.startDate);
+    if (dateA && dateB) {
+      return dateA.getTime() - dateB.getTime();
+    }
+    return 0;
+  });
+
+  // Calculate counts from sorted activities (dynamic based on filters)
+  const greenCount = sortedActivities.filter((a) => a.ragColor === "green").length;
+  const amberCount = sortedActivities.filter((a) => a.ragColor === "amber").length;
+  const redCount = sortedActivities.filter((a) => a.ragColor === "red").length;
+  const blockedCount = sortedActivities.filter((a) => a.status === "Blocked").length;
 
   const getColorValue = (color: string) => {
     switch (color) {
@@ -472,7 +509,7 @@ const ActivitiesLookahead = ({
         </Box>
       </Box>
 
-      {filteredActivities.length === 0 ? (
+      {sortedActivities.length === 0 ? (
         <Box
           sx={{
             bgcolor: COLORS.bgSecondary,
@@ -494,8 +531,8 @@ const ActivitiesLookahead = ({
         </Box>
       ) : (
         (() => {
-          const totalPages = Math.ceil(filteredActivities.length / activitiesPerPage);
-          const paginatedActivities = filteredActivities.slice(
+          const totalPages = Math.ceil(sortedActivities.length / activitiesPerPage);
+          const paginatedActivities = sortedActivities.slice(
             (currentPage - 1) * activitiesPerPage,
             currentPage * activitiesPerPage
           );
@@ -505,18 +542,20 @@ const ActivitiesLookahead = ({
               activities={paginatedActivities}
               onAssignClick={onAssignClick}
               onActionClick={onActionClick}
+              onReassignClick={onReassignClick}
               currentPage={currentPage}
               totalPages={totalPages}
-              totalActivities={filteredActivities.length}
+              totalActivities={sortedActivities.length}
               onPageChange={setCurrentPage}
               activitiesPerPage={activitiesPerPage}
+              isProjectEnded={isProjectEnded}
             />
           );
         })()
       )}
 
       <ActivitiesSummary
-        totalActivities={filteredActivities.length}
+        totalActivities={sortedActivities.length}
         greenCount={greenCount}
         amberCount={amberCount}
         redCount={redCount}

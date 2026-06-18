@@ -15,7 +15,9 @@
       "Bash(node scripts/generateEndedProjectPDF.cjs:*)",
       "Bash(grep:*)",
       "Bash(node scripts/generateTestPDF.js:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(git checkout:*)",
+      "Bash(git push:*)"
     ]
   }
 }
