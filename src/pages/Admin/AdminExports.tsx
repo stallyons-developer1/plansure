@@ -82,18 +82,12 @@ const AdminExports = () => {
     blockedActivities: 0,
     greenActivities: 0,
   });
-  const [weeklyActionStats, setWeeklyActionStats] = useState<WeeklyActionStats>({
-    openRequired: 0,
-    total: 0,
-  });
-
-  // Closure readiness checklist
-  const [closureChecklist, setClosureChecklist] = useState({
-    plannerReview: false,
-    todoGenerated: false,
-    overdueAcknowledged: false,
-    blockedAcknowledged: false,
-  });
+  const [weeklyActionStats, setWeeklyActionStats] = useState<WeeklyActionStats>(
+    {
+      openRequired: 0,
+      total: 0,
+    },
+  );
 
   const amberColor = "#F59E0B";
   const amberBg = "rgba(245, 158, 11, 0.15)";
@@ -101,7 +95,12 @@ const AdminExports = () => {
   const greenBg = "rgba(34, 197, 94, 0.15)";
 
   // Unlock exports when cycle reaches "Execution" or "Close-Out Eligible"
-  const isExportAllowed = ["Execution", "Close-Out Eligible", "Approved", "Closed"].includes(gatingStatus.cycleStatus);
+  const isExportAllowed = [
+    "Execution",
+    "Close-Out Eligible",
+    "Approved",
+    "Closed",
+  ].includes(gatingStatus.cycleStatus);
   const statusColor = isExportAllowed ? greenColor : amberColor;
   const statusBg = isExportAllowed ? greenBg : amberBg;
 
@@ -155,9 +154,14 @@ const AdminExports = () => {
           // Get current week from weeks status
           let currentWeek = "W1";
           try {
-            const weeksRes = await programmeAPI.getWeeksStatus(response.programme._id);
+            const weeksRes = await programmeAPI.getWeeksStatus(
+              response.programme._id,
+            );
             if (weeksRes.success && weeksRes.weeks) {
-              const firstOpenWeek = weeksRes.weeks.find((w: { status: string; weekNumber: number }) => w.status === "open");
+              const firstOpenWeek = weeksRes.weeks.find(
+                (w: { status: string; weekNumber: number }) =>
+                  w.status === "open",
+              );
               if (firstOpenWeek) {
                 currentWeek = `W${firstOpenWeek.weekNumber}`;
               } else {
@@ -165,7 +169,7 @@ const AdminExports = () => {
                   ...weeksRes.weeks
                     .filter((w: { status: string }) => w.status === "closed")
                     .map((w: { weekNumber: number }) => w.weekNumber),
-                  0
+                  0,
                 );
                 currentWeek = `W${maxClosedWeek + 1}`;
               }
@@ -175,14 +179,21 @@ const AdminExports = () => {
           }
 
           setGatingStatus({
-            isGated: !["Execution", "Close-Out Eligible", "Approved", "Closed"].includes(cycleStatus),
+            isGated: ![
+              "Execution",
+              "Close-Out Eligible",
+              "Approved",
+              "Closed",
+            ].includes(cycleStatus),
             cycleStatus,
             currentWeek,
           });
 
           // Fetch weekly control data for export counts
           try {
-            const wcRes = await programmeAPI.getWeeklyControl(response.programme._id);
+            const wcRes = await programmeAPI.getWeeklyControl(
+              response.programme._id,
+            );
 
             // Calculate export counts - access response directly (not through .weeklyControl)
             const greenActivities = wcRes.ragDistribution?.green || 0;
@@ -196,7 +207,8 @@ const AdminExports = () => {
               (wcRes.weeklyActionsByStatus?.overdue || 0);
 
             const overdueActions = wcRes.actionsByStatus?.overdue || 0;
-            const weeklyPlanTotal = greenActivities + (wcRes.weeklyPlanPreview?.length || 0);
+            const weeklyPlanTotal =
+              greenActivities + (wcRes.weeklyPlanPreview?.length || 0);
 
             setExportCounts({
               weeklyPlanTotal,
@@ -207,7 +219,9 @@ const AdminExports = () => {
             });
 
             // Calculate weekly action stats
-            const openRequired = (wcRes.requiredActionsByStatus?.open || 0) + (wcRes.requiredActionsByStatus?.inProgress || 0);
+            const openRequired =
+              (wcRes.requiredActionsByStatus?.open || 0) +
+              (wcRes.requiredActionsByStatus?.inProgress || 0);
             setWeeklyActionStats({
               openRequired,
               total: outstandingActions,
@@ -256,7 +270,7 @@ const AdminExports = () => {
               month: "short",
               year: "numeric",
             }),
-          }))
+          })),
         );
       }
     } catch (error) {
@@ -408,8 +422,18 @@ const AdminExports = () => {
 
   if (loadingProjects) {
     return (
-      <AdminLayout title="Exports" subtitle="Weekly Plan and Planner To-Do exports">
-        <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", height: "50vh" }}>
+      <AdminLayout
+        title="Exports"
+        subtitle="Weekly Plan and Planner To-Do exports"
+      >
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            height: "50vh",
+          }}
+        >
           <CircularProgress sx={{ color: COLORS.blue }} />
         </Box>
       </AdminLayout>
@@ -423,7 +447,14 @@ const AdminExports = () => {
       headerAction={projectDropdown}
     >
       {loadingData ? (
-        <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", height: "50vh" }}>
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            height: "50vh",
+          }}
+        >
           <CircularProgress sx={{ color: COLORS.blue }} />
         </Box>
       ) : projects.length === 0 ? (
@@ -493,7 +524,12 @@ const AdminExports = () => {
             </Box>
             <Box sx={{ flex: 1 }}>
               <Box
-                sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 0.5 }}
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1.5,
+                  mb: 0.5,
+                }}
               >
                 <Typography
                   sx={{
@@ -529,7 +565,9 @@ const AdminExports = () => {
                   {isExportAllowed ? "Unlocked" : "Gated"}
                 </Box>
               </Box>
-              <Typography sx={{ color: COLORS.textSecondary, fontSize: "14px" }}>
+              <Typography
+                sx={{ color: COLORS.textSecondary, fontSize: "14px" }}
+              >
                 {isExportAllowed ? (
                   <>
                     Exports are unlocked — Cycle is in{" "}
@@ -585,7 +623,12 @@ const AdminExports = () => {
               }}
             >
               <Box
-                sx={{ display: "flex", alignItems: "flex-start", gap: 2, mb: 3 }}
+                sx={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 2,
+                  mb: 3,
+                }}
               >
                 <Box
                   sx={{
@@ -662,7 +705,11 @@ const AdminExports = () => {
                               : greenColor,
                         }}
                       />
-                      {!isExportAllowed ? "Gated" : weeklyActionStats.openRequired > 0 ? "Pending" : "Ready"}
+                      {!isExportAllowed
+                        ? "Gated"
+                        : weeklyActionStats.openRequired > 0
+                          ? "Pending"
+                          : "Ready"}
                     </Box>
                   </Box>
                   <Typography
@@ -673,7 +720,9 @@ const AdminExports = () => {
                   <Typography
                     sx={{ color: COLORS.textMuted, fontSize: "12px", mt: 0.5 }}
                   >
-                    {exportCounts.weeklyPlanTotal} {exportCounts.weeklyPlanTotal === 1 ? "item" : "items"} to export
+                    {exportCounts.weeklyPlanTotal}{" "}
+                    {exportCounts.weeklyPlanTotal === 1 ? "item" : "items"} to
+                    export
                   </Typography>
                 </Box>
               </Box>
@@ -720,7 +769,11 @@ const AdminExports = () => {
 
               <Button
                 onClick={handleExportWeeklyPlan}
-                disabled={!isExportAllowed || weeklyActionStats.openRequired > 0 || exporting === "weekly"}
+                disabled={
+                  !isExportAllowed ||
+                  weeklyActionStats.openRequired > 0 ||
+                  exporting === "weekly"
+                }
                 startIcon={
                   exporting === "weekly" ? (
                     <CircularProgress size={14} sx={{ color: "inherit" }} />
@@ -733,15 +786,24 @@ const AdminExports = () => {
                   )
                 }
                 sx={{
-                  bgcolor: isExportAllowed && weeklyActionStats.openRequired === 0 ? COLORS.green : COLORS.bgTertiary,
-                  color: isExportAllowed && weeklyActionStats.openRequired === 0 ? COLORS.white : COLORS.textPrimary,
+                  bgcolor:
+                    isExportAllowed && weeklyActionStats.openRequired === 0
+                      ? COLORS.green
+                      : COLORS.bgTertiary,
+                  color:
+                    isExportAllowed && weeklyActionStats.openRequired === 0
+                      ? COLORS.white
+                      : COLORS.textPrimary,
                   textTransform: "none",
                   py: 1.5,
                   borderRadius: "8px",
                   fontSize: "14px",
                   fontWeight: 500,
                   "&:hover": {
-                    bgcolor: isExportAllowed && weeklyActionStats.openRequired === 0 ? "#16a34a" : COLORS.border,
+                    bgcolor:
+                      isExportAllowed && weeklyActionStats.openRequired === 0
+                        ? "#16a34a"
+                        : COLORS.border,
                   },
                   "&:disabled": {
                     bgcolor: COLORS.bgTertiary,
@@ -771,7 +833,12 @@ const AdminExports = () => {
               }}
             >
               <Box
-                sx={{ display: "flex", alignItems: "flex-start", gap: 2, mb: 3 }}
+                sx={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 2,
+                  mb: 3,
+                }}
               >
                 <Box
                   sx={{
@@ -848,19 +915,24 @@ const AdminExports = () => {
                               : greenColor,
                         }}
                       />
-                      {!isExportAllowed ? "Gated" : exportCounts.outstandingActions === 0 ? "Empty" : "Ready"}
+                      {!isExportAllowed
+                        ? "Gated"
+                        : exportCounts.outstandingActions === 0
+                          ? "Empty"
+                          : "Ready"}
                     </Box>
                   </Box>
                   <Typography
                     sx={{ color: COLORS.textSecondary, fontSize: "13px" }}
                   >
-                    Outstanding actions and planner follow-on items. A prioritised
-                    task list for the planning team.
+                    Outstanding actions and planner follow-on items. A
+                    prioritised task list for the planning team.
                   </Typography>
                   <Typography
                     sx={{ color: COLORS.textMuted, fontSize: "12px", mt: 0.5 }}
                   >
-                    {exportCounts.outstandingActions} outstanding {exportCounts.outstandingActions === 1 ? "item" : "items"}
+                    {exportCounts.outstandingActions} outstanding{" "}
+                    {exportCounts.outstandingActions === 1 ? "item" : "items"}
                   </Typography>
                 </Box>
               </Box>
@@ -915,7 +987,11 @@ const AdminExports = () => {
 
               <Button
                 onClick={handleExportPlannerTodo}
-                disabled={!isExportAllowed || exportCounts.outstandingActions === 0 || exporting === "todo"}
+                disabled={
+                  !isExportAllowed ||
+                  exportCounts.outstandingActions === 0 ||
+                  exporting === "todo"
+                }
                 startIcon={
                   exporting === "todo" ? (
                     <CircularProgress size={14} sx={{ color: "inherit" }} />
@@ -928,15 +1004,24 @@ const AdminExports = () => {
                   )
                 }
                 sx={{
-                  bgcolor: isExportAllowed && exportCounts.outstandingActions > 0 ? COLORS.blue : COLORS.bgTertiary,
-                  color: isExportAllowed && exportCounts.outstandingActions > 0 ? COLORS.white : COLORS.textMuted,
+                  bgcolor:
+                    isExportAllowed && exportCounts.outstandingActions > 0
+                      ? COLORS.blue
+                      : COLORS.bgTertiary,
+                  color:
+                    isExportAllowed && exportCounts.outstandingActions > 0
+                      ? COLORS.white
+                      : COLORS.textMuted,
                   textTransform: "none",
                   py: 1.5,
                   borderRadius: "8px",
                   fontSize: "14px",
                   fontWeight: 500,
                   "&:hover": {
-                    bgcolor: isExportAllowed && exportCounts.outstandingActions > 0 ? "#2563eb" : COLORS.bgTertiary,
+                    bgcolor:
+                      isExportAllowed && exportCounts.outstandingActions > 0
+                        ? "#2563eb"
+                        : COLORS.bgTertiary,
                   },
                   "&:disabled": {
                     bgcolor: COLORS.bgTertiary,
@@ -964,7 +1049,9 @@ const AdminExports = () => {
               overflow: "hidden",
             }}
           >
-            <Box sx={{ px: 3, py: 1, borderBottom: `1px solid ${COLORS.border}` }}>
+            <Box
+              sx={{ px: 3, py: 1, borderBottom: `1px solid ${COLORS.border}` }}
+            >
               <Typography
                 sx={{
                   color: COLORS.blue,
@@ -975,7 +1062,9 @@ const AdminExports = () => {
               >
                 Export History
               </Typography>
-              <Typography sx={{ color: COLORS.textSecondary, fontSize: "14px" }}>
+              <Typography
+                sx={{ color: COLORS.textSecondary, fontSize: "14px" }}
+              >
                 Previously generated exports for this project
               </Typography>
             </Box>
@@ -1017,7 +1106,9 @@ const AdminExports = () => {
 
                 {exportHistory.length === 0 ? (
                   <Box sx={{ px: 3, py: 4, textAlign: "center" }}>
-                    <Typography sx={{ color: COLORS.textMuted, fontSize: "14px" }}>
+                    <Typography
+                      sx={{ color: COLORS.textMuted, fontSize: "14px" }}
+                    >
                       No exports generated yet
                     </Typography>
                   </Box>
@@ -1052,7 +1143,9 @@ const AdminExports = () => {
                         sx={{
                           border: `1px solid ${item.type === "Weekly Plan" ? COLORS.green : COLORS.blue}`,
                           color:
-                            item.type === "Weekly Plan" ? COLORS.green : COLORS.blue,
+                            item.type === "Weekly Plan"
+                              ? COLORS.green
+                              : COLORS.blue,
                           px: 2,
                           py: 0.75,
                           borderRadius: "20px",
@@ -1095,12 +1188,22 @@ const AdminExports = () => {
                             width: 8,
                             height: 8,
                             borderRadius: "50%",
-                            bgcolor: item.status === "Complete" ? COLORS.green : item.status === "Failed" ? COLORS.red : amberColor,
+                            bgcolor:
+                              item.status === "Complete"
+                                ? COLORS.green
+                                : item.status === "Failed"
+                                  ? COLORS.red
+                                  : amberColor,
                           }}
                         />
                         <Typography
                           sx={{
-                            color: item.status === "Complete" ? COLORS.green : item.status === "Failed" ? COLORS.red : amberColor,
+                            color:
+                              item.status === "Complete"
+                                ? COLORS.green
+                                : item.status === "Failed"
+                                  ? COLORS.red
+                                  : amberColor,
                             fontSize: "13px",
                             fontWeight: 500,
                           }}
