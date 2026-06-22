@@ -17,7 +17,8 @@
       "Bash(node scripts/generateTestPDF.js:*)",
       "Bash(wc:*)",
       "Bash(git checkout:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(cat:*)"
     ]
   }
 }

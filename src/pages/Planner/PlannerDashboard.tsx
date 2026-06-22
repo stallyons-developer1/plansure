@@ -640,7 +640,7 @@ const PlannerDashboard = () => {
                   mb: 0.5,
                 }}
               >
-                Current Week Cycle
+                Current 2-Week Cycle
               </Typography>
               <Typography
                 sx={{

@@ -44,6 +44,19 @@ interface GatingStatus {
   currentWeek: string;
 }
 
+interface ExportCounts {
+  weeklyPlanTotal: number;
+  outstandingActions: number;
+  overdueActions: number;
+  blockedActivities: number;
+  greenActivities: number;
+}
+
+interface WeeklyActionStats {
+  openRequired: number;
+  total: number;
+}
+
 const PlannerExports = () => {
   // Project selection state
   const [projects, setProjects] = useState<Project[]>([]);
@@ -61,13 +74,26 @@ const PlannerExports = () => {
   const [loadingData, setLoadingData] = useState(false);
   const [exporting, setExporting] = useState<"weekly" | "todo" | null>(null);
 
+  // Export counts and action stats (like Closure & Export tab)
+  const [exportCounts, setExportCounts] = useState<ExportCounts>({
+    weeklyPlanTotal: 0,
+    outstandingActions: 0,
+    overdueActions: 0,
+    blockedActivities: 0,
+    greenActivities: 0,
+  });
+  const [weeklyActionStats, setWeeklyActionStats] = useState<WeeklyActionStats>({
+    openRequired: 0,
+    total: 0,
+  });
+
   const amberColor = "#F59E0B";
   const amberBg = "rgba(245, 158, 11, 0.15)";
   const greenColor = COLORS.green;
   const greenBg = "rgba(34, 197, 94, 0.15)";
 
-  // ONLY unlock exports when cycle reaches "Close-Out Eligible"
-  const isExportAllowed = gatingStatus.cycleStatus === "Close-Out Eligible";
+  // Unlock exports when cycle reaches "Execution" or "Close-Out Eligible"
+  const isExportAllowed = ["Execution", "Close-Out Eligible", "Approved", "Closed"].includes(gatingStatus.cycleStatus);
   const statusColor = isExportAllowed ? greenColor : amberColor;
   const statusBg = isExportAllowed ? greenBg : amberBg;
 
@@ -141,10 +167,46 @@ const PlannerExports = () => {
           }
 
           setGatingStatus({
-            isGated: cycleStatus !== "Close-Out Eligible",
+            isGated: !["Execution", "Close-Out Eligible", "Approved", "Closed"].includes(cycleStatus),
             cycleStatus,
             currentWeek,
           });
+
+          // Fetch weekly control data for export counts
+          try {
+            const wcRes = await programmeAPI.getWeeklyControl(response.programme._id);
+
+            // Calculate export counts - access response directly (not through .weeklyControl)
+            const greenActivities = wcRes.ragDistribution?.green || 0;
+            const blockedActivities = wcRes.ragDistribution?.red || 0;
+
+            // Outstanding actions for Planner To-Do = open + inProgress + overdue (from CURRENT 2 WEEKS only)
+            // Use weeklyActionsByStatus which is filtered to current week's actions
+            const outstandingActions =
+              (wcRes.weeklyActionsByStatus?.open || 0) +
+              (wcRes.weeklyActionsByStatus?.inProgress || 0) +
+              (wcRes.weeklyActionsByStatus?.overdue || 0);
+
+            const overdueActions = wcRes.actionsByStatus?.overdue || 0;
+            const weeklyPlanTotal = greenActivities + (wcRes.weeklyPlanPreview?.length || 0);
+
+            setExportCounts({
+              weeklyPlanTotal,
+              outstandingActions,
+              overdueActions,
+              blockedActivities,
+              greenActivities,
+            });
+
+            // Calculate weekly action stats
+            const openRequired = (wcRes.requiredActionsByStatus?.open || 0) + (wcRes.requiredActionsByStatus?.inProgress || 0);
+            setWeeklyActionStats({
+              openRequired,
+              total: outstandingActions,
+            });
+          } catch (e) {
+            console.error("Error fetching weekly control data:", e);
+          }
 
           // Fetch export history for this programme/project
           await fetchExportHistory(response.programme._id);
@@ -206,12 +268,12 @@ const PlannerExports = () => {
       setExporting("weekly");
       const response = await exportAPI.generateWeeklyPlan(programmeId);
       const blob = new Blob([response.data], {
-        type: "application/pdf",
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `Weekly_Plan_${gatingStatus.currentWeek}.pdf`;
+      link.download = `Weekly_Plan_${gatingStatus.currentWeek}.xlsx`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -232,12 +294,12 @@ const PlannerExports = () => {
       setExporting("todo");
       const response = await exportAPI.generatePlannerTodo(programmeId);
       const blob = new Blob([response.data], {
-        type: "application/pdf",
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `Planner_ToDo_${gatingStatus.currentWeek}.pdf`;
+      link.download = `Planner_ToDo_${gatingStatus.currentWeek}.xlsx`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -255,12 +317,12 @@ const PlannerExports = () => {
     try {
       const response = await exportAPI.download(id);
       const blob = new Blob([response.data], {
-        type: "application/pdf",
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = fileName || "export.pdf";
+      link.download = fileName || "export.xlsx";
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -478,9 +540,9 @@ const PlannerExports = () => {
                       component="span"
                       sx={{ color: COLORS.blue, fontSize: "14px" }}
                     >
-                      Close-Out Eligible
+                      Execution
                     </Typography>{" "}
-                    state. Current cycle is in{" "}
+                    or higher state. Current cycle is in{" "}
                     <Typography
                       component="span"
                       sx={{ color: COLORS.blue, fontSize: "14px" }}
@@ -559,8 +621,16 @@ const PlannerExports = () => {
                     </Typography>
                     <Box
                       sx={{
-                        bgcolor: statusBg,
-                        color: statusColor,
+                        bgcolor: !isExportAllowed
+                          ? "rgba(239, 68, 68, 0.15)"
+                          : weeklyActionStats.openRequired > 0
+                            ? amberBg
+                            : greenBg,
+                        color: !isExportAllowed
+                          ? COLORS.red
+                          : weeklyActionStats.openRequired > 0
+                            ? amberColor
+                            : greenColor,
                         px: 1.5,
                         py: 0.25,
                         borderRadius: "12px",
@@ -577,17 +647,25 @@ const PlannerExports = () => {
                           width: 6,
                           height: 6,
                           borderRadius: "50%",
-                          bgcolor: statusColor,
+                          bgcolor: !isExportAllowed
+                            ? COLORS.red
+                            : weeklyActionStats.openRequired > 0
+                              ? amberColor
+                              : greenColor,
                         }}
                       />
-                      {isExportAllowed ? "Ready" : "Gated"}
+                      {!isExportAllowed ? "Gated" : weeklyActionStats.openRequired > 0 ? "Pending" : "Ready"}
                     </Box>
                   </Box>
                   <Typography
                     sx={{ color: COLORS.textSecondary, fontSize: "13px" }}
                   >
-                    Green activities with zero open required actions. The definitive
-                    weekly delivery plan for field teams.
+                    Actions + Activities (Completed/Blocked)
+                  </Typography>
+                  <Typography
+                    sx={{ color: COLORS.textMuted, fontSize: "12px", mt: 0.5 }}
+                  >
+                    {exportCounts.weeklyPlanTotal} {exportCounts.weeklyPlanTotal === 1 ? "item" : "items"} to export
                   </Typography>
                 </Box>
               </Box>
@@ -634,7 +712,7 @@ const PlannerExports = () => {
 
               <Button
                 onClick={handleExportWeeklyPlan}
-                disabled={!isExportAllowed || exporting === "weekly"}
+                disabled={!isExportAllowed || weeklyActionStats.openRequired > 0 || exporting === "weekly"}
                 startIcon={
                   exporting === "weekly" ? (
                     <CircularProgress size={14} sx={{ color: "inherit" }} />
@@ -647,15 +725,15 @@ const PlannerExports = () => {
                   )
                 }
                 sx={{
-                  bgcolor: isExportAllowed ? COLORS.green : COLORS.bgTertiary,
-                  color: isExportAllowed ? COLORS.white : COLORS.textPrimary,
+                  bgcolor: isExportAllowed && weeklyActionStats.openRequired === 0 ? COLORS.green : COLORS.bgTertiary,
+                  color: isExportAllowed && weeklyActionStats.openRequired === 0 ? COLORS.white : COLORS.textPrimary,
                   textTransform: "none",
                   py: 1.5,
                   borderRadius: "8px",
                   fontSize: "14px",
                   fontWeight: 500,
                   "&:hover": {
-                    bgcolor: isExportAllowed ? "#16a34a" : COLORS.border,
+                    bgcolor: isExportAllowed && weeklyActionStats.openRequired === 0 ? "#16a34a" : COLORS.border,
                   },
                   "&:disabled": {
                     bgcolor: COLORS.bgTertiary,
@@ -663,7 +741,13 @@ const PlannerExports = () => {
                   },
                 }}
               >
-                {!isExportAllowed ? "Export Gated" : exporting === "weekly" ? "Exporting..." : "Export Weekly Plan"}
+                {!isExportAllowed
+                  ? "Export Gated"
+                  : weeklyActionStats.openRequired > 0
+                    ? `${weeklyActionStats.openRequired} Required Actions Pending`
+                    : exporting === "weekly"
+                      ? "Exporting..."
+                      : "Download Weekly Plan"}
               </Button>
             </Box>
 
@@ -723,8 +807,16 @@ const PlannerExports = () => {
                     </Typography>
                     <Box
                       sx={{
-                        bgcolor: statusBg,
-                        color: statusColor,
+                        bgcolor: !isExportAllowed
+                          ? "rgba(239, 68, 68, 0.15)"
+                          : exportCounts.outstandingActions === 0
+                            ? "rgba(107, 114, 128, 0.15)"
+                            : greenBg,
+                        color: !isExportAllowed
+                          ? COLORS.red
+                          : exportCounts.outstandingActions === 0
+                            ? COLORS.textMuted
+                            : greenColor,
                         px: 1.5,
                         py: 0.25,
                         borderRadius: "12px",
@@ -741,10 +833,14 @@ const PlannerExports = () => {
                           width: 6,
                           height: 6,
                           borderRadius: "50%",
-                          bgcolor: statusColor,
+                          bgcolor: !isExportAllowed
+                            ? COLORS.red
+                            : exportCounts.outstandingActions === 0
+                              ? COLORS.textMuted
+                              : greenColor,
                         }}
                       />
-                      {isExportAllowed ? "Ready" : "Gated"}
+                      {!isExportAllowed ? "Gated" : exportCounts.outstandingActions === 0 ? "Empty" : "Ready"}
                     </Box>
                   </Box>
                   <Typography
@@ -752,6 +848,11 @@ const PlannerExports = () => {
                   >
                     Outstanding actions and planner follow-on items. A prioritised
                     task list for the planning team.
+                  </Typography>
+                  <Typography
+                    sx={{ color: COLORS.textMuted, fontSize: "12px", mt: 0.5 }}
+                  >
+                    {exportCounts.outstandingActions} outstanding {exportCounts.outstandingActions === 1 ? "item" : "items"}
                   </Typography>
                 </Box>
               </Box>
@@ -806,7 +907,7 @@ const PlannerExports = () => {
 
               <Button
                 onClick={handleExportPlannerTodo}
-                disabled={!isExportAllowed || exporting === "todo"}
+                disabled={!isExportAllowed || exportCounts.outstandingActions === 0 || exporting === "todo"}
                 startIcon={
                   exporting === "todo" ? (
                     <CircularProgress size={14} sx={{ color: "inherit" }} />
@@ -819,15 +920,15 @@ const PlannerExports = () => {
                   )
                 }
                 sx={{
-                  bgcolor: isExportAllowed ? COLORS.blue : COLORS.bgTertiary,
-                  color: isExportAllowed ? COLORS.white : COLORS.textPrimary,
+                  bgcolor: isExportAllowed && exportCounts.outstandingActions > 0 ? COLORS.blue : COLORS.bgTertiary,
+                  color: isExportAllowed && exportCounts.outstandingActions > 0 ? COLORS.white : COLORS.textMuted,
                   textTransform: "none",
                   py: 1.5,
                   borderRadius: "8px",
                   fontSize: "14px",
                   fontWeight: 500,
                   "&:hover": {
-                    bgcolor: isExportAllowed ? "#2563eb" : COLORS.border,
+                    bgcolor: isExportAllowed && exportCounts.outstandingActions > 0 ? "#2563eb" : COLORS.bgTertiary,
                   },
                   "&:disabled": {
                     bgcolor: COLORS.bgTertiary,
@@ -835,7 +936,13 @@ const PlannerExports = () => {
                   },
                 }}
               >
-                {!isExportAllowed ? "Export Gated" : exporting === "todo" ? "Exporting..." : "Export Planner To-Do"}
+                {!isExportAllowed
+                  ? "Export Gated"
+                  : exportCounts.outstandingActions === 0
+                    ? "No Items to Export"
+                    : exporting === "todo"
+                      ? "Exporting..."
+                      : "Export Planner To-Do"}
               </Button>
             </Box>
           </Box>

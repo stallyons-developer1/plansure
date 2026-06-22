@@ -66,6 +66,10 @@ interface ActionOwnership {
   open: number;
   closed: number;
   overdue: number;
+  openActions?: string[];
+  closedActions?: string[];
+  overdueActions?: string[];
+  activityName?: string;
 }
 
 interface WeeklyData {
@@ -471,7 +475,37 @@ const AdminWeeklyDashboard = () => {
     fetchWeeklyControlData();
   }, [programmeId, currentWeekNumber]);
 
-  // Fetch actions for ownership chart
+  // Extract discipline from activity name
+  const extractDiscipline = (activityName: string): string => {
+    const name = (activityName || "").toLowerCase().trim();
+
+    // Construction discipline patterns
+    const disciplinePatterns: { [key: string]: string[] } = {
+      "Structural": ["steel", "structure", "column", "beam", "slab", "concrete", "rebar", "structural", "frame", "framing"],
+      "MEP": ["mep", "mechanical", "hvac", "piping", "duct", "ventilation", "air conditioning"],
+      "Electrical": ["electrical", "wiring", "cable", "power", "lighting", "switchgear", "panel"],
+      "Plumbing": ["plumbing", "pipe", "drainage", "water", "sanitary", "sewer"],
+      "Civil": ["civil", "excavation", "earthwork", "grading", "paving", "road", "site work"],
+      "Architectural": ["architectural", "partition", "ceiling", "flooring", "tiling", "painting", "plastering", "drywall", "wall", "door", "window"],
+      "Facade": ["facade", "cladding", "curtain wall", "glazing", "external", "envelope"],
+      "Roofing": ["roof", "roofing", "waterproof", "membrane", "insulation"],
+      "Foundation": ["foundation", "footing", "pile", "piling", "ground"],
+      "Finishing": ["finishing", "fit-out", "fitout", "interior", "decoration", "paint"],
+      "Testing": ["test", "testing", "commission", "commissioning", "inspection", "handover", "snag"],
+      "Design": ["design", "drawing", "approval", "permit", "submittal"],
+    };
+
+    // Find matching discipline
+    for (const [discipline, keywords] of Object.entries(disciplinePatterns)) {
+      if (keywords.some(kw => name.includes(kw))) {
+        return discipline;
+      }
+    }
+
+    return "General";
+  };
+
+  // Fetch actions for ownership chart - grouped by DISCIPLINE (work area)
   useEffect(() => {
     const fetchActionsData = async () => {
       if (!programmeId) return;
@@ -479,27 +513,32 @@ const AdminWeeklyDashboard = () => {
       try {
         const response = await actionAPI.getByProgramme(programmeId);
         if (response.success && response.actions) {
-          // Group actions by action title and track activity name for tooltip
-          const ownershipMap: { [key: string]: { open: number; closed: number; overdue: number; activityName: string } } = {};
+          // Group actions by DISCIPLINE (extracted from activity name)
+          const ownershipMap: { [key: string]: { open: number; closed: number; overdue: number; openActions: string[]; closedActions: string[]; overdueActions: string[]; activityName: string } } = {};
           const today = new Date();
           today.setHours(0, 0, 0, 0);
 
-          response.actions.forEach((action: { title?: string; linkedActivity?: { activityName?: string }; status?: string; dueDate?: string }) => {
-            // Group by action title
-            const discipline = action.title || "Unassigned";
+          response.actions.forEach((action: { title?: string; assignee?: { name?: string }; assigneeName?: string; linkedActivity?: { activityName?: string }; status?: string; dueDate?: string }) => {
+            // Extract discipline from activity name
             const activityName = action.linkedActivity?.activityName || "";
+            const discipline = extractDiscipline(activityName);
+            const actionName = action.title || "";
+
             if (!ownershipMap[discipline]) {
-              ownershipMap[discipline] = { open: 0, closed: 0, overdue: 0, activityName };
+              ownershipMap[discipline] = { open: 0, closed: 0, overdue: 0, openActions: [], closedActions: [], overdueActions: [], activityName };
             }
 
             if (action.status === "Closed" || action.status === "Completed") {
               ownershipMap[discipline].closed++;
+              if (actionName) ownershipMap[discipline].closedActions.push(actionName);
             } else {
               const dueDate = action.dueDate ? new Date(action.dueDate) : null;
               if (dueDate && dueDate < today) {
                 ownershipMap[discipline].overdue++;
+                if (actionName) ownershipMap[discipline].overdueActions.push(actionName);
               } else {
                 ownershipMap[discipline].open++;
+                if (actionName) ownershipMap[discipline].openActions.push(actionName);
               }
             }
           });
@@ -509,6 +548,7 @@ const AdminWeeklyDashboard = () => {
               discipline,
               ...counts,
             }))
+            .sort((a, b) => (b.open + b.closed + b.overdue) - (a.open + a.closed + a.overdue)) // Sort by total actions
             .slice(0, 5); // Limit to top 5
 
           if (ownershipArray.length > 0) {
@@ -1084,7 +1124,7 @@ const AdminWeeklyDashboard = () => {
                 mb: 0.75,
               }}
             >
-              ACTIVE WEEK
+              ACTIVE 2-WEEK PERIOD
             </Typography>
             <Typography
               sx={{
@@ -1157,7 +1197,7 @@ const AdminWeeklyDashboard = () => {
                 mb: 0.75,
               }}
             >
-              WEEKLY RAG
+              2-WEEK RAG
             </Typography>
             <Box
               sx={{
@@ -1374,7 +1414,7 @@ const AdminWeeklyDashboard = () => {
               fontSize: "12px",
             }}
           >
-            This week's scope
+            2-week scope
           </Typography>
         </Box>
 
@@ -1958,14 +1998,16 @@ const AdminWeeklyDashboard = () => {
                     <Tooltip
                       content={({ active, payload, label }) => {
                         if (active && payload && payload.length) {
+                          const openActions = payload[0]?.payload?.openActions || [];
+                          const closedActions = payload[0]?.payload?.closedActions || [];
+                          const overdueActions = payload[0]?.payload?.overdueActions || [];
                           const activityName = payload[0]?.payload?.activityName || "";
                           return (
                             <Box sx={{ bgcolor: COLORS.bgSecondary, border: `1px solid ${COLORS.border}`, borderRadius: "8px", p: 1.5 }}>
-                              <Typography sx={{ color: COLORS.textPrimary, fontWeight: 600, fontSize: "13px", mb: 0.5 }}>Action: {label}</Typography>
-                              {activityName && <Typography sx={{ color: COLORS.textSecondary, fontSize: "12px", mb: 0.5 }}>Activity: {activityName}</Typography>}
-                              <Typography sx={{ color: COLORS.amber, fontSize: "12px" }}>Open: {payload.find(p => p.dataKey === 'open')?.value || 0}</Typography>
-                              <Typography sx={{ color: COLORS.green, fontSize: "12px" }}>Closed: {payload.find(p => p.dataKey === 'closed')?.value || 0}</Typography>
-                              <Typography sx={{ color: COLORS.red, fontSize: "12px" }}>Overdue: {payload.find(p => p.dataKey === 'overdue')?.value || 0}</Typography>
+                              <Typography sx={{ color: COLORS.textPrimary, fontWeight: 600, fontSize: "13px", mb: 0.5 }}>Discipline: {label}</Typography>
+                              {openActions.length > 0 && <Typography sx={{ color: COLORS.amber, fontSize: "12px" }}>Open: {openActions.join(", ")}</Typography>}
+                              {closedActions.length > 0 && <Typography sx={{ color: COLORS.green, fontSize: "12px" }}>Closed: {closedActions.join(", ")}</Typography>}
+                              {overdueActions.length > 0 && <Typography sx={{ color: COLORS.red, fontSize: "12px" }}>Overdue: {overdueActions.join(", ")}</Typography>}
                             </Box>
                           );
                         }
