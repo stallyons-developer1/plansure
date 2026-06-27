@@ -150,6 +150,10 @@ const getStatusType = (activityStatus: string): string => {
       return "red";
     case "at risk":
       return "amber";
+    case "action open":
+      return "blue";
+    case "action overdue":
+      return "red";
     case "ready":
     default:
       return "green";
@@ -161,6 +165,8 @@ const getDisplayStatus = (activityStatus: string): string => {
   if (activityStatus === "Complete" || activityStatus === "Completed") return "Completed";
   if (activityStatus === "Blocked") return "Blocked";
   if (activityStatus === "At Risk") return "At Risk";
+  if (activityStatus === "Action Open") return "Action Open";
+  if (activityStatus === "Action Overdue") return "Action Overdue";
   return "Ready";
 };
 

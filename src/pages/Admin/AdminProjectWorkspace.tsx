@@ -22,7 +22,6 @@ import {
 import {
   Close as CloseIcon,
   KeyboardArrowDown as ArrowDownIcon,
-  KeyboardArrowRight as ArrowRightIcon,
 } from "@mui/icons-material";
 import editIcon from "../../assets/tabler_edit.png";
 import viewIcon from "../../assets/Frame.png";
@@ -46,6 +45,8 @@ import RAGDonutChart from "../../components/RAGDonutChart";
 import RecentCycleHistory from "../../components/RecentCycleHistory";
 import BlockedActivitiesTable from "../../components/BlockedActivitiesTable";
 import AdminActivitiesSummary from "../../components/AdminActivitiesSummary";
+import ActivitiesTable from "../../components/ActivitiesTable";
+import type { Activity } from "../../components/ActivitiesTable";
 
 interface ProjectData {
   _id: string;
@@ -402,9 +403,6 @@ const AdminProjectWorkspace = () => {
       activitiesCount: number;
     }>;
   } | null>(null);
-  const [expandedActivityId, setExpandedActivityId] = useState<string | null>(
-    null,
-  );
   const [projectActions, setProjectActions] = useState<
     Array<{
       _id: string;
@@ -1373,10 +1371,13 @@ const AdminProjectWorkspace = () => {
         // Fetch weekly control data FIRST (this updates all 3 tabs)
         await fetchWeeklyControlData(uploadedProgramme._id, weekNumber);
 
-        // Refresh actions data
-        const actionsRes = await actionAPI.getAll({
-          programmeId: uploadedProgramme._id,
-        });
+        // Refresh actions data and lookahead/activities data in parallel.
+        // refetchProgramme() reloads lookaheadData so the Activities tab Status
+        // column reflects the newly assigned action (e.g. Action Open / Overdue).
+        const [actionsRes] = await Promise.all([
+          actionAPI.getAll({ programmeId: uploadedProgramme._id }),
+          refetchProgramme(),
+        ]);
 
         if (actionsRes.success) {
           setProjectActions(actionsRes.actions || []);
@@ -3152,1287 +3153,220 @@ const AdminProjectWorkspace = () => {
               ))}
             </Box>
 
-            {/* Activities Table */}
-            <>
-              <Box
-                sx={{
-                  overflowX: "auto",
-                  mb: 2,
-                  "&::-webkit-scrollbar": {
-                    height: 6,
-                  },
-                  "&::-webkit-scrollbar-track": {
-                    bgcolor: "transparent",
-                  },
-                  "&::-webkit-scrollbar-thumb": {
-                    bgcolor: COLORS.border,
-                    borderRadius: 3,
-                  },
-                }}
-              >
-                <Box
-                  sx={{
-                    minWidth: 1200,
-                    bgcolor: COLORS.bgSecondary,
-                    border: `1px solid ${COLORS.border}`,
-                    borderRadius: "12px",
-                    overflow: "hidden",
-                  }}
-                >
-                  {/* Table Header */}
-                  <Box
-                    sx={{
-                      display: "grid",
-                      gridTemplateColumns:
-                        "4px 100px 1fr 95px 95px 70px 95px 60px 75px 100px 100px",
-                      bgcolor: COLORS.bgTertiary,
-                      borderBottom: `1px solid ${COLORS.border}`,
-                      px: 2,
-                      py: 1.5,
-                      gap: 1,
-                    }}
-                  >
-                    <Box /> {/* Space for status indicator */}
-                    {[
-                      "Activity ID",
-                      "Activity Name",
-                      "Start Date",
-                      "End Date",
-                      "Duration",
-                      "RAG Zone",
-                      "Actions",
-                      "Status",
-                      "Assignee",
-                      "Owner",
-                    ].map((header, idx) => (
-                      <Typography
-                        key={header}
-                        sx={{
-                          fontSize: "11px",
-                          fontWeight: 600,
-                          color: COLORS.textSecondary,
-                          textTransform: "uppercase",
-                          textAlign: [2, 3, 4, 5, 6, 7, 8, 9].includes(idx)
-                            ? "center"
-                            : "left",
-                        }}
-                      >
-                        {header}
-                      </Typography>
-                    ))}
-                  </Box>
-                  {!lookaheadData?.activities ||
-                  lookaheadData.activities.length === 0 ? (
-                    <Box sx={{ py: 4, textAlign: "center" }}>
-                      <Typography
-                        sx={{ color: COLORS.textMuted, fontSize: "14px" }}
-                      >
-                        No activities data available
-                      </Typography>
-                    </Box>
-                  ) : (
-                    (() => {
-                      // Use TODAY for 6-week lookahead calculation (not Monday)
-                      const today = new Date();
-                      today.setHours(0, 0, 0, 0);
+            {/* Activities Table (shared component - matches sidebar layout) */}
+            {(() => {
+              const allActivities = lookaheadData?.activities || [];
 
-                      // End of 6th week (6 weeks from today = 42 days)
-                      const sixWeekEnd = new Date(today);
-                      sixWeekEnd.setDate(today.getDate() + 42);
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              const sixWeekEnd = new Date(today);
+              sixWeekEnd.setDate(today.getDate() + 42);
 
-                      // Helper to get which week an activity falls into (1-6) based on today
-                      const getActivityWeek = (
-                        startDate: string,
-                      ): number | null => {
-                        const activityStart = parseDate(startDate);
-                        if (!activityStart) return null;
-                        const msPerDay = 1000 * 60 * 60 * 24;
-                        const daysFromToday = Math.floor(
-                          (activityStart.getTime() - today.getTime()) /
-                            msPerDay,
-                        );
-                        if (daysFromToday < 0) return null; // Before today
-                        const weekNum = Math.floor(daysFromToday / 7) + 1;
-                        if (weekNum > 6) return null; // Beyond 6 weeks
-                        return weekNum;
-                      };
+              const getActivityWeek = (startDate: string): number | null => {
+                const activityStart = parseDate(startDate);
+                if (!activityStart) return null;
+                const msPerDay = 1000 * 60 * 60 * 24;
+                const daysFromToday = Math.floor(
+                  (activityStart.getTime() - today.getTime()) / msPerDay,
+                );
+                if (daysFromToday < 0) return null;
+                const weekNum = Math.floor(daysFromToday / 7) + 1;
+                if (weekNum > 6) return null;
+                return weekNum;
+              };
 
-                      // Check if activity matches the selected week filter
-                      const activityMatchesWeek = (
-                        activityWeek: number | null,
-                        weekNum: number,
-                      ): boolean => {
-                        if (activityWeek === null) return false;
-                        return activityWeek === weekNum;
-                      };
-
-                      const filteredActivities = lookaheadData.activities
-                        .filter((activity) => {
-                          // Apply status filter
-                          const matchesStatus =
-                            ragFilter === "all" ||
-                            activity.activityStatus === ragFilter;
-                          if (!matchesStatus) return false;
-
-                          // Apply 6-week lookahead filter based on start date
-                          const activityStart = parseDate(activity.startDate);
-                          if (!activityStart) return true; // Include if no start date
-
-                          // Only show activities from today to 6 weeks ahead
-                          if (
-                            activityStart < today ||
-                            activityStart >= sixWeekEnd
-                          )
-                            return false;
-
-                          // Then apply week filter if selected
-                          if (weekFilter !== null) {
-                            const activityWeek = getActivityWeek(
-                              activity.startDate,
-                            );
-                            return activityMatchesWeek(
-                              activityWeek,
-                              weekFilter,
-                            );
-                          }
-
-                          return true;
-                        })
-                        .sort((a, b) => {
-                          // Calculate RAG zone for sorting
-                          const getZone = (activity: typeof a) => {
-                            const start = parseDate(activity.startDate);
-                            const todayDate = new Date();
-                            todayDate.setHours(0, 0, 0, 0);
-
-                            // Check if completed
-                            if (
-                              activity.activityStatus === "Complete" ||
-                              activity.activityStatus === "Completed" ||
-                              activity.startDate?.includes(" A") ||
-                              activity.finishDate?.includes(" A")
-                            ) {
-                              return "Completed";
-                            }
-
-                            if (!start) return "Unknown";
-
-                            // Calculate week from today
-                            const msPerDay = 1000 * 60 * 60 * 24;
-                            const daysFromToday = Math.floor(
-                              (start.getTime() - todayDate.getTime()) /
-                                msPerDay,
-                            );
-                            const weekNum = Math.floor(daysFromToday / 7) + 1;
-
-                            if (weekNum <= 2) return "Weeks 1-2";
-                            if (weekNum <= 4) return "Weeks 3-4";
-                            if (weekNum <= 6) return "Weeks 5-6";
-                            return "Beyond";
-                          };
-
-                          return (
-                            getRAGZonePriority(getZone(a)) -
-                            getRAGZonePriority(getZone(b))
-                          );
-                        });
-                      const startIndex =
-                        (activitiesPage - 1) * activitiesPerPage;
-                      const paginatedActivities = filteredActivities.slice(
-                        startIndex,
-                        startIndex + activitiesPerPage,
-                      );
-
-                      return paginatedActivities.length === 0 ? (
-                        <Box sx={{ py: 4, textAlign: "center" }}>
-                          <Typography
-                            sx={{ color: COLORS.textMuted, fontSize: "14px" }}
-                          >
-                            No activities match the selected filter
-                          </Typography>
-                        </Box>
-                      ) : (
-                        paginatedActivities.map((activity, index) => {
-                          const getStatusColor = (status: string) => {
-                            switch (status) {
-                              case "Ready":
-                                return {
-                                  bg: "rgba(34, 197, 94, 0.15)",
-                                  text: COLORS.green,
-                                };
-                              case "At Risk":
-                                return {
-                                  bg: "rgba(245, 158, 11, 0.15)",
-                                  text: COLORS.amber,
-                                };
-                              case "Blocked":
-                                return {
-                                  bg: "rgba(239, 68, 68, 0.15)",
-                                  text: COLORS.red,
-                                };
-                              case "Complete":
-                              case "Completed":
-                                return {
-                                  bg: "rgba(59, 130, 246, 0.15)",
-                                  text: COLORS.blue,
-                                };
-                              default:
-                                return {
-                                  bg: "rgba(142, 156, 177, 0.15)",
-                                  text: COLORS.textSecondary,
-                                };
-                            }
-                          };
-                          const getIndicatorColor = (status: string) => {
-                            switch (status) {
-                              case "Ready":
-                                return COLORS.green;
-                              case "At Risk":
-                                return COLORS.amber;
-                              case "Blocked":
-                                return COLORS.red;
-                              case "Complete":
-                              case "Completed":
-                                return COLORS.blue;
-                              default:
-                                return COLORS.textMuted;
-                            }
-                          };
-                          const calculateRagZone = (
-                            startDate: string,
-                            finishDate: string,
-                            activityStatus?: string,
-                          ) => {
-                            // Check if completed (status or "A" suffix in dates)
-                            const isCompleted =
-                              activityStatus === "Complete" ||
-                              activityStatus === "Completed" ||
-                              startDate?.includes(" A") ||
-                              finishDate?.includes(" A");
-
-                            if (isCompleted) {
-                              return { zone: "Completed", color: COLORS.blue };
-                            }
-
-                            if (!startDate)
-                              return { zone: "N/A", color: COLORS.textMuted };
-
-                            const start = parseDate(startDate);
-                            const today = new Date();
-                            today.setHours(0, 0, 0, 0);
-
-                            if (!start)
-                              return { zone: "N/A", color: COLORS.textMuted };
-
-                            // Calculate which week from today
-                            const msPerDay = 1000 * 60 * 60 * 24;
-                            const daysFromToday = Math.floor(
-                              (start.getTime() - today.getTime()) / msPerDay,
-                            );
-                            const weekNum = Math.floor(daysFromToday / 7) + 1;
-
-                            // Show week number based on today
-                            if (weekNum <= 2) {
-                              return { zone: "Weeks 1-2", color: COLORS.green };
-                            } else if (weekNum <= 4) {
-                              return { zone: "Weeks 3-4", color: COLORS.amber };
-                            } else if (weekNum <= 6) {
-                              return { zone: "Weeks 5-6", color: COLORS.red };
-                            } else {
-                              return {
-                                zone: `Week ${weekNum}`,
-                                color: COLORS.textMuted,
-                              };
-                            }
-                          };
-                          const statusColors = getStatusColor(
-                            activity.activityStatus || "Ready",
-                          );
-                          const indicatorColor = getIndicatorColor(
-                            activity.activityStatus || "Ready",
-                          );
-                          const ragZone = calculateRagZone(
-                            activity.startDate,
-                            activity.finishDate,
-                            activity.activityStatus,
-                          );
-                          const ownerName = user?.name || "Unknown";
-                          const ownerInitials = ownerName
-                            .split(" ")
-                            .map((n) => n[0])
-                            .join("")
-                            .toUpperCase()
-                            .slice(0, 2);
-
-                          const formatDate = (dateStr: string) => {
-                            if (!dateStr) return "-";
-
-                            const months: { [key: string]: number } = {
-                              Jan: 0,
-                              Feb: 1,
-                              Mar: 2,
-                              Apr: 3,
-                              May: 4,
-                              Jun: 5,
-                              Jul: 6,
-                              Aug: 7,
-                              Sep: 8,
-                              Oct: 9,
-                              Nov: 10,
-                              Dec: 11,
-                            };
-
-                            const cleanDate = dateStr
-                              .replace(/\s*[A*]$/, "")
-                              .trim();
-                            const match = cleanDate.match(
-                              /(\d{2})-([A-Za-z]{3})-(\d{2})/,
-                            );
-
-                            if (match) {
-                              const day = parseInt(match[1]);
-                              const month = months[match[2]];
-                              let year = parseInt(match[3]);
-                              year = year < 50 ? 2000 + year : 1900 + year;
-                              return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-                            }
-
-                            const date = new Date(dateStr);
-                            if (isNaN(date.getTime())) return "-";
-                            const year = date.getFullYear();
-                            const month = String(date.getMonth() + 1).padStart(
-                              2,
-                              "0",
-                            );
-                            const day = String(date.getDate()).padStart(2, "0");
-                            return `${year}-${month}-${day}`;
-                          };
-
-                          const actionsForThisActivity = getActionsForActivity(
-                            activity.activityId,
-                          );
-                          const isExpanded =
-                            expandedActivityId === activity.activityId;
-
-                          return (
-                            <Box key={activity.activityId || index}>
-                              <Box
-                                sx={{
-                                  display: "grid",
-                                  gridTemplateColumns:
-                                    "4px 100px 1fr 95px 95px 70px 95px 60px 75px 100px 100px",
-                                  px: 2,
-                                  py: 1.5,
-                                  borderBottom: isExpanded
-                                    ? "none"
-                                    : `1px solid ${COLORS.border}`,
-                                  alignItems: "center",
-                                  gap: 1,
-                                  "&:last-child": {
-                                    borderBottom: isExpanded ? "none" : "none",
-                                  },
-                                  "&:hover": {
-                                    bgcolor: COLORS.whiteHoverLight,
-                                  },
-                                  position: "relative",
-                                  cursor:
-                                    actionsForThisActivity.length > 0
-                                      ? "pointer"
-                                      : "default",
-                                }}
-                                onClick={() => {
-                                  if (actionsForThisActivity.length > 0) {
-                                    setExpandedActivityId(
-                                      isExpanded ? null : activity.activityId,
-                                    );
-                                  }
-                                }}
-                              >
-                                {/* Status Indicator (based on activityStatus) */}
-                                <Box
-                                  sx={{
-                                    position: "absolute",
-                                    left: 0,
-                                    top: 0,
-                                    bottom: 0,
-                                    width: "2px",
-                                    bgcolor: indicatorColor,
-                                    borderRadius: 0,
-                                  }}
-                                />
-                                <Box /> {/* Spacer for indicator column */}
-                                {/* Activity ID */}
-                                <Typography
-                                  sx={{
-                                    fontSize: "12px",
-                                    color: COLORS.blue,
-                                    fontWeight: 500,
-                                  }}
-                                >
-                                  {activity.activityId}
-                                </Typography>
-                                {/* Activity Name */}
-                                <Box
-                                  sx={{
-                                    display: "flex",
-                                    alignItems: "flex-start",
-                                    gap: 0.5,
-                                  }}
-                                >
-                                  {actionsForThisActivity.length > 0 &&
-                                    (isExpanded ? (
-                                      <ArrowDownIcon
-                                        sx={{
-                                          fontSize: 16,
-                                          color: COLORS.textSecondary,
-                                          mt: 0.2,
-                                          flexShrink: 0,
-                                        }}
-                                      />
-                                    ) : (
-                                      <ArrowRightIcon
-                                        sx={{
-                                          fontSize: 16,
-                                          color: COLORS.textSecondary,
-                                          mt: 0.2,
-                                          flexShrink: 0,
-                                        }}
-                                      />
-                                    ))}
-                                  <Typography
-                                    sx={{
-                                      fontSize: "12px",
-                                      color: COLORS.textPrimary,
-                                      wordBreak: "break-word",
-                                      lineHeight: 1.5,
-                                    }}
-                                  >
-                                    {activity.activityName}
-                                  </Typography>
-                                </Box>
-                                {/* Start Date */}
-                                <Typography
-                                  sx={{
-                                    fontSize: "12px",
-                                    color: COLORS.textSecondary,
-                                    textAlign: "center",
-                                  }}
-                                >
-                                  {formatDate(activity.startDate)}
-                                </Typography>
-                                {/* End Date */}
-                                <Typography
-                                  sx={{
-                                    fontSize: "12px",
-                                    color: COLORS.textSecondary,
-                                    textAlign: "center",
-                                  }}
-                                >
-                                  {formatDate(activity.finishDate)}
-                                </Typography>
-                                {/* Duration */}
-                                <Typography
-                                  sx={{
-                                    fontSize: "12px",
-                                    color: COLORS.textSecondary,
-                                    textAlign: "center",
-                                  }}
-                                >
-                                  {activity.duration || "-"}
-                                </Typography>
-                                {/* RAG Zone badge */}
-                                <Box
-                                  sx={{
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    gap: 0.75,
-                                    px: 1,
-                                    py: 0.4,
-                                    borderRadius: "14px",
-                                    border: `1px solid ${ragZone.color}40`,
-                                    bgcolor: `${ragZone.color}15`,
-                                    width: "100%",
-                                    maxWidth: "fit-content",
-                                    mx: "auto",
-                                  }}
-                                >
-                                  <Box
-                                    sx={{
-                                      width: 6,
-                                      height: 6,
-                                      borderRadius: "50%",
-                                      bgcolor: ragZone.color,
-                                      flexShrink: 0,
-                                    }}
-                                  />
-                                  <Typography
-                                    sx={{
-                                      fontSize: "10px",
-                                      fontWeight: 500,
-                                      color: ragZone.color,
-                                    }}
-                                  >
-                                    {ragZone.zone}
-                                  </Typography>
-                                </Box>
-                                {/* Actions */}
-                                {(() => {
-                                  const actionsForActivity =
-                                    getActionsForActivity(activity.activityId);
-                                  const actionsCount =
-                                    actionsForActivity.length;
-                                  return actionsCount > 0 ? (
-                                    <Typography
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setExpandedActivityId(
-                                          expandedActivityId ===
-                                            activity.activityId
-                                            ? null
-                                            : activity.activityId,
-                                        );
-                                      }}
-                                      sx={{
-                                        fontSize: "12px",
-                                        color: COLORS.blue,
-                                        cursor: "pointer",
-                                        "&:hover": {
-                                          textDecoration: "underline",
-                                        },
-                                      }}
-                                    >
-                                      {actionsCount} action
-                                      {actionsCount !== 1 ? "s" : ""}
-                                    </Typography>
-                                  ) : (
-                                    <Typography
-                                      sx={{
-                                        fontSize: "12px",
-                                        color: COLORS.textSecondary,
-                                      }}
-                                    >
-                                      -
-                                    </Typography>
-                                  );
-                                })()}
-                                {/* Status */}
-                                <Box
-                                  sx={{
-                                    display: "flex",
-                                    justifyContent: "center",
-                                  }}
-                                >
-                                  <Box
-                                    sx={{
-                                      display: "inline-flex",
-                                      alignItems: "center",
-                                      justifyContent: "center",
-                                      px: 1.5,
-                                      py: 0.5,
-                                      borderRadius: "14px",
-                                      bgcolor: statusColors.bg,
-                                    }}
-                                  >
-                                    <Typography
-                                      sx={{
-                                        fontSize: "11px",
-                                        fontWeight: 500,
-                                        color: statusColors.text,
-                                        whiteSpace: "nowrap",
-                                      }}
-                                    >
-                                      {activity.activityStatus === "Complete"
-                                        ? "Completed"
-                                        : activity.activityStatus || "Ready"}
-                                    </Typography>
-                                  </Box>
-                                </Box>
-                                {/* Assignee */}
-                                <Box
-                                  sx={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                  }}
-                                >
-                                  {(() => {
-                                    const activityActions =
-                                      getActionsForActivity(
-                                        activity.activityId,
-                                      );
-                                    if (activityActions.length > 0) {
-                                      const latestAction = activityActions[0];
-                                      const assigneeName =
-                                        latestAction.assignee?.name ||
-                                        "Assigned";
-                                      const assigneeInitials = assigneeName
-                                        .split(" ")
-                                        .map((n) => n[0])
-                                        .join("")
-                                        .toUpperCase()
-                                        .slice(0, 2);
-                                      return (
-                                        <Box
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setExpandedActivityId(
-                                              isExpanded
-                                                ? null
-                                                : activity.activityId,
-                                            );
-                                          }}
-                                          sx={{
-                                            display: "flex",
-                                            alignItems: "center",
-                                            gap: 0.5,
-                                            cursor: "pointer",
-                                            px: 1,
-                                            py: 0.5,
-                                            borderRadius: "6px",
-                                            "&:hover": {
-                                              bgcolor: COLORS.bgTertiary,
-                                            },
-                                          }}
-                                        >
-                                          <Avatar
-                                            sx={{
-                                              width: 20,
-                                              height: 20,
-                                              fontSize: "9px",
-                                              fontWeight: 600,
-                                              bgcolor: COLORS.green,
-                                            }}
-                                          >
-                                            {assigneeInitials}
-                                          </Avatar>
-                                          <Typography
-                                            sx={{
-                                              fontSize: "10px",
-                                              color: COLORS.textPrimary,
-                                              overflow: "hidden",
-                                              textOverflow: "ellipsis",
-                                              whiteSpace: "nowrap",
-                                              maxWidth: "60px",
-                                            }}
-                                          >
-                                            {assigneeName.split(" ")[0]}
-                                          </Typography>
-                                        </Box>
-                                      );
-                                    }
-                                    // Enable assign for activities within 6 weeks (Weeks 1-2, 3-4, 5-6 or In Progress)
-                                    const isWithin6Weeks =
-                                      ragZone.zone === "Weeks 1-2" ||
-                                      ragZone.zone === "Weeks 3-4" ||
-                                      ragZone.zone === "Weeks 5-6" ||
-                                      ragZone.zone === "In Progress";
-                                    const canAssign =
-                                      isWithin6Weeks &&
-                                      !weeklyControlData?.isProjectEnded;
-
-                                    return (
-                                      <Button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          if (canAssign) {
-                                            const startDateFormatted =
-                                              toDateInputFormat(
-                                                activity.startDate,
-                                              );
-                                            setAssigningActivity({
-                                              activityId: activity.activityId,
-                                              activityName:
-                                                activity.activityName,
-                                              startDate: startDateFormatted,
-                                              finishDate: toDateInputFormat(
-                                                activity.finishDate,
-                                              ),
-                                            });
-                                            setAssignFormData({
-                                              title: "",
-                                              description: "",
-                                              type: "Required",
-                                              priority: "Medium",
-                                              assignee: "",
-                                              dueDate: startDateFormatted,
-                                            });
-                                            setAssignModalOpen(true);
-                                          }
-                                        }}
-                                        disabled={!canAssign}
-                                        title={
-                                          !canAssign
-                                            ? weeklyControlData?.isProjectEnded
-                                              ? "Project has ended - read only"
-                                              : "Only activities within 6 weeks can be assigned"
-                                            : "Assign action"
-                                        }
-                                        sx={{
-                                          fontSize: "10px",
-                                          fontWeight: 500,
-                                          color: canAssign
-                                            ? COLORS.blue
-                                            : COLORS.textMuted,
-                                          textTransform: "none",
-                                          bgcolor: canAssign
-                                            ? COLORS.blueBgLight
-                                            : "transparent",
-                                          border: `1px solid ${canAssign ? COLORS.blue : COLORS.textMuted}30`,
-                                          borderRadius: "6px",
-                                          px: 1.5,
-                                          py: 0.3,
-                                          minWidth: "auto",
-                                          cursor: canAssign
-                                            ? "pointer"
-                                            : "not-allowed",
-                                          opacity: canAssign ? 1 : 0.5,
-                                          "&:hover": {
-                                            bgcolor: canAssign
-                                              ? COLORS.blueBgMedium
-                                              : "transparent",
-                                          },
-                                          "&.Mui-disabled": {
-                                            color: COLORS.textMuted,
-                                          },
-                                        }}
-                                      >
-                                        Assign
-                                      </Button>
-                                    );
-                                  })()}
-                                </Box>
-                                {/* Owner */}
-                                <Box
-                                  sx={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    gap: 0.75,
-                                  }}
-                                >
-                                  <Avatar
-                                    sx={{
-                                      width: 24,
-                                      height: 24,
-                                      fontSize: "10px",
-                                      fontWeight: 600,
-                                      bgcolor: COLORS.blue,
-                                    }}
-                                  >
-                                    {ownerInitials}
-                                  </Avatar>
-                                  <Typography
-                                    sx={{
-                                      fontSize: "11px",
-                                      color: COLORS.textPrimary,
-                                      overflow: "hidden",
-                                      textOverflow: "ellipsis",
-                                      whiteSpace: "nowrap",
-                                    }}
-                                  >
-                                    {ownerName}
-                                  </Typography>
-                                </Box>
-                              </Box>
-
-                              {/* Expanded section for linked actions */}
-                              {isExpanded &&
-                                actionsForThisActivity.length > 0 && (
-                                  <Box
-                                    sx={{
-                                      bgcolor: COLORS.bgTertiary,
-                                      borderBottom: `1px solid ${COLORS.border}`,
-                                      px: 3,
-                                      py: 2,
-                                    }}
-                                  >
-                                    <Box
-                                      sx={{
-                                        display: "grid",
-                                        gridTemplateColumns: "1fr 1fr 1fr",
-                                        gap: 4,
-                                      }}
-                                    >
-                                      {/* Linked Actions */}
-                                      <Box>
-                                        <Typography
-                                          sx={{
-                                            fontSize: "10px",
-                                            fontWeight: 600,
-                                            color: COLORS.textMuted,
-                                            textTransform: "uppercase",
-                                            letterSpacing: "0.5px",
-                                            mb: 1.5,
-                                          }}
-                                        >
-                                          Linked Actions
-                                        </Typography>
-                                        <Box
-                                          sx={{
-                                            display: "flex",
-                                            flexDirection: "column",
-                                            gap: 0.75,
-                                          }}
-                                        >
-                                          {actionsForThisActivity.map(
-                                            (action) => (
-                                              <Box
-                                                key={action._id}
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  setSelectedActionId(
-                                                    action._id,
-                                                  );
-                                                  setActiveTab(3);
-                                                  setExpandedActivityId(null);
-                                                }}
-                                                sx={{
-                                                  display: "flex",
-                                                  alignItems: "center",
-                                                  gap: 1,
-                                                  cursor: "pointer",
-                                                  "&:hover": {
-                                                    "& .action-title": {
-                                                      textDecoration:
-                                                        "underline",
-                                                    },
-                                                  },
-                                                }}
-                                              >
-                                                <Box
-                                                  sx={{
-                                                    color: COLORS.blue,
-                                                    fontSize: "11px",
-                                                  }}
-                                                >
-                                                  ›
-                                                </Box>
-                                                <Typography
-                                                  className="action-title"
-                                                  sx={{
-                                                    fontSize: "12px",
-                                                    color: COLORS.textPrimary,
-                                                  }}
-                                                >
-                                                  {action.title}
-                                                </Typography>
-                                                {action.status ===
-                                                "Completed" ? (
-                                                  <Typography
-                                                    sx={{
-                                                      fontSize: "10px",
-                                                      color: COLORS.green,
-                                                      ml: 0.5,
-                                                    }}
-                                                  >
-                                                    (Complete)
-                                                  </Typography>
-                                                ) : action.dueDate &&
-                                                  new Date(action.dueDate) <
-                                                    new Date(
-                                                      new Date().setHours(
-                                                        0,
-                                                        0,
-                                                        0,
-                                                        0,
-                                                      ),
-                                                    ) ? (
-                                                  <Typography
-                                                    sx={{
-                                                      fontSize: "10px",
-                                                      color: COLORS.red,
-                                                      ml: 0.5,
-                                                    }}
-                                                  >
-                                                    (Overdue)
-                                                  </Typography>
-                                                ) : null}
-                                              </Box>
-                                            ),
-                                          )}
-                                        </Box>
-                                      </Box>
-
-                                      {/* Reassign */}
-                                      <Box>
-                                        <Typography
-                                          sx={{
-                                            fontSize: "10px",
-                                            fontWeight: 600,
-                                            color: COLORS.textMuted,
-                                            textTransform: "uppercase",
-                                            letterSpacing: "0.5px",
-                                            mb: 1.5,
-                                          }}
-                                        >
-                                          Reassign
-                                        </Typography>
-                                        {actionsForThisActivity.length > 0 ? (
-                                          <Box
-                                            sx={{
-                                              display: "flex",
-                                              flexDirection: "column",
-                                              gap: 1,
-                                            }}
-                                          >
-                                            {actionsForThisActivity.map(
-                                              (action) => (
-                                                <Box
-                                                  key={action._id}
-                                                  sx={{
-                                                    display: "flex",
-                                                    alignItems: "center",
-                                                    gap: 1,
-                                                  }}
-                                                >
-                                                  {/* <Typography
-                                                  sx={{
-                                                    fontSize: "11px",
-                                                    color: COLORS.textSecondary,
-                                                  }}
-                                                >
-                                                  {action.assignee?.name || "Unassigned"}:
-                                                </Typography> */}
-                                                  <Button
-                                                    onClick={(e) => {
-                                                      e.stopPropagation();
-                                                      handleOpenReassign(
-                                                        action,
-                                                      );
-                                                    }}
-                                                    disabled={
-                                                      uploadedProgramme?.isLocked ||
-                                                      action.status ===
-                                                        "Completed"
-                                                    }
-                                                    sx={{
-                                                      fontSize: "10px",
-                                                      fontWeight: 500,
-                                                      color: COLORS.amber,
-                                                      textTransform: "none",
-                                                      bgcolor:
-                                                        "rgba(245, 158, 11, 0.15)",
-                                                      border: `1px solid ${COLORS.amber}30`,
-                                                      borderRadius: "6px",
-                                                      px: 1.5,
-                                                      py: 0.3,
-                                                      minWidth: "auto",
-                                                      "&:hover": {
-                                                        bgcolor:
-                                                          "rgba(245, 158, 11, 0.25)",
-                                                      },
-                                                      "&.Mui-disabled": {
-                                                        color: COLORS.textMuted,
-                                                        bgcolor:
-                                                          COLORS.bgTertiary,
-                                                        borderColor:
-                                                          COLORS.border,
-                                                      },
-                                                    }}
-                                                  >
-                                                    Reassign
-                                                  </Button>
-                                                </Box>
-                                              ),
-                                            )}
-                                          </Box>
-                                        ) : (
-                                          <Typography
-                                            sx={{
-                                              fontSize: "12px",
-                                              color: COLORS.textSecondary,
-                                            }}
-                                          >
-                                            -
-                                          </Typography>
-                                        )}
-                                      </Box>
-
-                                      {/* Notes */}
-                                      <Box>
-                                        <Typography
-                                          sx={{
-                                            fontSize: "10px",
-                                            fontWeight: 600,
-                                            color: COLORS.textMuted,
-                                            textTransform: "uppercase",
-                                            letterSpacing: "0.5px",
-                                            mb: 1.5,
-                                          }}
-                                        >
-                                          Notes
-                                        </Typography>
-                                        <Typography
-                                          sx={{
-                                            fontSize: "12px",
-                                            color: COLORS.textSecondary,
-                                          }}
-                                        >
-                                          -
-                                        </Typography>
-                                      </Box>
-                                    </Box>
-                                  </Box>
-                                )}
-                            </Box>
-                          );
-                        })
-                      );
-                    })()
-                  )}
-                </Box>
-              </Box>
-
-              {/* Pagination */}
-              {lookaheadData?.activities &&
-                lookaheadData.activities.length > 0 &&
-                (() => {
-                  // Use TODAY for 6-week lookahead calculation (not Monday)
-                  const today = new Date();
-                  today.setHours(0, 0, 0, 0);
-
-                  // End of 6th week (6 weeks from today = 42 days)
-                  const sixWeekEnd = new Date(today);
-                  sixWeekEnd.setDate(today.getDate() + 42);
-
-                  const getActivityWeek = (
-                    startDate: string,
-                  ): number | null => {
-                    const activityStart = parseDate(startDate);
-                    if (!activityStart) return null;
+              const filtered = allActivities
+                .filter((activity) => {
+                  const matchesStatus =
+                    ragFilter === "all" ||
+                    activity.activityStatus === ragFilter;
+                  if (!matchesStatus) return false;
+                  const activityStart = parseDate(activity.startDate);
+                  if (!activityStart) return true;
+                  if (activityStart < today || activityStart >= sixWeekEnd)
+                    return false;
+                  if (weekFilter !== null) {
+                    const activityWeek = getActivityWeek(activity.startDate);
+                    return activityWeek !== null && activityWeek === weekFilter;
+                  }
+                  return true;
+                })
+                .sort((a, b) => {
+                  const getZone = (activity: typeof a) => {
+                    const start = parseDate(activity.startDate);
+                    const todayDate = new Date();
+                    todayDate.setHours(0, 0, 0, 0);
+                    if (
+                      activity.activityStatus === "Complete" ||
+                      activity.activityStatus === "Completed" ||
+                      activity.startDate?.includes(" A") ||
+                      activity.finishDate?.includes(" A")
+                    ) {
+                      return "Completed";
+                    }
+                    if (!start) return "Unknown";
                     const msPerDay = 1000 * 60 * 60 * 24;
                     const daysFromToday = Math.floor(
-                      (activityStart.getTime() - today.getTime()) / msPerDay,
+                      (start.getTime() - todayDate.getTime()) / msPerDay,
                     );
-                    if (daysFromToday < 0) return null;
                     const weekNum = Math.floor(daysFromToday / 7) + 1;
-                    if (weekNum > 6) return null;
-                    return weekNum;
+                    if (weekNum <= 2) return "Weeks 1-2";
+                    if (weekNum <= 4) return "Weeks 3-4";
+                    if (weekNum <= 6) return "Weeks 5-6";
+                    return "Beyond";
                   };
+                  return (
+                    getRAGZonePriority(getZone(a)) -
+                    getRAGZonePriority(getZone(b))
+                  );
+                });
 
-                  const activityMatchesWeek = (
-                    activityWeek: number | null,
-                    weekNum: number,
-                  ): boolean => {
-                    if (activityWeek === null) return false;
-                    return activityWeek === weekNum;
-                  };
+              const startOfToday = new Date();
+              startOfToday.setHours(0, 0, 0, 0);
 
-                  const filteredActivities = lookaheadData.activities
-                    .filter((activity) => {
-                      const matchesStatus =
-                        ragFilter === "all" ||
-                        activity.activityStatus === ragFilter;
-                      if (!matchesStatus) return false;
+              const ragZoneFor = (
+                startDate: string,
+                finishDate: string,
+                activityStatus?: string,
+              ): { zone: string; color: string } => {
+                if (
+                  activityStatus === "Complete" ||
+                  activityStatus === "Completed" ||
+                  startDate?.includes(" A") ||
+                  finishDate?.includes(" A")
+                ) {
+                  return { zone: "Completed", color: "blue" };
+                }
+                if (!startDate) return { zone: "N/A", color: "muted" };
+                const start = parseDate(startDate);
+                if (!start) return { zone: "N/A", color: "muted" };
+                const msPerDay = 1000 * 60 * 60 * 24;
+                const daysFromToday = Math.floor(
+                  (start.getTime() - startOfToday.getTime()) / msPerDay,
+                );
+                const weekNum = Math.floor(daysFromToday / 7) + 1;
+                if (weekNum <= 2) return { zone: "Weeks 1-2", color: "green" };
+                if (weekNum <= 4) return { zone: "Weeks 3-4", color: "amber" };
+                if (weekNum <= 6) return { zone: "Weeks 5-6", color: "red" };
+                return { zone: `Week ${weekNum}`, color: "muted" };
+              };
 
-                      const activityStart = parseDate(activity.startDate);
-                      if (!activityStart) return true;
+              const statusTypeFor = (status: string): string => {
+                switch (status) {
+                  case "Ready":
+                    return "green";
+                  case "At Risk":
+                    return "amber";
+                  case "Blocked":
+                    return "red";
+                  case "Complete":
+                  case "Completed":
+                    return "blue";
+                  case "Action Open":
+                    return "blue";
+                  case "Action Overdue":
+                    return "red";
+                  default:
+                    return "green";
+                }
+              };
 
-                      // Only show activities from today to 6 weeks ahead
-                      if (activityStart < today || activityStart >= sixWeekEnd)
-                        return false;
+              const ownerName = user?.name || "Unknown";
+              const ownerInitials = ownerName
+                .split(" ")
+                .map((n) => n[0])
+                .join("")
+                .toUpperCase()
+                .slice(0, 2);
 
-                      // Then apply week filter if selected
-                      if (weekFilter !== null) {
-                        const activityWeek = getActivityWeek(
-                          activity.startDate,
-                        );
-                        return activityMatchesWeek(activityWeek, weekFilter);
-                      }
+              const mapped: Activity[] = filtered.map((activity) => {
+                const rag = ragZoneFor(
+                  activity.startDate,
+                  activity.finishDate,
+                  activity.activityStatus,
+                );
+                const linked = getActionsForActivity(activity.activityId);
+                const displayStatus =
+                  activity.activityStatus === "Complete"
+                    ? "Completed"
+                    : activity.activityStatus || "Ready";
+                return {
+                  id: activity.activityId,
+                  name: activity.activityName,
+                  startDate: activity.startDate,
+                  endDate: activity.finishDate,
+                  duration: activity.duration || "",
+                  ragZone: rag.zone,
+                  ragColor: rag.color,
+                  actions: linked.length,
+                  status: displayStatus,
+                  statusType: statusTypeFor(displayStatus),
+                  owner: {
+                    initials: ownerInitials,
+                    name: ownerName,
+                    color: COLORS.blue,
+                  },
+                  notes: "",
+                  linkedActionsData: linked.map((a) => ({
+                    _id: a._id,
+                    title: a.title,
+                    status: a.status,
+                    dueDate: a.dueDate,
+                    assignee: a.assignee,
+                  })),
+                };
+              });
 
-                      return true;
-                    })
-                    .sort((a, b) => {
-                      // Calculate RAG zone for sorting
-                      const getZone = (activity: typeof a) => {
-                        const start = parseDate(activity.startDate);
-                        const todayDate = new Date();
-                        todayDate.setHours(0, 0, 0, 0);
+              const totalPages = Math.ceil(mapped.length / activitiesPerPage);
+              const startIndex = (activitiesPage - 1) * activitiesPerPage;
+              const pageItems = mapped.slice(
+                startIndex,
+                startIndex + activitiesPerPage,
+              );
 
-                        if (
-                          activity.activityStatus === "Complete" ||
-                          activity.activityStatus === "Completed" ||
-                          activity.startDate?.includes(" A") ||
-                          activity.finishDate?.includes(" A")
-                        ) {
-                          return "Completed";
-                        }
-
-                        if (!start) return "Unknown";
-
-                        // Calculate week from today
-                        const msPerDay = 1000 * 60 * 60 * 24;
-                        const daysFromToday = Math.floor(
-                          (start.getTime() - todayDate.getTime()) / msPerDay,
-                        );
-                        const weekNum = Math.floor(daysFromToday / 7) + 1;
-
-                        if (weekNum <= 2) return "Weeks 1-2";
-                        if (weekNum <= 4) return "Weeks 3-4";
-                        if (weekNum <= 6) return "Weeks 5-6";
-                        return "Beyond";
-                      };
-
-                      return (
-                        getRAGZonePriority(getZone(a)) -
-                        getRAGZonePriority(getZone(b))
+              return (
+                <Box sx={{ mb: 3 }}>
+                  <ActivitiesTable
+                    activities={pageItems}
+                    onAssignClick={(a) => {
+                      const startDateFormatted = toDateInputFormat(a.startDate);
+                      setAssigningActivity({
+                        activityId: a.id,
+                        activityName: a.name,
+                        startDate: startDateFormatted,
+                        finishDate: toDateInputFormat(a.endDate),
+                      });
+                      setAssignFormData({
+                        title: "",
+                        description: "",
+                        type: "Required",
+                        priority: "Medium",
+                        assignee: "",
+                        dueDate: startDateFormatted,
+                      });
+                      setAssignModalOpen(true);
+                    }}
+                    onActionClick={() => setActiveTab(3)}
+                    onReassignClick={(a) => {
+                      const action = projectActions.find(
+                        (ac) => ac._id === a._id,
                       );
-                    });
-                  const totalPages = Math.ceil(
-                    filteredActivities.length / activitiesPerPage,
-                  );
-                  const startIndex = (activitiesPage - 1) * activitiesPerPage;
-                  const endIndex = Math.min(
-                    startIndex + activitiesPerPage,
-                    filteredActivities.length,
-                  );
-
-                  return totalPages > 1 ? (
-                    <Box
-                      sx={{
-                        display: "flex",
-                        flexDirection: { xs: "column", sm: "row" },
-                        justifyContent: "space-between",
-                        alignItems: { xs: "flex-start", sm: "center" },
-                        gap: { xs: 2, sm: 0 },
-                        mb: 3,
-                      }}
-                    >
-                      <Typography
-                        sx={{ fontSize: "13px", color: COLORS.textSecondary }}
-                      >
-                        Showing {startIndex + 1}-{endIndex} of{" "}
-                        {filteredActivities.length} activities
-                      </Typography>
-                      <Box
-                        sx={{
-                          display: "flex",
-                          gap: 1,
-                          overflowX: "auto",
-                          maxWidth: "100%",
-                          pb: { xs: 1, sm: 0 },
-                          "&::-webkit-scrollbar": { display: "none" },
-                        }}
-                      >
-                        <Button
-                          onClick={() =>
-                            setActivitiesPage((p) => Math.max(1, p - 1))
-                          }
-                          disabled={activitiesPage === 1}
-                          sx={{
-                            minWidth: "auto",
-                            px: 2,
-                            py: 0.75,
-                            fontSize: "13px",
-                            flexShrink: 0,
-                            color:
-                              activitiesPage === 1
-                                ? COLORS.textMuted
-                                : COLORS.textPrimary,
-                            bgcolor: COLORS.bgSecondary,
-                            border: `1px solid ${COLORS.border}`,
-                            borderRadius: "8px",
-                            textTransform: "none",
-                            "&:hover": { bgcolor: COLORS.whiteHoverLight },
-                            "&.Mui-disabled": {
-                              bgcolor: COLORS.bgSecondary,
-                              color: COLORS.textMuted,
-                            },
-                          }}
-                        >
-                          Previous
-                        </Button>
-                        {Array.from(
-                          { length: Math.min(5, totalPages) },
-                          (_, i) => {
-                            let pageNum;
-                            if (totalPages <= 5) {
-                              pageNum = i + 1;
-                            } else if (activitiesPage <= 3) {
-                              pageNum = i + 1;
-                            } else if (activitiesPage >= totalPages - 2) {
-                              pageNum = totalPages - 4 + i;
-                            } else {
-                              pageNum = activitiesPage - 2 + i;
-                            }
-                            return (
-                              <Button
-                                key={pageNum}
-                                onClick={() => setActivitiesPage(pageNum)}
-                                sx={{
-                                  minWidth: "36px",
-                                  px: 1,
-                                  py: 0.75,
-                                  fontSize: "13px",
-                                  flexShrink: 0,
-                                  color:
-                                    activitiesPage === pageNum
-                                      ? COLORS.blue
-                                      : COLORS.textPrimary,
-                                  bgcolor:
-                                    activitiesPage === pageNum
-                                      ? COLORS.blueBgMedium
-                                      : COLORS.bgSecondary,
-                                  border: `1px solid ${activitiesPage === pageNum ? COLORS.blue : COLORS.border}`,
-                                  borderRadius: "8px",
-                                  textTransform: "none",
-                                  "&:hover": {
-                                    bgcolor:
-                                      activitiesPage === pageNum
-                                        ? COLORS.blueBgMedium
-                                        : COLORS.whiteHoverLight,
-                                  },
-                                }}
-                              >
-                                {pageNum}
-                              </Button>
-                            );
-                          },
-                        )}
-                        <Button
-                          onClick={() =>
-                            setActivitiesPage((p) =>
-                              Math.min(totalPages, p + 1),
-                            )
-                          }
-                          disabled={activitiesPage === totalPages}
-                          sx={{
-                            minWidth: "auto",
-                            px: 2,
-                            py: 0.75,
-                            fontSize: "13px",
-                            flexShrink: 0,
-                            color:
-                              activitiesPage === totalPages
-                                ? COLORS.textMuted
-                                : COLORS.textPrimary,
-                            bgcolor: COLORS.bgSecondary,
-                            border: `1px solid ${COLORS.border}`,
-                            borderRadius: "8px",
-                            textTransform: "none",
-                            "&:hover": { bgcolor: COLORS.whiteHoverLight },
-                            "&.Mui-disabled": {
-                              bgcolor: COLORS.bgSecondary,
-                              color: COLORS.textMuted,
-                            },
-                          }}
-                        >
-                          Next
-                        </Button>
-                      </Box>
-                    </Box>
-                  ) : (
-                    <Box sx={{ mb: 3 }}>
-                      <Typography
-                        sx={{ fontSize: "13px", color: COLORS.textSecondary }}
-                      >
-                        Showing {filteredActivities.length} activities
-                      </Typography>
-                    </Box>
-                  );
-                })()}
-            </>
+                      handleOpenReassign({
+                        _id: a._id,
+                        title: a.title,
+                        assignee: action?.assignee,
+                      });
+                    }}
+                    currentPage={activitiesPage}
+                    totalPages={totalPages}
+                    totalActivities={mapped.length}
+                    onPageChange={setActivitiesPage}
+                    activitiesPerPage={activitiesPerPage}
+                    isProjectEnded={weeklyControlData?.isProjectEnded}
+                  />
+                </Box>
+              );
+            })()}
 
             {(() => {
               const allActivities = lookaheadData?.activities || [];

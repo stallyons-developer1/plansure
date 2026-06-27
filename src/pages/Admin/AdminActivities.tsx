@@ -25,7 +25,12 @@ import AdminLayout from "../../layouts/AdminLayout";
 import ActivitiesLookahead from "../../components/ActivitiesLookahead";
 import type { Activity } from "../../components/ActivitiesTable";
 import { COLORS } from "../../constants/colors";
-import { projectAPI, programmeAPI, userAPI, actionAPI } from "../../services/api";
+import {
+  projectAPI,
+  programmeAPI,
+  userAPI,
+  actionAPI,
+} from "../../services/api";
 
 interface Project {
   _id: string;
@@ -76,8 +81,17 @@ interface Action {
 
 // Helper to generate owner avatar color based on name
 const getOwnerColor = (name: string): string => {
-  const colors = ["#22C55E", "#F59E0B", "#3B82F6", "#EF4444", "#8B5CF6", "#EC4899"];
-  const hash = name.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  const colors = [
+    "#22C55E",
+    "#F59E0B",
+    "#3B82F6",
+    "#EF4444",
+    "#8B5CF6",
+    "#EC4899",
+  ];
+  const hash = name
+    .split("")
+    .reduce((acc, char) => acc + char.charCodeAt(0), 0);
   return colors[hash % colors.length];
 };
 
@@ -96,8 +110,18 @@ const formatDateForDisplay = (dateStr: string): string => {
   if (!dateStr) return "";
 
   const months: { [key: string]: number } = {
-    Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
-    Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11,
+    Jan: 0,
+    Feb: 1,
+    Mar: 2,
+    Apr: 3,
+    May: 4,
+    Jun: 5,
+    Jul: 6,
+    Aug: 7,
+    Sep: 8,
+    Oct: 9,
+    Nov: 10,
+    Dec: 11,
   };
 
   // Clean suffix like " A" or " *" (indicates actual/completed)
@@ -150,6 +174,10 @@ const getStatusType = (activityStatus: string): string => {
       return "red";
     case "at risk":
       return "amber";
+    case "action open":
+      return "blue";
+    case "action overdue":
+      return "red";
     case "ready":
     default:
       return "green";
@@ -158,9 +186,12 @@ const getStatusType = (activityStatus: string): string => {
 
 // Helper to get display status
 const getDisplayStatus = (activityStatus: string): string => {
-  if (activityStatus === "Complete" || activityStatus === "Completed") return "Completed";
+  if (activityStatus === "Complete" || activityStatus === "Completed")
+    return "Completed";
   if (activityStatus === "Blocked") return "Blocked";
   if (activityStatus === "At Risk") return "At Risk";
+  if (activityStatus === "Action Open") return "Action Open";
+  if (activityStatus === "Action Overdue") return "Action Overdue";
   return "Ready";
 };
 
@@ -169,8 +200,18 @@ const parseDate = (dateStr: string): Date | null => {
   if (!dateStr) return null;
 
   const months: { [key: string]: number } = {
-    Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
-    Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11,
+    Jan: 0,
+    Feb: 1,
+    Mar: 2,
+    Apr: 3,
+    May: 4,
+    Jun: 5,
+    Jul: 6,
+    Aug: 7,
+    Sep: 8,
+    Oct: 9,
+    Nov: 10,
+    Dec: 11,
   };
 
   const cleanDate = dateStr.replace(/\s*[A*]$/, "").trim();
@@ -192,7 +233,7 @@ const parseDate = (dateStr: string): Date | null => {
 const calculateRagZone = (
   startDate: string,
   finishDate: string,
-  activityStatus?: string
+  activityStatus?: string,
 ): { zone: string; color: "green" | "amber" | "red" | "muted" | "blue" } => {
   // Check if completed
   const isCompleted =
@@ -216,7 +257,9 @@ const calculateRagZone = (
   const msPerDay = 1000 * 60 * 60 * 24;
 
   // Calculate which week from today (not Monday)
-  const daysFromToday = Math.floor((start.getTime() - today.getTime()) / msPerDay);
+  const daysFromToday = Math.floor(
+    (start.getTime() - today.getTime()) / msPerDay,
+  );
   const weeksUntilStart = Math.floor(daysFromToday / 7) + 1;
   if (weeksUntilStart <= 2) {
     return { zone: "Weeks 1-2", color: "green" };
@@ -244,7 +287,9 @@ const AdminActivities = () => {
 
   // Assign modal state
   const [assignModalOpen, setAssignModalOpen] = useState(false);
-  const [assigningActivity, setAssigningActivity] = useState<Activity | null>(null);
+  const [assigningActivity, setAssigningActivity] = useState<Activity | null>(
+    null,
+  );
   const [users, setUsers] = useState<User[]>([]);
   const [assignFormData, setAssignFormData] = useState({
     title: "",
@@ -300,7 +345,7 @@ const AdminActivities = () => {
         if (res.success) {
           // Filter to only show active planners
           const activePlanners = (res.users || []).filter(
-            (user: User) => user.role === "planner" && user.status === "active"
+            (user: User) => user.role === "planner" && user.status === "active",
           );
           setUsers(activePlanners);
         }
@@ -359,7 +404,7 @@ const AdminActivities = () => {
   // Helper to get actions for a specific activity
   const getActionsForActivity = (activityId: string): Action[] => {
     return programmeActions.filter(
-      (action) => action.linkedActivity?.activityId === activityId
+      (action) => action.linkedActivity?.activityId === activityId,
     );
   };
 
@@ -376,7 +421,7 @@ const AdminActivities = () => {
             dueDate: a.dueDate,
             assignee: a.assignee,
           })),
-        }))
+        })),
       );
     }
   }, [programmeActions]);
@@ -419,7 +464,7 @@ const AdminActivities = () => {
               const ragZoneData = calculateRagZone(
                 a.startDate || "",
                 a.finishDate || "",
-                a.activityStatus
+                a.activityStatus,
               );
 
               return {
@@ -439,7 +484,7 @@ const AdminActivities = () => {
                   color: getOwnerColor(uploaderName),
                 },
               };
-            }
+            },
           );
 
           setActivities(transformedActivities);
@@ -484,7 +529,7 @@ const AdminActivities = () => {
               now.toLocaleTimeString("en-GB", {
                 hour: "2-digit",
                 minute: "2-digit",
-              })
+              }),
           );
         } else {
           // No programme found for this project
@@ -540,8 +585,12 @@ const AdminActivities = () => {
   };
 
   // Reassign modal handlers
-  const handleOpenReassign = (action: { _id: string; title: string; currentAssignee?: string }) => {
-    const assigneeUser = users.find(u => u._id === action.currentAssignee);
+  const handleOpenReassign = (action: {
+    _id: string;
+    title: string;
+    currentAssignee?: string;
+  }) => {
+    const assigneeUser = users.find((u) => u._id === action.currentAssignee);
     setReassigningAction({
       _id: action._id,
       title: action.title,
@@ -591,8 +640,14 @@ const AdminActivities = () => {
       }
     } catch (error: unknown) {
       console.error("Failed to reassign action:", error);
-      const err = error as { response?: { data?: { message?: string } }; message?: string };
-      const errorMessage = err?.response?.data?.message || err?.message || "Failed to reassign action. Please try again.";
+      const err = error as {
+        response?: { data?: { message?: string } };
+        message?: string;
+      };
+      const errorMessage =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Failed to reassign action. Please try again.";
       setReassignError(errorMessage);
     } finally {
       setReassignLoading(false);
@@ -608,8 +663,14 @@ const AdminActivities = () => {
 
     setAssignError("");
 
-    if (!assignFormData.title || !assignFormData.assignee || !assignFormData.dueDate) {
-      setAssignError("Please fill in all required fields (Title, Assignee, Due Date)");
+    if (
+      !assignFormData.title ||
+      !assignFormData.assignee ||
+      !assignFormData.dueDate
+    ) {
+      setAssignError(
+        "Please fill in all required fields (Title, Assignee, Due Date)",
+      );
       return;
     }
 
@@ -640,16 +701,20 @@ const AdminActivities = () => {
         if (progResponse.success && progResponse.programme) {
           const programmeActivities: ProgrammeActivity[] =
             progResponse.programme.extractedData?.activities || [];
-          const uploaderName = progResponse.programme.uploadedBy?.name || "Admin";
+          const uploaderName =
+            progResponse.programme.uploadedBy?.name || "Admin";
           const freshActions = actionsResponse?.actions || [];
 
           // Use today's date for weekStart calculation
           const todayRefresh = new Date();
           todayRefresh.setHours(0, 0, 0, 0);
           const dayOfWeekRefresh = todayRefresh.getDay();
-          const daysToMondayRefresh = dayOfWeekRefresh === 0 ? 6 : dayOfWeekRefresh - 1;
+          const daysToMondayRefresh =
+            dayOfWeekRefresh === 0 ? 6 : dayOfWeekRefresh - 1;
           const weekStartRefresh = new Date(todayRefresh);
-          weekStartRefresh.setDate(todayRefresh.getDate() - daysToMondayRefresh);
+          weekStartRefresh.setDate(
+            todayRefresh.getDate() - daysToMondayRefresh,
+          );
 
           const transformedActivities: Activity[] = programmeActivities.map(
             (a, index) => {
@@ -657,12 +722,14 @@ const AdminActivities = () => {
               const ragZoneData = calculateRagZone(
                 a.startDate || "",
                 a.finishDate || "",
-                a.activityStatus
+                a.activityStatus,
               );
 
-              const activityId = a.activityId || `ACT-${String(index + 1).padStart(3, "0")}`;
+              const activityId =
+                a.activityId || `ACT-${String(index + 1).padStart(3, "0")}`;
               const linkedActions = freshActions.filter(
-                (action: Action) => action.linkedActivity?.activityId === activityId
+                (action: Action) =>
+                  action.linkedActivity?.activityId === activityId,
               );
 
               return {
@@ -689,16 +756,21 @@ const AdminActivities = () => {
                   assignee: act.assignee,
                 })),
               };
-            }
+            },
           );
           setActivities(transformedActivities);
         }
       }
     } catch (error: unknown) {
       console.error("Failed to create action:", error);
-      const err = error as { response?: { data?: { error?: string } }; message?: string };
+      const err = error as {
+        response?: { data?: { error?: string } };
+        message?: string;
+      };
       const errorMessage =
-        err?.response?.data?.error || err?.message || "Failed to create action. Please try again.";
+        err?.response?.data?.error ||
+        err?.message ||
+        "Failed to create action. Please try again.";
       setAssignError(errorMessage);
     } finally {
       setAssignSaveLoading(false);
@@ -1014,7 +1086,9 @@ const AdminActivities = () => {
             </Box>
 
             {/* Type | Priority row */}
-            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+            <Box
+              sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}
+            >
               <Box>
                 <Typography
                   sx={{
@@ -1094,7 +1168,9 @@ const AdminActivities = () => {
                 <Select
                   fullWidth
                   value={assignFormData.priority}
-                  onChange={(e) => handleAssignChange("priority", e.target.value)}
+                  onChange={(e) =>
+                    handleAssignChange("priority", e.target.value)
+                  }
                   IconComponent={ArrowDownIcon}
                   sx={{
                     bgcolor: COLORS.bgPrimary,
@@ -1147,7 +1223,9 @@ const AdminActivities = () => {
             </Box>
 
             {/* Assignee | Due Date row */}
-            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+            <Box
+              sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}
+            >
               <Box>
                 <Typography
                   sx={{
@@ -1163,7 +1241,9 @@ const AdminActivities = () => {
                 <Select
                   fullWidth
                   value={assignFormData.assignee}
-                  onChange={(e) => handleAssignChange("assignee", e.target.value)}
+                  onChange={(e) =>
+                    handleAssignChange("assignee", e.target.value)
+                  }
                   displayEmpty
                   IconComponent={ArrowDownIcon}
                   sx={{
@@ -1239,7 +1319,9 @@ const AdminActivities = () => {
                   fullWidth
                   type="date"
                   value={assignFormData.dueDate}
-                  onChange={(e) => handleAssignChange("dueDate", e.target.value)}
+                  onChange={(e) =>
+                    handleAssignChange("dueDate", e.target.value)
+                  }
                   slotProps={{
                     htmlInput: {
                       min: assigningActivity?.startDate,
@@ -1504,7 +1586,9 @@ const AdminActivities = () => {
                   borderWidth: 1,
                 },
                 "& .MuiSelect-select": {
-                  color: reassignAssignee ? COLORS.textPrimary : COLORS.textMuted,
+                  color: reassignAssignee
+                    ? COLORS.textPrimary
+                    : COLORS.textMuted,
                   fontSize: "14px",
                   py: 1.2,
                 },

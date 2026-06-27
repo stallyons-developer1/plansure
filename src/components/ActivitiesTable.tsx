@@ -429,20 +429,41 @@ const ActivityRow = ({
           }}
         >
           {activity.linkedActionsData && activity.linkedActionsData.length > 0 ? (
-            <Typography
-              sx={{
-                fontSize: "12px",
-                color: COLORS.blue,
-                cursor: "pointer",
-                "&:hover": {
-                  textDecoration: "underline",
-                },
-              }}
-              onClick={() => setOpen(!open)}
-            >
-              {activity.linkedActionsData.length} action
-              {activity.linkedActionsData.length !== 1 ? "s" : ""}
-            </Typography>
+            (() => {
+              const count = activity.linkedActionsData.length;
+              const allClosed = activity.linkedActionsData.every(
+                (a) => a.status === "Completed"
+              );
+              const anyOverdue = activity.linkedActionsData.some(
+                (a) =>
+                  a.status !== "Completed" &&
+                  a.dueDate &&
+                  new Date(a.dueDate) < startOfToday
+              );
+              const actionLabel = allClosed
+                ? "Closed"
+                : `${count} action${count !== 1 ? "s" : ""}`;
+              const actionLabelColor = allClosed
+                ? COLORS.green
+                : anyOverdue
+                  ? COLORS.red
+                  : COLORS.blue;
+              return (
+                <Typography
+                  sx={{
+                    fontSize: "12px",
+                    color: actionLabelColor,
+                    cursor: "pointer",
+                    "&:hover": {
+                      textDecoration: "underline",
+                    },
+                  }}
+                  onClick={() => setOpen(!open)}
+                >
+                  {actionLabel}
+                </Typography>
+              );
+            })()
           ) : (
             <Typography sx={{ fontSize: "12px", color: COLORS.textSecondary }}>
               -

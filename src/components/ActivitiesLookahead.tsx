@@ -129,6 +129,8 @@ const ActivitiesLookahead = ({
   // Sort activities by RAG zone order: Weeks 1-2, Weeks 3-4, Weeks 5-6, In Progress, then others
   const getRagZoneSortOrder = (ragZone: string): number => {
     switch (ragZone) {
+      case "Completed":
+        return 0; // Show completed activities at the top
       case "Weeks 1-2":
         return 1;
       case "Weeks 3-4":
@@ -137,8 +139,6 @@ const ActivitiesLookahead = ({
         return 3;
       case "In Progress":
         return 4;
-      case "Completed":
-        return 5;
       default:
         return 6; // Any other zone goes last
     }

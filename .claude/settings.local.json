@@ -19,7 +19,9 @@
       "Bash(git checkout:*)",
       "Bash(git push:*)",
       "Bash(cat:*)",
-      "Bash(textutil:*)"
+      "Bash(textutil:*)",
+      "Bash(brew services *)",
+      "Bash(echo \"EXIT:$?\")"
     ]
   }
 }
