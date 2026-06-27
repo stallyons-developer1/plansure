@@ -1240,6 +1240,12 @@ const PlannerActivities = () => {
                   type="date"
                   value={assignFormData.dueDate}
                   onChange={(e) => handleAssignChange("dueDate", e.target.value)}
+                  slotProps={{
+                    htmlInput: {
+                      min: assigningActivity?.startDate,
+                      max: assigningActivity?.endDate,
+                    },
+                  }}
                   sx={{
                     "& .MuiOutlinedInput-root": {
                       bgcolor: COLORS.bgPrimary,
@@ -1257,6 +1263,11 @@ const PlannerActivities = () => {
                         : COLORS.textMuted,
                       fontSize: "14px",
                       py: 1.2,
+                      "&::-webkit-calendar-picker-indicator": {
+                        filter: "invert(1)",
+                        cursor: "pointer",
+                        opacity: 0.6,
+                      },
                     },
                   }}
                 />

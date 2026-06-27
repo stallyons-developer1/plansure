@@ -18,7 +18,8 @@
       "Bash(wc:*)",
       "Bash(git checkout:*)",
       "Bash(git push:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(textutil:*)"
     ]
   }
 }

@@ -480,6 +480,8 @@ const PlannerProjectWorkspace = () => {
       owner: string;
       blocker: string;
       linkedAction: { actionId: string; title?: string; status: string } | null;
+      startDate?: string;
+      finishDate?: string;
     }>;
     activityCounts?: {
       completed: number;
@@ -2318,29 +2320,6 @@ const PlannerProjectWorkspace = () => {
                     mb: 3,
                   }}
                 >
-                  <Box
-                    sx={{
-                      bgcolor: COLORS.bgTertiary,
-                      borderRadius: "8px",
-                      p: 2,
-                      textAlign: "center",
-                    }}
-                  >
-                    <Typography
-                      sx={{
-                        color: COLORS.textPrimary,
-                        fontSize: "24px",
-                        fontWeight: 700,
-                      }}
-                    >
-                      {uploadedProgramme.totalActivities}
-                    </Typography>
-                    <Typography
-                      sx={{ color: COLORS.textSecondary, fontSize: "12px" }}
-                    >
-                      Total Activities
-                    </Typography>
-                  </Box>
                   {(() => {
                     // Show all activities from the full PDF
                     const activities = lookaheadData?.activities || [];
@@ -2361,7 +2340,9 @@ const PlannerProjectWorkspace = () => {
                     const activitiesIn6Weeks = activities.filter((a) => {
                       const activityStart = parseDateStr(a.startDate || "");
                       if (!activityStart) return false; // Exclude activities without start date
-                      return activityStart >= todayDate && activityStart < sixWeekEnd;
+                      return (
+                        activityStart >= todayDate && activityStart < sixWeekEnd
+                      );
                     });
 
                     const readyCount = activitiesIn6Weeks.filter(
@@ -2382,6 +2363,32 @@ const PlannerProjectWorkspace = () => {
                     ).length;
                     return (
                       <>
+                        <Box
+                          sx={{
+                            bgcolor: COLORS.bgTertiary,
+                            borderRadius: "8px",
+                            p: 2,
+                            textAlign: "center",
+                          }}
+                        >
+                          <Typography
+                            sx={{
+                              color: COLORS.textPrimary,
+                              fontSize: "24px",
+                              fontWeight: 700,
+                            }}
+                          >
+                            {activities.length}
+                          </Typography>
+                          <Typography
+                            sx={{
+                              color: COLORS.textSecondary,
+                              fontSize: "12px",
+                            }}
+                          >
+                            Total Activities
+                          </Typography>
+                        </Box>
                         <Box
                           sx={{
                             bgcolor: COLORS.bgTertiary,
@@ -2510,6 +2517,32 @@ const PlannerProjectWorkspace = () => {
                   >
                     View Activities & Lookahead
                   </Button>
+                  {/* <Button
+                    onClick={() => {
+                      if (uploadedProgramme?._id) {
+                        window.open(
+                          `${import.meta.env.VITE_API_URL}/programmes/${uploadedProgramme._id}/pdf`,
+                          "_blank"
+                        );
+                      }
+                    }}
+                    sx={{
+                      bgcolor: COLORS.bgTertiary,
+                      color: COLORS.textPrimary,
+                      border: `1px solid ${COLORS.border}`,
+                      textTransform: "none",
+                      px: 3,
+                      py: 1,
+                      borderRadius: "8px",
+                      fontSize: "14px",
+                      fontWeight: 500,
+                      "&:hover": {
+                        bgcolor: COLORS.border,
+                      },
+                    }}
+                  >
+                    View PDF
+                  </Button> */}
                   {/* <Button
                     onClick={handleDeleteProgramme}
                     disabled={isDeleting}
@@ -5115,8 +5148,8 @@ const PlannerProjectWorkspace = () => {
                     <Typography
                       sx={{ color: COLORS.textSecondary, fontSize: "12px" }}
                     >
-                      {getWeekDateRangeFromToday()}{" "}
-                      • {weeklyControlData.weekInfo.totalActivities} activities
+                      {getWeekDateRangeFromToday()} •{" "}
+                      {weeklyControlData.weekInfo.totalActivities} activities
                       these weeks
                     </Typography>
                   </Box>
@@ -5960,6 +5993,8 @@ const PlannerProjectWorkspace = () => {
                     blocker: a.blocker || "",
                     isBlocked: a.isBlocked,
                     linkedAction: a.linkedAction || null,
+                    startDate: a.startDate,
+                    finishDate: a.finishDate,
                   })) || []
                 }
                 weeklyPlanPreview={weeklyControlData?.weeklyPlanPreview || []}
@@ -5968,8 +6003,8 @@ const PlannerProjectWorkspace = () => {
                   handleOpenAssignModal({
                     activityId: activity.activityId,
                     activityName: activity.activityName,
-                    startDate: "",
-                    finishDate: "",
+                    startDate: toDateInputFormat(activity.startDate || ""),
+                    finishDate: toDateInputFormat(activity.finishDate || ""),
                   });
                 }}
                 onUnblockClick={async (activityId) => {
@@ -5998,7 +6033,9 @@ const PlannerProjectWorkspace = () => {
                 onActionIdClick={() => setActiveTab(3)}
                 onReassignClick={(action) => {
                   // Find the assignee name from users list
-                  const assigneeUser = users.find(u => u._id === action.currentAssignee);
+                  const assigneeUser = users.find(
+                    (u) => u._id === action.currentAssignee,
+                  );
                   setReassigningAction({
                     _id: action._id || "",
                     title: action.title,

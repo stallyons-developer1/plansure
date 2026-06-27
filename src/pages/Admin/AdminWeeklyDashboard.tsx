@@ -340,6 +340,8 @@ const AdminWeeklyDashboard = () => {
   const [assigningActivity, setAssigningActivity] = useState<{
     activityId: string;
     activityName: string;
+    startDate?: string;
+    finishDate?: string;
   } | null>(null);
   const [assignFormData, setAssignFormData] = useState({
     title: "",
@@ -2382,6 +2384,8 @@ const AdminWeeklyDashboard = () => {
                 setAssigningActivity({
                   activityId: activity.activityId,
                   activityName: activity.activityName,
+                  startDate: activity.startDate,
+                  finishDate: activity.finishDate,
                 });
                 setAssignFormData({
                   title: "",
@@ -2868,6 +2872,12 @@ const AdminWeeklyDashboard = () => {
                       onChange={(e) =>
                         handleAssignChange("dueDate", e.target.value)
                       }
+                      slotProps={{
+                        htmlInput: {
+                          min: assigningActivity?.startDate,
+                          max: assigningActivity?.finishDate,
+                        },
+                      }}
                       sx={{
                         "& .MuiOutlinedInput-root": {
                           bgcolor: COLORS.bgPrimary,

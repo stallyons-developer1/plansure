@@ -33,6 +33,8 @@ interface BlockedActivity {
     title?: string;
     status: string;
   } | null;
+  startDate?: string;
+  finishDate?: string;
 }
 
 interface LinkedAction {
@@ -79,7 +81,7 @@ interface BlockedActivitiesTableProps {
   activities?: BlockedActivity[];
   weeklyPlanPreview?: WeeklyPlanActivity[];
   plannerToDo?: PlannerToDoItem[];
-  onAssignClick?: (activity: { activityId: string; activityName: string }) => void;
+  onAssignClick?: (activity: { activityId: string; activityName: string; startDate?: string; finishDate?: string }) => void;
   onUnblockClick?: (activityId: string) => void;
   onActionIdClick?: (actionId: string) => void;
   onReassignClick?: (action: { _id?: string; actionId: string; title: string; currentAssignee?: string }) => void;
@@ -339,6 +341,8 @@ const BlockedActivitiesTable = ({
                           !isProjectEnded && !activity.isBlocked && onAssignClick?.({
                             activityId: activity.activityId,
                             activityName: activity.activityName,
+                            startDate: activity.startDate,
+                            finishDate: activity.finishDate,
                           })
                         }
                         disabled={isProjectEnded || activity.isBlocked}
@@ -846,10 +850,15 @@ const BlockedActivitiesTable = ({
                     ) : (
                       <Button
                         onClick={() =>
-                          !isProjectEnded && onAssignClick?.({
-                            activityId: item.activityId,
-                            activityName: item.activityName,
-                          })
+                          !isProjectEnded && (() => {
+                            const wpActivity = weeklyPlanPreview.find(wp => wp.activityId === item.activityId);
+                            onAssignClick?.({
+                              activityId: item.activityId,
+                              activityName: item.activityName,
+                              startDate: wpActivity?.startDate,
+                              finishDate: wpActivity?.finishDate,
+                            });
+                          })()
                         }
                         disabled={isProjectEnded}
                         title={isProjectEnded ? "Project has ended - read only" : "Assign action"}
