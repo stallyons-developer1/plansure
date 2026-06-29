@@ -41,8 +41,6 @@ import {
 } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import StatCard from "../../components/StatCard";
-import RAGDonutChart from "../../components/RAGDonutChart";
-import RecentCycleHistory from "../../components/RecentCycleHistory";
 import BlockedActivitiesTable from "../../components/BlockedActivitiesTable";
 import AdminActivitiesSummary from "../../components/AdminActivitiesSummary";
 import ActivitiesTable from "../../components/ActivitiesTable";
@@ -246,6 +244,7 @@ const AdminProjectWorkspace = () => {
   const [ragFilter, setRagFilter] = useState("all");
   const [weekFilter, setWeekFilter] = useState<number | null>(null); // null = all weeks, 1-6 = specific week
   const [activitiesPage, setActivitiesPage] = useState(1);
+  const [uploaderName, setUploaderName] = useState("");
   const activitiesPerPage = 20;
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -413,6 +412,7 @@ const AdminProjectWorkspace = () => {
       priority: string;
       assignee?: { name: string };
       dueDate: string;
+      createdAt?: string;
     }>
   >([]);
   const [selectedActionId, setSelectedActionId] = useState<string | null>(null);
@@ -562,7 +562,8 @@ const AdminProjectWorkspace = () => {
         if (response.success) {
           const activeUsers = (response.users || []).filter(
             (user: { role: string; status: string }) =>
-              user.role === "planner" && user.status === "active",
+              (user.role === "planner" || user.role === "user") &&
+              user.status === "active",
           );
           setUsers(activeUsers);
         }
@@ -580,6 +581,8 @@ const AdminProjectWorkspace = () => {
       const response = await programmeAPI.getByProject(projectId);
       if (response.success && response.programme) {
         const programme = response.programme;
+        // Owner column shows whoever uploaded the programme PDF
+        setUploaderName(programme.uploadedBy?.name || "");
         const activities = programme.extractedData?.activities || [];
         const summary = programme.extractedData?.summary || {
           total: 0,
@@ -2124,66 +2127,73 @@ const AdminProjectWorkspace = () => {
           </Tabs>
         </Box>
 
-        {activeTab === 0 && (
-          <>
-            <Box
-              sx={{
-                display: "grid",
-                gridTemplateColumns: {
-                  xs: "repeat(2, 1fr)",
-                  md: "repeat(4, 1fr)",
-                },
-                gap: 2,
-                mb: 3,
-              }}
-            >
-              <StatCard
-                label="Activities in Lookahead"
-                value={defaultDashboardData.activitiesInLookahead}
-              />
-              <StatCard
-                label={`${defaultDashboardData.activitiesInLookahead} Green & Ready`}
-                value={defaultDashboardData.greenReady}
-                subLabel={`of ${defaultDashboardData.totalGreen} green`}
-                valueColor={COLORS.green}
-              />
-              <StatCard
-                label="Open Actions"
-                value={defaultDashboardData.openActions}
-                valueColor={COLORS.amber}
-              />
-              <StatCard
-                label="Overdue Actions"
-                value={defaultDashboardData.overdueActions}
-                valueColor={COLORS.red}
-              />
-            </Box>
-
-            {(defaultDashboardData.ragDistribution.green > 0 ||
-              defaultDashboardData.ragDistribution.amber > 0 ||
-              defaultDashboardData.ragDistribution.red > 0 ||
-              defaultDashboardData.cycleHistory.length > 0) && (
-              <Box
-                sx={{
-                  display: "grid",
-                  gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" },
-                  gap: 3,
-                }}
-              >
-                {(defaultDashboardData.ragDistribution.green > 0 ||
-                  defaultDashboardData.ragDistribution.amber > 0 ||
-                  defaultDashboardData.ragDistribution.red > 0) && (
-                  <RAGDonutChart data={defaultDashboardData.ragDistribution} />
-                )}
-                {defaultDashboardData.cycleHistory.length > 0 && (
-                  <RecentCycleHistory
-                    cycleHistory={defaultDashboardData.cycleHistory}
+        {activeTab === 0 &&
+          (() => {
+            // Overview KPIs computed over the 6-week lookahead (matches the
+            // Activities & Lookahead table), excluding PM-override'd actions.
+            const ovToday = new Date();
+            ovToday.setHours(0, 0, 0, 0);
+            const ovSixWeekEnd = new Date(ovToday);
+            ovSixWeekEnd.setDate(ovToday.getDate() + 42);
+            const ovActivities = (lookaheadData?.activities || []).filter(
+              (a) => {
+                const start = parseDate(a.startDate);
+                if (!start) return false;
+                return start >= ovToday && start < ovSixWeekEnd;
+              },
+            );
+            const ovInLookahead = ovActivities.length;
+            const ovGreenReady = ovActivities.filter(
+              (a) => a.activityStatus === "Ready",
+            ).length;
+            const ovOpenActions = projectActions.filter(
+              (a) => a.status === "Open" && !isActionFromClosedWeek(a),
+            ).length;
+            const ovOverdueActions = projectActions.filter(
+              (a) =>
+                a.status !== "Completed" &&
+                a.status !== "Cancelled" &&
+                !isActionFromClosedWeek(a) &&
+                a.dueDate &&
+                new Date(a.dueDate) < ovToday,
+            ).length;
+            return (
+              <>
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: {
+                      xs: "repeat(2, 1fr)",
+                      md: "repeat(4, 1fr)",
+                    },
+                    gap: 2,
+                    mb: 3,
+                  }}
+                >
+                  <StatCard
+                    label="Activities in Lookahead"
+                    value={ovInLookahead}
                   />
-                )}
-              </Box>
-            )}
-          </>
-        )}
+                  <StatCard
+                    label={`${ovGreenReady} Green & Ready`}
+                    value={ovGreenReady}
+                    subLabel={`of ${ovInLookahead} total`}
+                    valueColor={COLORS.green}
+                  />
+                  <StatCard
+                    label="Open Actions"
+                    value={ovOpenActions}
+                    valueColor={COLORS.amber}
+                  />
+                  <StatCard
+                    label="Overdue Actions"
+                    value={ovOverdueActions}
+                    valueColor={COLORS.red}
+                  />
+                </Box>
+              </>
+            );
+          })()}
 
         {activeTab === 1 && (
           <Box>
@@ -3271,7 +3281,7 @@ const AdminProjectWorkspace = () => {
                 }
               };
 
-              const ownerName = user?.name || "Unknown";
+              const ownerName = uploaderName || "Unknown";
               const ownerInitials = ownerName
                 .split(" ")
                 .map((n) => n[0])

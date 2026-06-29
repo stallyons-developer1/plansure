@@ -209,7 +209,9 @@ const AdminActions = () => {
         }
 
         const activeUsers = (usersRes.users || []).filter(
-          (user: User) => user.role === "planner" && user.status === "active",
+          (user: User) =>
+            (user.role === "planner" || user.role === "user") &&
+            user.status === "active",
         );
         setUsers(activeUsers);
 

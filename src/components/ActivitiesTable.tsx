@@ -297,6 +297,13 @@ const ActivityRow = ({
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
 
+  // Activity status says an action exists, but the current user can't see it
+  // (e.g. a User role only receives actions assigned to them). Show a hint
+  // instead of a bare "-" so they know the activity is being handled.
+  const hasHiddenAction =
+    (!activity.linkedActionsData || activity.linkedActionsData.length === 0) &&
+    (activity.status === "Action Open" || activity.status === "Action Overdue");
+
   return (
     <>
       <TableRow
@@ -464,6 +471,13 @@ const ActivityRow = ({
                 </Typography>
               );
             })()
+          ) : hasHiddenAction ? (
+            <Typography
+              title="An action has been raised for this activity and assigned to another member"
+              sx={{ fontSize: "12px", color: COLORS.textMuted }}
+            >
+              Assigned
+            </Typography>
           ) : (
             <Typography sx={{ fontSize: "12px", color: COLORS.textSecondary }}>
               -
@@ -605,6 +619,13 @@ const ActivityRow = ({
                 </Button>
               );
             })()
+          ) : hasHiddenAction ? (
+            <Typography
+              title="Assigned to another team member"
+              sx={{ color: COLORS.textMuted, fontSize: "12px" }}
+            >
+              Assigned
+            </Typography>
           ) : (
             <Typography sx={{ color: COLORS.textMuted, fontSize: "13px" }}>
               -
@@ -660,7 +681,7 @@ const ActivityRow = ({
                   py: 2,
                   px: 3,
                   display: "grid",
-                  gridTemplateColumns: "1fr 1fr 1fr",
+                  gridTemplateColumns: onReassignClick ? "1fr 1fr 1fr" : "1fr 1fr",
                   gap: 4,
                 }}
               >
@@ -739,53 +760,57 @@ const ActivityRow = ({
                     );
                   })}
                 </Box>
-                <Box>
-                  <Typography
-                    sx={{
-                      color: COLORS.textMuted,
-                      fontSize: "11px",
-                      fontWeight: 600,
-                      mb: 1.5,
-                      letterSpacing: "0.05em",
-                    }}
-                  >
-                    REASSIGN
-                  </Typography>
-                  {activity.linkedActionsData.map((action) => (
-                    <Box key={action._id} sx={{ mb: 0.75 }}>
-                      <Button
-                        disabled={action.status === "Completed"}
-                        onClick={() => onReassignClick?.({
-                          _id: action._id,
-                          title: action.title,
-                          currentAssignee: action.assignee?._id,
-                        })}
-                        sx={{
-                          fontSize: "10px",
-                          fontWeight: 500,
-                          color: COLORS.amber,
-                          textTransform: "none",
-                          bgcolor: "rgba(245, 158, 11, 0.15)",
-                          border: `1px solid ${COLORS.amber}30`,
-                          borderRadius: "6px",
-                          px: 1.5,
-                          py: 0.3,
-                          minWidth: "auto",
-                          "&:hover": {
-                            bgcolor: "rgba(245, 158, 11, 0.25)",
-                          },
-                          "&.Mui-disabled": {
-                            color: COLORS.textMuted,
-                            bgcolor: COLORS.bgTertiary,
-                            borderColor: COLORS.border,
-                          },
-                        }}
-                      >
-                        Reassign
-                      </Button>
-                    </Box>
-                  ))}
-                </Box>
+                {onReassignClick && (
+                  <Box>
+                    <Typography
+                      sx={{
+                        color: COLORS.textMuted,
+                        fontSize: "11px",
+                        fontWeight: 600,
+                        mb: 1.5,
+                        letterSpacing: "0.05em",
+                      }}
+                    >
+                      REASSIGN
+                    </Typography>
+                    {activity.linkedActionsData.map((action) => (
+                      <Box key={action._id} sx={{ mb: 0.75 }}>
+                        <Button
+                          disabled={action.status === "Completed"}
+                          onClick={() =>
+                            onReassignClick?.({
+                              _id: action._id,
+                              title: action.title,
+                              currentAssignee: action.assignee?._id,
+                            })
+                          }
+                          sx={{
+                            fontSize: "10px",
+                            fontWeight: 500,
+                            color: COLORS.amber,
+                            textTransform: "none",
+                            bgcolor: "rgba(245, 158, 11, 0.15)",
+                            border: `1px solid ${COLORS.amber}30`,
+                            borderRadius: "6px",
+                            px: 1.5,
+                            py: 0.3,
+                            minWidth: "auto",
+                            "&:hover": {
+                              bgcolor: "rgba(245, 158, 11, 0.25)",
+                            },
+                            "&.Mui-disabled": {
+                              color: COLORS.textMuted,
+                              bgcolor: COLORS.bgTertiary,
+                              borderColor: COLORS.border,
+                            },
+                          }}
+                        >
+                          Reassign
+                        </Button>
+                      </Box>
+                    ))}
+                  </Box>
+                )}
                 <Box>
                   <Typography
                     sx={{

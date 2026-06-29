@@ -304,9 +304,11 @@ const PlannerActivities = () => {
       try {
         const res = await userAPI.getAll({ status: "active" });
         if (res.success) {
-          // Filter to only show active planners
+          // Filter to active planners and users (assignable members)
           const activePlanners = (res.users || []).filter(
-            (user: User) => user.role === "planner" && user.status === "active"
+            (user: User) =>
+              (user.role === "planner" || user.role === "user") &&
+              user.status === "active"
           );
           setUsers(activePlanners);
         }

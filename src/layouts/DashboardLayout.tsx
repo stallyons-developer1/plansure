@@ -33,6 +33,7 @@ import { COLORS } from "../constants/colors";
 import logo from "../assets/logo.png";
 import projectsIcon from "../assets/sidebar/projects.png";
 import activitiesIcon from "../assets/sidebar/activitiesClipboard.png";
+import governanceIcon from "../assets/sidebar/governance.png";
 
 const DRAWER_WIDTH = 240;
 
@@ -40,6 +41,7 @@ interface DashboardLayoutProps {
   children: React.ReactNode;
   title: string;
   subtitle?: string;
+  headerAction?: React.ReactNode;
 }
 
 const sampleNotifications = [
@@ -77,6 +79,7 @@ const DashboardLayout = ({
   children,
   title,
   subtitle,
+  headerAction,
 }: DashboardLayoutProps) => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [logoutModalOpen, setLogoutModalOpen] = useState(false);
@@ -151,6 +154,13 @@ const DashboardLayout = ({
       isCustomIcon: true,
       iconSize: { width: 16, height: 18 },
     },
+    {
+      text: "Governance Dashboard",
+      iconSrc: governanceIcon,
+      path: "/dashboard/governance",
+      isCustomIcon: true,
+      iconSize: { width: 18, height: 18 },
+    },
   ];
 
   const renderIcon = (item: any) => {
@@ -164,7 +174,7 @@ const DashboardLayout = ({
             height: item.iconSize.height,
             filter: isActive(item.path)
               ? "brightness(0) saturate(100%) invert(45%) sepia(98%) saturate(1752%) hue-rotate(199deg) brightness(101%) contrast(96%)"
-              : "none",
+              : "brightness(0) saturate(100%) invert(60%) sepia(10%) saturate(500%) hue-rotate(180deg) brightness(95%) contrast(90%)",
           }}
         />
       );
@@ -499,26 +509,29 @@ const DashboardLayout = ({
               )}
             </Box>
           </Box>
-          <IconButton
-            onClick={handleNotificationClick}
-            sx={{ color: COLORS.textSecondary }}
-          >
-            <Badge
-              badgeContent={unreadCount}
-              color="error"
-              sx={{
-                "& .MuiBadge-badge": {
-                  bgcolor: COLORS.red,
-                  color: COLORS.white,
-                  fontSize: "10px",
-                  minWidth: "18px",
-                  height: "18px",
-                },
-              }}
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+            {headerAction}
+            <IconButton
+              onClick={handleNotificationClick}
+              sx={{ color: COLORS.textSecondary }}
             >
-              <NotificationsIcon />
-            </Badge>
-          </IconButton>
+              <Badge
+                badgeContent={unreadCount}
+                color="error"
+                sx={{
+                  "& .MuiBadge-badge": {
+                    bgcolor: COLORS.red,
+                    color: COLORS.white,
+                    fontSize: "10px",
+                    minWidth: "18px",
+                    height: "18px",
+                  },
+                }}
+              >
+                <NotificationsIcon />
+              </Badge>
+            </IconButton>
+          </Box>
           <Popover
             open={Boolean(notificationAnchor)}
             anchorEl={notificationAnchor}

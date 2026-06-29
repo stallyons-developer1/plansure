@@ -11,7 +11,7 @@ import { Search as SearchIcon } from "@mui/icons-material";
 import { COLORS } from "../constants/colors";
 import ActivitiesTable from "./ActivitiesTable";
 import type { Activity } from "./ActivitiesTable";
-import ActivitiesSummary from "./ActivitiesSummary";
+import AdminActivitiesSummary from "./AdminActivitiesSummary";
 
 interface WeekData {
   week: number;
@@ -160,10 +160,25 @@ const ActivitiesLookahead = ({
   });
 
   // Calculate counts from sorted activities (dynamic based on filters)
-  const greenCount = sortedActivities.filter((a) => a.ragColor === "green").length;
-  const amberCount = sortedActivities.filter((a) => a.ragColor === "amber").length;
-  const redCount = sortedActivities.filter((a) => a.ragColor === "red").length;
-  const blockedCount = sortedActivities.filter((a) => a.status === "Blocked").length;
+  let readyCount = 0;
+  let atRiskCount = 0;
+  let blockedCount = 0;
+  let completeCount = 0;
+  sortedActivities.forEach((a) => {
+    switch (a.status) {
+      case "At Risk":
+        atRiskCount++;
+        break;
+      case "Blocked":
+        blockedCount++;
+        break;
+      case "Completed":
+        completeCount++;
+        break;
+      default:
+        readyCount++;
+    }
+  });
 
   const getColorValue = (color: string) => {
     switch (color) {
@@ -554,12 +569,12 @@ const ActivitiesLookahead = ({
         })()
       )}
 
-      <ActivitiesSummary
+      <AdminActivitiesSummary
         totalActivities={sortedActivities.length}
-        greenCount={greenCount}
-        amberCount={amberCount}
-        redCount={redCount}
+        readyCount={readyCount}
+        atRiskCount={atRiskCount}
         blockedCount={blockedCount}
+        completeCount={completeCount}
         lastUpdated={lastUpdated}
       />
     </Box>

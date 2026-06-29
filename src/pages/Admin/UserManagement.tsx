@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   Box,
   Typography,
@@ -8,9 +7,6 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Radio,
-  RadioGroup,
-  FormControlLabel,
   IconButton,
   CircularProgress,
 } from "@mui/material";
@@ -23,13 +19,12 @@ import {
   CalendarTodayOutlined as PlannerIcon,
   PersonOutlined as UserIcon,
   BlockOutlined as BlockIcon,
-  FolderOutlined as FolderIcon,
   Send as SendIcon,
 } from "@mui/icons-material";
 import AdminLayout from "../../layouts/AdminLayout";
 import { COLORS } from "../../constants/colors";
 import editIcon from "../../assets/tabler_edit.png";
-import { userAPI, projectAPI } from "../../services/api";
+import { userAPI } from "../../services/api";
 
 interface User {
   _id: string;
@@ -40,11 +35,6 @@ interface User {
   projectAccess: string;
   status: "active" | "pending" | "blocked";
   lastLogin: string | null;
-}
-
-interface Project {
-  _id: string;
-  name: string;
 }
 
 const roleColors: Record<string, { bg: string; color: string }> = {
@@ -80,15 +70,12 @@ const getAvatarStyle = (role: string) => {
 };
 
 const UserManagement = () => {
-  const navigate = useNavigate();
   const [users, setUsers] = useState<User[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [inviteLoading, setInviteLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
   const [selectedRole, setSelectedRole] = useState("");
-  const [selectedProject, setSelectedProject] = useState("");
   const [inviteName, setInviteName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteError, setInviteError] = useState("");
@@ -112,12 +99,8 @@ const UserManagement = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [usersRes, projectsRes] = await Promise.all([
-          userAPI.getAll(),
-          projectAPI.getAll(),
-        ]);
+        const usersRes = await userAPI.getAll();
         setUsers(usersRes.users || []);
-        setProjects(projectsRes.projects || []);
       } catch (error) {
         console.error("Error fetching data:", error);
       } finally {
@@ -132,12 +115,11 @@ const UserManagement = () => {
     setInviteName("");
     setInviteEmail("");
     setSelectedRole("");
-    setSelectedProject("");
     setInviteError("");
   };
 
   const handleSendInvite = async () => {
-    if (!inviteName || !inviteEmail || !selectedRole || !selectedProject) {
+    if (!inviteName || !inviteEmail || !selectedRole) {
       return;
     }
 
@@ -149,7 +131,6 @@ const UserManagement = () => {
         name: inviteName,
         email: inviteEmail,
         role: selectedRole.toLowerCase(),
-        projectId: selectedProject,
       });
 
       if (response.success) {
@@ -1194,112 +1175,6 @@ const UserManagement = () => {
               </Box>
             </Box>
           </Box>
-
-          <Box>
-            <Typography
-              sx={{
-                color: COLORS.border,
-                fontSize: "12px",
-                fontWeight: 500,
-                mb: 0.5,
-                mt: 2,
-              }}
-            >
-              Project Assignment <span style={{ color: COLORS.red }}>*</span>
-            </Typography>
-            {projects.length === 0 ? (
-              <Box
-                sx={{
-                  bgcolor: COLORS.bgPrimary,
-                  border: `1px solid ${COLORS.border}`,
-                  borderRadius: "8px",
-                  p: 3,
-                  mt: 1,
-                  textAlign: "center",
-                }}
-              >
-                <FolderIcon
-                  sx={{ fontSize: 40, color: COLORS.textMuted, mb: 1 }}
-                />
-                <Typography
-                  sx={{
-                    color: COLORS.textSecondary,
-                    fontSize: "14px",
-                    mb: 2,
-                  }}
-                >
-                  No projects available. Create a project first to assign users.
-                </Typography>
-                <Button
-                  onClick={() => {
-                    handleCloseInviteModal();
-                    navigate("/admin/projects");
-                  }}
-                  sx={{
-                    bgcolor: COLORS.blue,
-                    color: COLORS.white,
-                    textTransform: "none",
-                    px: 3,
-                    py: 1,
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    "&:hover": {
-                      bgcolor: COLORS.blueHover,
-                    },
-                  }}
-                >
-                  Create Project
-                </Button>
-              </Box>
-            ) : (
-              <RadioGroup
-                value={selectedProject}
-                onChange={(e) => setSelectedProject(e.target.value)}
-                sx={{ mt: 1 }}
-              >
-                {projects.map((project) => (
-                  <Box
-                    key={project._id}
-                    sx={{
-                      bgcolor: COLORS.bgPrimary,
-                      border: `1px solid ${selectedProject === project._id ? COLORS.blue : COLORS.white}`,
-                      borderRadius: "8px",
-                      mb: 1,
-                      transition: "border-color 0.2s ease",
-                      "&:hover": {
-                        borderColor:
-                          selectedProject === project._id
-                            ? COLORS.blue
-                            : COLORS.textMuted,
-                      },
-                    }}
-                  >
-                    <FormControlLabel
-                      value={project._id}
-                      control={
-                        <Radio
-                          sx={{
-                            color: COLORS.textMuted,
-                            "&.Mui-checked": {
-                              color: COLORS.blue,
-                            },
-                          }}
-                        />
-                      }
-                      label={
-                        <Typography
-                          sx={{ color: COLORS.textPrimary, fontSize: "14px" }}
-                        >
-                          {project.name}
-                        </Typography>
-                      }
-                      sx={{ m: 0, p: 1.5, width: "100%" }}
-                    />
-                  </Box>
-                ))}
-              </RadioGroup>
-            )}
-          </Box>
         </DialogContent>
         <DialogActions
           sx={{
@@ -1330,7 +1205,7 @@ const UserManagement = () => {
           </Button>
           <Button
             onClick={handleSendInvite}
-            disabled={inviteLoading || projects.length === 0}
+            disabled={inviteLoading}
             sx={{
               color: COLORS.white,
               bgcolor: COLORS.blue,

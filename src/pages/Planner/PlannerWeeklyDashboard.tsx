@@ -893,7 +893,8 @@ const PlannerWeeklyDashboard = () => {
         if (response.success) {
           const activeUsers = (response.users || []).filter(
             (user: { role: string; status: string }) =>
-              user.role === "planner" && user.status === "active",
+              (user.role === "planner" || user.role === "user") &&
+              user.status === "active",
           );
           setTeamMembers(activeUsers);
         }
@@ -912,7 +913,8 @@ const PlannerWeeklyDashboard = () => {
         if (response.success) {
           const plannerUsers = (response.users || []).filter(
             (user: { role: string; status: string }) =>
-              user.role === "planner" && user.status === "active",
+              (user.role === "planner" || user.role === "user") &&
+              user.status === "active",
           );
           setUsers(plannerUsers);
         }

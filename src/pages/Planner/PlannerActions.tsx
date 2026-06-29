@@ -218,7 +218,7 @@ const PlannerActions = () => {
           const usersRes = await userAPI.getAll({ status: "active" });
           const activeUsers = (usersRes.users || []).filter(
             (u: User) =>
-              u.role === "planner" &&
+              (u.role === "planner" || u.role === "user") &&
               u.status === "active" &&
               u._id !== user?.id,
           );
