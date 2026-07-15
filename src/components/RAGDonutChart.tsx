@@ -2,18 +2,77 @@ import { Box, Card, Typography, Tooltip } from "@mui/material";
 import { COLORS } from "../constants/colors";
 
 interface RAGDonutChartProps {
-  data: { green: number; amber: number; red: number };
+  data: {
+    green: number;
+    amber: number;
+    red: number;
+    blue?: number;
+    grey?: number;
+  };
   title?: string;
 }
 
-const RAG_DESCRIPTIONS = {
-  green: "Ready - Activities that are ready to proceed",
-  amber: "At Risk - Activities that are at risk or overdue",
-  red: "Blocked - Activities that are blocked",
+type SegmentKey = "red" | "amber" | "green" | "blue" | "grey";
+
+const SEGMENT_META: Record<
+  SegmentKey,
+  { color: string; label: string; description: string }
+> = {
+  green: {
+    color: COLORS.green,
+    label: "Green",
+    description: "Ready - No action required",
+  },
+  amber: {
+    color: COLORS.amber,
+    label: "Amber",
+    description: "At Risk - An action has been assigned",
+  },
+  blue: {
+    color: COLORS.blue,
+    label: "Blue",
+    description: "Completed - All assigned actions are complete",
+  },
+  red: {
+    color: COLORS.red,
+    label: "Red",
+    description: "Blocked - Action still open after the 6-week cycle",
+  },
+  grey: {
+    color: COLORS.textMuted,
+    label: "Grey",
+    description: "Unassigned - Not yet assigned",
+  },
 };
 
-const RAGDonutChart = ({ data, title = "RAG Distribution" }: RAGDonutChartProps) => {
-  const total = data.green + data.amber + data.red;
+const tooltipSlotProps = {
+  tooltip: {
+    sx: {
+      bgcolor: COLORS.bgSecondary,
+      color: COLORS.textPrimary,
+      border: `1px solid ${COLORS.border}`,
+      fontSize: "12px",
+      maxWidth: 250,
+      p: 1,
+    },
+  },
+  arrow: { sx: { color: COLORS.bgSecondary } },
+};
+
+const RAGDonutChart = ({
+  data,
+  title = "RAG Distribution",
+}: RAGDonutChartProps) => {
+  const values: Record<SegmentKey, number> = {
+    red: data.red || 0,
+    amber: data.amber || 0,
+    green: data.green || 0,
+    blue: data.blue || 0,
+    grey: data.grey || 0,
+  };
+
+  const total =
+    values.red + values.amber + values.green + values.blue + values.grey;
   const size = 240;
   const strokeWidth = 36;
   const radius = (size - strokeWidth) / 2;
@@ -30,20 +89,29 @@ const RAGDonutChart = ({ data, title = "RAG Distribution" }: RAGDonutChartProps)
     return `M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2}`;
   };
 
-  const segments = [
-    { value: data.red, color: COLORS.red, key: "red" as const },
-    { value: data.green, color: COLORS.green, key: "green" as const },
-    { value: data.amber, color: COLORS.amber, key: "amber" as const },
-  ];
-
+  // Arc order (only non-zero segments get an arc).
+  const arcOrder: SegmentKey[] = ["red", "amber", "green", "blue", "grey"];
   let currentAngle = 0;
-  const arcs = segments.map((segment) => {
-    const startAngle = currentAngle;
-    const sweepAngle = (segment.value / total) * 360;
-    const endAngle = startAngle + sweepAngle;
-    currentAngle = endAngle;
-    return { ...segment, path: createArc(startAngle, endAngle), description: RAG_DESCRIPTIONS[segment.key] };
-  });
+  const arcs = arcOrder
+    .filter((key) => values[key] > 0)
+    .map((key) => {
+      const startAngle = currentAngle;
+      const sweepAngle = total > 0 ? (values[key] / total) * 360 : 0;
+      const endAngle = startAngle + sweepAngle;
+      currentAngle = endAngle;
+      return {
+        key,
+        color: SEGMENT_META[key].color,
+        description: SEGMENT_META[key].description,
+        path: createArc(startAngle, endAngle),
+      };
+    });
+
+  // Legend order (Green, Amber, Blue, Red, then Grey if present).
+  const legendOrder: SegmentKey[] = ["green", "amber", "blue", "red", "grey"];
+  const legend = legendOrder.filter(
+    (key) => key !== "grey" || values.grey > 0,
+  );
 
   return (
     <Card
@@ -65,7 +133,9 @@ const RAGDonutChart = ({ data, title = "RAG Distribution" }: RAGDonutChartProps)
         {title}
       </Typography>
       <Box>
-        <Box sx={{ position: "relative", width: size, height: size, mx: "auto" }}>
+        <Box
+          sx={{ position: "relative", width: size, height: size, mx: "auto" }}
+        >
           <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size}>
             {arcs.map((arc, index) => (
               <Tooltip
@@ -73,23 +143,7 @@ const RAGDonutChart = ({ data, title = "RAG Distribution" }: RAGDonutChartProps)
                 title={arc.description}
                 placement="top"
                 arrow
-                slotProps={{
-                  tooltip: {
-                    sx: {
-                      bgcolor: COLORS.bgSecondary,
-                      color: COLORS.textPrimary,
-                      border: `1px solid ${COLORS.border}`,
-                      fontSize: "12px",
-                      maxWidth: 250,
-                      p: 1,
-                    },
-                  },
-                  arrow: {
-                    sx: {
-                      color: COLORS.bgSecondary,
-                    },
-                  },
-                }}
+                slotProps={tooltipSlotProps}
               >
                 <path
                   d={arc.path}
@@ -107,106 +161,43 @@ const RAGDonutChart = ({ data, title = "RAG Distribution" }: RAGDonutChartProps)
           sx={{
             display: "flex",
             justifyContent: "center",
-            gap: 4,
+            flexWrap: "wrap",
+            gap: 3,
             mt: 4,
           }}
         >
-          <Tooltip
-            title={RAG_DESCRIPTIONS.green}
-            placement="bottom"
-            arrow
-            slotProps={{
-              tooltip: {
-                sx: {
-                  bgcolor: COLORS.bgSecondary,
-                  color: COLORS.textPrimary,
-                  border: `1px solid ${COLORS.border}`,
-                  fontSize: "12px",
-                  maxWidth: 250,
-                  p: 1,
-                },
-              },
-              arrow: { sx: { color: COLORS.bgSecondary } },
-            }}
-          >
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1, cursor: "pointer" }}>
+          {legend.map((key) => (
+            <Tooltip
+              key={key}
+              title={SEGMENT_META[key].description}
+              placement="bottom"
+              arrow
+              slotProps={tooltipSlotProps}
+            >
               <Box
                 sx={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: "50%",
-                  bgcolor: COLORS.green,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1,
+                  cursor: "pointer",
                 }}
-              />
-              <Typography sx={{ color: COLORS.textSecondary, fontSize: "14px" }}>
-                Green:&nbsp;&nbsp;{data.green}
-              </Typography>
-            </Box>
-          </Tooltip>
-          <Tooltip
-            title={RAG_DESCRIPTIONS.amber}
-            placement="bottom"
-            arrow
-            slotProps={{
-              tooltip: {
-                sx: {
-                  bgcolor: COLORS.bgSecondary,
-                  color: COLORS.textPrimary,
-                  border: `1px solid ${COLORS.border}`,
-                  fontSize: "12px",
-                  maxWidth: 250,
-                  p: 1,
-                },
-              },
-              arrow: { sx: { color: COLORS.bgSecondary } },
-            }}
-          >
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1, cursor: "pointer" }}>
-              <Box
-                sx={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: "50%",
-                  bgcolor: COLORS.amber,
-                }}
-              />
-              <Typography sx={{ color: COLORS.textSecondary, fontSize: "14px" }}>
-                Amber:&nbsp;&nbsp;{data.amber}
-              </Typography>
-            </Box>
-          </Tooltip>
-          <Tooltip
-            title={RAG_DESCRIPTIONS.red}
-            placement="bottom"
-            arrow
-            slotProps={{
-              tooltip: {
-                sx: {
-                  bgcolor: COLORS.bgSecondary,
-                  color: COLORS.textPrimary,
-                  border: `1px solid ${COLORS.border}`,
-                  fontSize: "12px",
-                  maxWidth: 250,
-                  p: 1,
-                },
-              },
-              arrow: { sx: { color: COLORS.bgSecondary } },
-            }}
-          >
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1, cursor: "pointer" }}>
-              <Box
-                sx={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: "50%",
-                  bgcolor: COLORS.red,
-                }}
-              />
-              <Typography sx={{ color: COLORS.textSecondary, fontSize: "14px" }}>
-                Red:&nbsp;&nbsp;{data.red}
-              </Typography>
-            </Box>
-          </Tooltip>
+              >
+                <Box
+                  sx={{
+                    width: 12,
+                    height: 12,
+                    borderRadius: "50%",
+                    bgcolor: SEGMENT_META[key].color,
+                  }}
+                />
+                <Typography
+                  sx={{ color: COLORS.textSecondary, fontSize: "14px" }}
+                >
+                  {SEGMENT_META[key].label}:&nbsp;&nbsp;{values[key]}
+                </Typography>
+              </Box>
+            </Tooltip>
+          ))}
         </Box>
       </Box>
     </Card>

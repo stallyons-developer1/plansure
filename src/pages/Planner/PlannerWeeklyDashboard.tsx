@@ -2393,7 +2393,7 @@ const PlannerWeeklyDashboard = () => {
                   type: "Required",
                   priority: "Medium",
                   assignee: "",
-                  dueDate: "",
+                  dueDate: new Date().toLocaleDateString("en-CA"),
                 });
                 setAssignModalOpen(true);
               }}
@@ -2874,7 +2874,9 @@ const PlannerWeeklyDashboard = () => {
                       }
                       slotProps={{
                         htmlInput: {
-                          min: assigningActivity?.startDate,
+                          // Due date can be set from today; activity start date
+                          // is no longer the floor.
+                          min: new Date().toLocaleDateString("en-CA"),
                           max: assigningActivity?.finishDate,
                         },
                       }}

@@ -289,14 +289,22 @@ const BlockedActivitiesTable = ({
                             ? COLORS.red
                             : activity.ragStatus === "Amber"
                               ? COLORS.amber
-                              : COLORS.green
+                              : activity.ragStatus === "Blue"
+                                ? COLORS.blue
+                                : activity.ragStatus === "Green"
+                                  ? COLORS.green
+                                  : COLORS.textMuted
                         }40`,
                         color:
                           activity.ragStatus === "Red"
                             ? COLORS.red
                             : activity.ragStatus === "Amber"
                               ? COLORS.amber
-                              : COLORS.green,
+                              : activity.ragStatus === "Blue"
+                                ? COLORS.blue
+                                : activity.ragStatus === "Green"
+                                  ? COLORS.green
+                                  : COLORS.textMuted,
                         px: 1.5,
                         py: 0.5,
                         borderRadius: "20px",
@@ -317,10 +325,22 @@ const BlockedActivitiesTable = ({
                               ? COLORS.red
                               : activity.ragStatus === "Amber"
                                 ? COLORS.amber
-                                : COLORS.green,
+                                : activity.ragStatus === "Blue"
+                                  ? COLORS.blue
+                                  : activity.ragStatus === "Green"
+                                    ? COLORS.green
+                                    : COLORS.textMuted,
                         }}
                       />
-                      {activity.ragStatus}
+                      {activity.ragStatus === "Red"
+                        ? "Blocked"
+                        : activity.ragStatus === "Amber"
+                          ? "At Risk"
+                          : activity.ragStatus === "Blue"
+                            ? "Completed"
+                            : activity.ragStatus === "Green"
+                              ? "Ready"
+                              : "Unassigned"}
                     </Box>
                   </Box>
                   {/* ASSIGNEE - show name or Assign button (disabled if blocked) */}
@@ -415,33 +435,38 @@ const BlockedActivitiesTable = ({
                     )}
                   </Box>
                   <Box sx={{ display: "flex", justifyContent: "center" }}>
-                    <Box
-                      sx={{
-                        bgcolor:
-                          activity.activityStatus === "Blocked"
-                            ? `${COLORS.red}20`
-                            : activity.linkedAction?.status === "Overdue"
-                              ? `${COLORS.red}20`
-                              : `${COLORS.amber}15`,
-                        border:
-                          activity.activityStatus === "Blocked" || activity.linkedAction?.status === "Overdue"
-                            ? `1px solid ${COLORS.red}40`
-                            : "none",
-                        color:
-                          activity.activityStatus === "Blocked" || activity.linkedAction?.status === "Overdue"
-                            ? COLORS.red
-                            : COLORS.amber,
-                        px: 1.5,
-                        py: 0.5,
-                        borderRadius: "20px",
-                        fontSize: "11px",
-                        fontWeight: 500,
-                      }}
-                    >
-                      {activity.activityStatus === "Blocked"
+                    {(() => {
+                      const isBlocked = activity.activityStatus === "Blocked";
+                      const actionStatus = activity.linkedAction?.status;
+                      const label = isBlocked
                         ? "Blocked"
-                        : activity.linkedAction?.status || "At Risk"}
-                    </Box>
+                        : actionStatus || "At Risk";
+                      const isCompleted =
+                        actionStatus === "Completed" ||
+                        actionStatus === "Complete";
+                      const isRed = isBlocked || actionStatus === "Overdue";
+                      const chipColor = isRed
+                        ? COLORS.red
+                        : isCompleted
+                          ? COLORS.blue
+                          : COLORS.amber;
+                      return (
+                        <Box
+                          sx={{
+                            bgcolor: `${chipColor}20`,
+                            border: isRed ? `1px solid ${COLORS.red}40` : "none",
+                            color: chipColor,
+                            px: 1.5,
+                            py: 0.5,
+                            borderRadius: "20px",
+                            fontSize: "11px",
+                            fontWeight: 500,
+                          }}
+                        >
+                          {label}
+                        </Box>
+                      );
+                    })()}
                   </Box>
                   {/* ACTION - Unblock button for blocked activities */}
                   <Box sx={{ display: "flex", justifyContent: "center" }}>
@@ -542,8 +567,8 @@ const BlockedActivitiesTable = ({
                     {weeklyPlanPreview.map((activity) => {
                       const isExpanded = expandedRows.has(activity.activityId);
                       const hasActions = (activity.linkedActions?.length || 0) > 0 || (activity.actionsCount || 0) > 0;
-                      const ragColor = activity.ragStatus === "Green" ? COLORS.green : activity.ragStatus === "Amber" ? COLORS.amber : COLORS.red;
-                      const statusColor = activity.activityStatus === "Ready" ? COLORS.green : activity.activityStatus === "Complete" ? COLORS.blue : COLORS.amber;
+                      const ragColor = activity.ragStatus === "Green" ? COLORS.green : activity.ragStatus === "Amber" ? COLORS.amber : activity.ragStatus === "Blue" ? COLORS.blue : COLORS.red;
+                      const statusColor = activity.activityStatus === "Ready" ? COLORS.green : (activity.activityStatus === "Complete" || activity.activityStatus === "Completed") ? COLORS.blue : activity.activityStatus === "Blocked" ? COLORS.red : COLORS.amber;
 
                       return (
                         <Fragment key={activity.activityId}>
@@ -606,7 +631,15 @@ const BlockedActivitiesTable = ({
                                 }}
                               >
                                 <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: ragColor }} />
-                                {activity.ragStatus}
+                                {activity.ragStatus === "Red"
+                                  ? "Blocked"
+                                  : activity.ragStatus === "Amber"
+                                    ? "At Risk"
+                                    : activity.ragStatus === "Blue"
+                                      ? "Completed"
+                                      : activity.ragStatus === "Green"
+                                        ? "Ready"
+                                        : "Unassigned"}
                               </Box>
                             </TableCell>
                             <TableCell align="center" sx={{ borderBottom: isExpanded ? `1px solid ${COLORS.border}` : "none", py: 1.5 }}>
@@ -953,14 +986,22 @@ const BlockedActivitiesTable = ({
                             ? COLORS.red
                             : item.ragStatus === "Amber"
                               ? COLORS.amber
-                              : COLORS.green
+                              : item.ragStatus === "Blue"
+                                ? COLORS.blue
+                                : item.ragStatus === "Green"
+                                  ? COLORS.green
+                                  : COLORS.textMuted
                         }40`,
                         color:
                           item.ragStatus === "Red"
                             ? COLORS.red
                             : item.ragStatus === "Amber"
                               ? COLORS.amber
-                              : COLORS.green,
+                              : item.ragStatus === "Blue"
+                                ? COLORS.blue
+                                : item.ragStatus === "Green"
+                                  ? COLORS.green
+                                  : COLORS.textMuted,
                         px: 1.5,
                         py: 0.5,
                         borderRadius: "20px",
@@ -981,10 +1022,22 @@ const BlockedActivitiesTable = ({
                               ? COLORS.red
                               : item.ragStatus === "Amber"
                                 ? COLORS.amber
-                                : COLORS.green,
+                                : item.ragStatus === "Blue"
+                                  ? COLORS.blue
+                                  : item.ragStatus === "Green"
+                                    ? COLORS.green
+                                    : COLORS.textMuted,
                         }}
                       />
-                      {item.ragStatus}
+                      {item.ragStatus === "Red"
+                        ? "Blocked"
+                        : item.ragStatus === "Amber"
+                          ? "At Risk"
+                          : item.ragStatus === "Blue"
+                            ? "Completed"
+                            : item.ragStatus === "Green"
+                              ? "Ready"
+                              : "Unassigned"}
                     </Box>
                   </Box>
                 </Box>

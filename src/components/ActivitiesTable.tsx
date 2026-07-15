@@ -271,6 +271,7 @@ const ActivityRow = ({
   activity,
   isFirst,
   onAssignClick,
+  onAddActionClick,
   onActionClick,
   onReassignClick,
   isProjectEnded = false,
@@ -278,8 +279,13 @@ const ActivityRow = ({
   activity: Activity;
   isFirst?: boolean;
   onAssignClick?: (activity: Activity) => void;
+  onAddActionClick?: (activity: Activity) => void;
   onActionClick?: () => void;
-  onReassignClick?: (action: { _id: string; title: string; currentAssignee?: string }) => void;
+  onReassignClick?: (action: {
+    _id: string;
+    title: string;
+    currentAssignee?: string;
+  }) => void;
   isProjectEnded?: boolean;
 }) => {
   const [open, setOpen] = useState(isFirst);
@@ -291,7 +297,18 @@ const ActivityRow = ({
         ? COLORS.green
         : activity.statusType === "amber"
           ? COLORS.amber
-          : COLORS.red;
+          : activity.statusType === "grey"
+            ? COLORS.textMuted
+            : COLORS.red;
+
+  // In the assignment-driven model the Assign button is only offered while the
+  // activity is still Unassigned (Grey). Once "No Action" (Ready/Green) is
+  // chosen, or an action is assigned/completed, the button is hidden.
+  const isUnassigned =
+    !activity.status ||
+    activity.status === "Unassigned" ||
+    activity.status === "Not Ready";
+  const isNoAction = activity.statusType === "green"; // Ready via No Action
 
   // Start of today (midnight) - actions are only overdue after due date has fully passed
   const startOfToday = new Date();
@@ -344,7 +361,9 @@ const ActivityRow = ({
           }}
         >
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-            {(activity.linkedActions || (activity.linkedActionsData && activity.linkedActionsData.length > 0)) && (
+            {(activity.linkedActions ||
+              (activity.linkedActionsData &&
+                activity.linkedActionsData.length > 0)) && (
               <IconButton
                 size="small"
                 onClick={() => setOpen(!open)}
@@ -435,17 +454,18 @@ const ActivityRow = ({
             fontSize: "13px",
           }}
         >
-          {activity.linkedActionsData && activity.linkedActionsData.length > 0 ? (
+          {activity.linkedActionsData &&
+          activity.linkedActionsData.length > 0 ? (
             (() => {
               const count = activity.linkedActionsData.length;
               const allClosed = activity.linkedActionsData.every(
-                (a) => a.status === "Completed"
+                (a) => a.status === "Completed",
               );
               const anyOverdue = activity.linkedActionsData.some(
                 (a) =>
                   a.status !== "Completed" &&
                   a.dueDate &&
-                  new Date(a.dueDate) < startOfToday
+                  new Date(a.dueDate) < startOfToday,
               );
               const actionLabel = allClosed
                 ? "Closed"
@@ -491,22 +511,38 @@ const ActivityRow = ({
             py: 1.5,
           }}
         >
-          <Box
-            sx={{
-              bgcolor: `${statusColor}20`,
-              color: statusColor,
-              px: 1.5,
-              py: 0.5,
-              borderRadius: "6px",
-              fontSize: "12px",
-              fontWeight: 500,
-              display: "inline-block",
-              textAlign: "center",
-              minWidth: 70,
-            }}
-          >
-            {activity.status}
-          </Box>
+          {isUnassigned ? (
+            // Unassigned: show an empty grey placeholder pill (no label).
+            <Box
+              sx={{
+                bgcolor: COLORS.textMuted,
+                opacity: 0.25,
+                px: 1.5,
+                py: 0.5,
+                height: 14,
+                borderRadius: "6px",
+                display: "inline-block",
+                minWidth: 70,
+              }}
+            />
+          ) : (
+            <Box
+              sx={{
+                bgcolor: `${statusColor}20`,
+                color: statusColor,
+                px: 1.5,
+                py: 0.5,
+                borderRadius: "6px",
+                fontSize: "12px",
+                fontWeight: 500,
+                display: "inline-block",
+                textAlign: "center",
+                minWidth: 70,
+              }}
+            >
+              {activity.status}
+            </Box>
+          )}
         </TableCell>
         <TableCell
           align="center"
@@ -515,7 +551,8 @@ const ActivityRow = ({
             py: 1.5,
           }}
         >
-          {activity.linkedActionsData && activity.linkedActionsData.length > 0 ? (
+          {activity.linkedActionsData &&
+          activity.linkedActionsData.length > 0 ? (
             (() => {
               const latestAction = activity.linkedActionsData[0];
               const assigneeName = latestAction.assignee?.name || "Assigned";
@@ -568,7 +605,7 @@ const ActivityRow = ({
                 </Box>
               );
             })()
-          ) : onAssignClick ? (
+          ) : onAssignClick && isUnassigned ? (
             (() => {
               // Allow assignment for activities within 6 weeks (Weeks 1-2, 3-4, 5-6 or In Progress)
               const isWithin6Weeks =
@@ -626,6 +663,13 @@ const ActivityRow = ({
             >
               Assigned
             </Typography>
+          ) : isNoAction ? (
+            <Typography
+              title="Marked as No Action - Ready"
+              sx={{ color: COLORS.textMuted, fontSize: "12px" }}
+            >
+              No action
+            </Typography>
           ) : (
             <Typography sx={{ color: COLORS.textMuted, fontSize: "13px" }}>
               -
@@ -639,7 +683,14 @@ const ActivityRow = ({
             py: 1.5,
           }}
         >
-          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 1 }}>
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 1,
+            }}
+          >
             <Avatar
               sx={{
                 width: 28,
@@ -681,7 +732,9 @@ const ActivityRow = ({
                   py: 2,
                   px: 3,
                   display: "grid",
-                  gridTemplateColumns: onReassignClick ? "1fr 1fr 1fr" : "1fr 1fr",
+                  gridTemplateColumns: onReassignClick
+                    ? "1fr 1fr 1fr"
+                    : "1fr 1fr",
                   gap: 4,
                 }}
               >
@@ -698,7 +751,10 @@ const ActivityRow = ({
                     LINKED ACTIONS
                   </Typography>
                   {activity.linkedActionsData.map((action) => {
-                    const isOverdue = action.status !== "Completed" && action.dueDate && new Date(action.dueDate) < startOfToday;
+                    const isOverdue =
+                      action.status !== "Completed" &&
+                      action.dueDate &&
+                      new Date(action.dueDate) < startOfToday;
                     return (
                       <Box
                         key={action._id}
@@ -811,23 +867,38 @@ const ActivityRow = ({
                     ))}
                   </Box>
                 )}
-                <Box>
-                  <Typography
-                    sx={{
-                      color: COLORS.textMuted,
-                      fontSize: "11px",
-                      fontWeight: 600,
-                      mb: 1.5,
-                      letterSpacing: "0.05em",
-                    }}
-                  >
-                    NOTES
-                  </Typography>
-                  <Typography
-                    sx={{ color: COLORS.textLight, fontSize: "13px" }}
-                  >
-                    {activity.notes || "-"}
-                  </Typography>
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "flex-start",
+                  }}
+                >
+                  {onAddActionClick &&
+                    activity.statusType !== "blue" &&
+                    !isProjectEnded && (
+                      <Button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onAddActionClick(activity);
+                        }}
+                        sx={{
+                          fontSize: "11px",
+                          fontWeight: 500,
+                          color: COLORS.blue,
+                          textTransform: "none",
+                          bgcolor: COLORS.blueBgLight,
+                          border: `1px solid ${COLORS.blue}30`,
+                          borderRadius: "6px",
+                          px: 1.5,
+                          py: 0.3,
+                          minWidth: "auto",
+                          "&:hover": { bgcolor: COLORS.blueBgMedium },
+                        }}
+                      >
+                        + Assign action
+                      </Button>
+                    )}
                 </Box>
               </Box>
             </Collapse>
@@ -841,8 +912,13 @@ const ActivityRow = ({
 interface ActivitiesTableProps {
   activities: Activity[];
   onAssignClick?: (activity: Activity) => void;
+  onAddActionClick?: (activity: Activity) => void;
   onActionClick?: () => void;
-  onReassignClick?: (action: { _id: string; title: string; currentAssignee?: string }) => void;
+  onReassignClick?: (action: {
+    _id: string;
+    title: string;
+    currentAssignee?: string;
+  }) => void;
   currentPage?: number;
   totalPages?: number;
   totalActivities?: number;
@@ -854,6 +930,7 @@ interface ActivitiesTableProps {
 const ActivitiesTable = ({
   activities,
   onAssignClick,
+  onAddActionClick,
   onActionClick,
   onReassignClick,
   currentPage = 1,
@@ -1017,6 +1094,7 @@ const ActivitiesTable = ({
                 activity={activity}
                 isFirst={index === 0}
                 onAssignClick={onAssignClick}
+                onAddActionClick={onAddActionClick}
                 onActionClick={onActionClick}
                 onReassignClick={onReassignClick}
                 isProjectEnded={isProjectEnded}
@@ -1050,7 +1128,8 @@ const ActivitiesTable = ({
                 py: 0.75,
                 fontSize: "13px",
                 flexShrink: 0,
-                color: currentPage === 1 ? COLORS.textMuted : COLORS.textPrimary,
+                color:
+                  currentPage === 1 ? COLORS.textMuted : COLORS.textPrimary,
                 bgcolor: COLORS.bgSecondary,
                 border: `1px solid ${COLORS.border}`,
                 borderRadius: "8px",
@@ -1064,52 +1143,49 @@ const ActivitiesTable = ({
             >
               Previous
             </Button>
-            {Array.from(
-              { length: Math.min(5, totalPages) },
-              (_, i) => {
-                let pageNum: number;
-                if (totalPages <= 5) {
-                  pageNum = i + 1;
-                } else if (currentPage <= 3) {
-                  pageNum = i + 1;
-                } else if (currentPage >= totalPages - 2) {
-                  pageNum = totalPages - 4 + i;
-                } else {
-                  pageNum = currentPage - 2 + i;
-                }
-                return (
-                  <Button
-                    key={pageNum}
-                    onClick={() => onPageChange?.(pageNum)}
-                    sx={{
-                      minWidth: 36,
-                      px: 1,
-                      py: 0.75,
-                      fontSize: "13px",
-                      color:
-                        currentPage === pageNum
-                          ? COLORS.blue
-                          : COLORS.textPrimary,
+            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              let pageNum: number;
+              if (totalPages <= 5) {
+                pageNum = i + 1;
+              } else if (currentPage <= 3) {
+                pageNum = i + 1;
+              } else if (currentPage >= totalPages - 2) {
+                pageNum = totalPages - 4 + i;
+              } else {
+                pageNum = currentPage - 2 + i;
+              }
+              return (
+                <Button
+                  key={pageNum}
+                  onClick={() => onPageChange?.(pageNum)}
+                  sx={{
+                    minWidth: 36,
+                    px: 1,
+                    py: 0.75,
+                    fontSize: "13px",
+                    color:
+                      currentPage === pageNum
+                        ? COLORS.blue
+                        : COLORS.textPrimary,
+                    bgcolor:
+                      currentPage === pageNum
+                        ? COLORS.blueBgMedium
+                        : COLORS.bgSecondary,
+                    border: `1px solid ${currentPage === pageNum ? COLORS.blue : COLORS.border}`,
+                    borderRadius: "8px",
+                    textTransform: "none",
+                    "&:hover": {
                       bgcolor:
                         currentPage === pageNum
                           ? COLORS.blueBgMedium
-                          : COLORS.bgSecondary,
-                      border: `1px solid ${currentPage === pageNum ? COLORS.blue : COLORS.border}`,
-                      borderRadius: "8px",
-                      textTransform: "none",
-                      "&:hover": {
-                        bgcolor:
-                          currentPage === pageNum
-                            ? COLORS.blueBgMedium
-                            : COLORS.whiteHoverLight,
-                      },
-                    }}
-                  >
-                    {pageNum}
-                  </Button>
-                );
-              },
-            )}
+                          : COLORS.whiteHoverLight,
+                    },
+                  }}
+                >
+                  {pageNum}
+                </Button>
+              );
+            })}
             <Button
               onClick={() => onPageChange?.(currentPage + 1)}
               disabled={currentPage === totalPages}

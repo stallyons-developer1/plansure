@@ -2174,6 +2174,10 @@ const PlannerActions = () => {
                     setFormData({ ...formData, dueDate: e.target.value })
                   }
                   slotProps={{
+                    htmlInput: {
+                      // Due date can be set from today onward.
+                      min: new Date().toLocaleDateString("en-CA"),
+                    },
                     input: {
                       endAdornment: (
                         <InputAdornment

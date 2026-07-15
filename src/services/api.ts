@@ -187,6 +187,8 @@ export const programmeAPI = {
       notes?: string;
       isBlocked?: boolean;
       blocker?: string;
+      assignmentState?: "Unassigned" | "NoAction" | "ActionAssigned";
+      overdueAcknowledged?: boolean;
     },
   ) => {
     const response = await api.patch(

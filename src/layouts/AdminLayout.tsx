@@ -211,6 +211,8 @@ const AdminLayout = ({
       path: "/admin/programs-upload",
       isCustomIcon: true,
       iconSize: { width: 24, height: 24 },
+      // Hidden for now — lives as a tab inside the Project Workspace.
+      hidden: true,
     },
     {
       text: "Activities & Lookahead",
@@ -218,6 +220,7 @@ const AdminLayout = ({
       path: "/admin/activities",
       isCustomIcon: true,
       iconSize: { width: 14, height: 18 },
+      hidden: true,
     },
     {
       text: "Action",
@@ -225,6 +228,7 @@ const AdminLayout = ({
       path: "/admin/action",
       isCustomIcon: true,
       iconSize: { width: 18, height: 18 },
+      hidden: true,
     },
     {
       text: "Weekly Dashboard",
@@ -233,7 +237,7 @@ const AdminLayout = ({
       isCustomIcon: true,
       iconSize: { width: 18, height: 18 },
     },
-  ];
+  ].filter((item) => !("hidden" in item && item.hidden));
 
   const governanceItems = [
     {

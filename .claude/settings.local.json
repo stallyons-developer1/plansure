@@ -21,7 +21,13 @@
       "Bash(cat:*)",
       "Bash(textutil:*)",
       "Bash(brew services *)",
-      "Bash(echo \"EXIT:$?\")"
+      "Bash(echo \"EXIT:$?\")",
+      "Read(//Users/apple/Downloads/**)",
+      "Bash(python3 -c \"import PyPDF2; print\\(len\\(PyPDF2.PdfReader\\('Plansureguide.pdf'\\).pages\\)\\)\")",
+      "Bash(mdls -name kMDItemNumberOfPages Plansureguide.pdf)",
+      "Bash(node --check routes/programmeUploadRoutes.js)",
+      "Bash(node --check routes/actionRoutes.js)",
+      "Bash(node --check models/Programme.js)"
     ]
   }
 }

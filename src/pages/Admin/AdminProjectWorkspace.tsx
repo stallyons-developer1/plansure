@@ -118,8 +118,9 @@ const parseDate = (dateStr: string): Date | null => {
   return isNaN(date.getTime()) ? null : date;
 };
 
-// Get sort priority based on RAG zone: Completed → In Progress → Weeks 1-2 → Weeks 3-4 → Weeks 5-6
+// Get sort priority based on RAG zone: Overdue → Completed → In Progress → Weeks 1-2 → 3-4 → 5-6
 const getRAGZonePriority = (zone: string): number => {
+  if (zone === "Overdue") return 0; // Blocked/overdue (past-dated) surfaces first
   if (zone === "Completed") return 1;
   if (zone === "In Progress") return 2;
   if (zone === "Weeks 1-2") return 3;
@@ -331,9 +332,22 @@ const AdminProjectWorkspace = () => {
   const [assignSaveLoading, setAssignSaveLoading] = useState(false);
   const [assignError, setAssignError] = useState("");
 
+  // Assign chooser (No Action vs Action Required)
+  const [assignChoiceOpen, setAssignChoiceOpen] = useState(false);
+  const [assignChoiceActivity, setAssignChoiceActivity] = useState<{
+    activityId: string;
+    activityName: string;
+    startDate: string;
+    finishDate: string;
+  } | null>(null);
+  const [noActionLoading, setNoActionLoading] = useState(false);
+
   const [reassignModalOpen, setReassignModalOpen] = useState(false);
   const [toastOpen, setToastOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
+  const [toastSeverity, setToastSeverity] = useState<"success" | "warning">(
+    "warning",
+  );
   const [reassigningAction, setReassigningAction] = useState<{
     _id: string;
     title: string;
@@ -465,6 +479,7 @@ const AdminProjectWorkspace = () => {
       green: number;
       amber: number;
       red: number;
+      grey?: number;
     };
     actionsByStatus: {
       open: number;
@@ -483,6 +498,7 @@ const AdminProjectWorkspace = () => {
       open: number;
       inProgress: number;
     };
+    unassignedInWeek?: number;
     blockedRiskActivities: Array<{
       activityId: string;
       activityName: string;
@@ -953,8 +969,17 @@ const AdminProjectWorkspace = () => {
           );
         }
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Failed to close week:", error);
+      const err = error as {
+        response?: { data?: { message?: string; error?: string } };
+      };
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        "Failed to close week. Please try again.";
+      setToastMessage(msg);
+      setToastOpen(true);
     } finally {
       setClosingWeek(null);
     }
@@ -1212,8 +1237,17 @@ const AdminProjectWorkspace = () => {
       }
 
       setOverrideReason("");
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Failed to close weeks with override:", error);
+      const err = error as {
+        response?: { data?: { message?: string; error?: string } };
+      };
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        "Failed to force-close weeks. Please try again.";
+      setToastMessage(msg);
+      setToastOpen(true);
     } finally {
       setClosingWeek(null);
     }
@@ -1407,6 +1441,74 @@ const AdminProjectWorkspace = () => {
     setAssignFormData({ ...assignFormData, [field]: value });
   };
 
+  // Assign button -> chooser modal (No Action / Action Required)
+  const openAssignChoice = (a: {
+    id: string;
+    name: string;
+    startDate: string;
+    endDate: string;
+  }) => {
+    setAssignChoiceActivity({
+      activityId: a.id,
+      activityName: a.name,
+      startDate: toDateInputFormat(a.startDate),
+      finishDate: toDateInputFormat(a.endDate),
+    });
+    setAssignError("");
+    setAssignChoiceOpen(true);
+  };
+
+  const handleAssignChoiceClose = () => {
+    setAssignChoiceOpen(false);
+    setAssignChoiceActivity(null);
+  };
+
+  // "Action Required" -> open the existing Assign Action modal.
+  const handleChooseActionRequired = () => {
+    if (!assignChoiceActivity) return;
+    setAssigningActivity(assignChoiceActivity);
+    setAssignFormData({
+      title: "",
+      description: "",
+      type: "Required",
+      priority: "Medium",
+      assignee: "",
+      dueDate: new Date().toLocaleDateString("en-CA"),
+    });
+    setAssignChoiceOpen(false);
+    setAssignModalOpen(true);
+  };
+
+  // "No Action" -> mark the activity Ready (Green) without creating an action.
+  const handleChooseNoAction = async () => {
+    if (!assignChoiceActivity || !uploadedProgramme?._id) return;
+    setNoActionLoading(true);
+    try {
+      await programmeAPI.updateActivity(
+        uploadedProgramme._id,
+        assignChoiceActivity.activityId,
+        { assignmentState: "NoAction" },
+      );
+      // Refresh Activities & Lookahead and Weekly Control so the activity moves
+      // out of the blocked/risk list into Ready wherever this was triggered.
+      const noActionWeek =
+        lockedViewWeek ?? weeklyControlData?.weekInfo?.weekNumber;
+      await Promise.all([
+        refetchProgramme(),
+        fetchWeeklyControlData(uploadedProgramme._id, noActionWeek),
+      ]);
+      setToastMessage("Activity marked as Ready (No Action).");
+      setToastSeverity("success");
+      setToastOpen(true);
+      handleAssignChoiceClose();
+    } catch (error) {
+      console.error("Failed to mark activity as No Action:", error);
+      setAssignError("Failed to update activity. Please try again.");
+    } finally {
+      setNoActionLoading(false);
+    }
+  };
+
   const handleOpenReassign = (action: {
     _id: string;
     title: string;
@@ -1592,6 +1694,7 @@ const AdminProjectWorkspace = () => {
           open: 0,
           inProgress: 0,
         },
+        unassignedInWeek: response.unassignedInWeek || 0,
         blockedRiskActivities: response.blockedRiskActivities || [],
         activityCounts: response.activityCounts || {
           completed: 0,
@@ -1918,17 +2021,24 @@ const AdminProjectWorkspace = () => {
   startOfToday.setHours(0, 0, 0, 0);
 
   // Calculate action stats from projectActions for Actions tab (shows ALL actions)
+  // Actions from a closed / PM-overridden week are resolved and must not count
+  // as Open / In Progress / Overdue in the summary tiles.
   const actionStats = {
     total: projectActions.length,
-    open: projectActions.filter((a) => a.status === "Open").length,
-    inProgress: projectActions.filter((a) => a.status === "In Progress").length,
+    open: projectActions.filter(
+      (a) => a.status === "Open" && !isActionFromClosedWeek(a),
+    ).length,
+    inProgress: projectActions.filter(
+      (a) => a.status === "In Progress" && !isActionFromClosedWeek(a),
+    ).length,
     closed: projectActions.filter((a) => a.status === "Completed").length,
     overdue: projectActions.filter(
       (a) =>
         a.dueDate &&
         new Date(a.dueDate) < startOfToday &&
         a.status !== "Completed" &&
-        a.status !== "Cancelled",
+        a.status !== "Cancelled" &&
+        !isActionFromClosedWeek(a),
     ).length,
   };
 
@@ -2014,6 +2124,20 @@ const AdminProjectWorkspace = () => {
     project.team?.find((t) => t.role === "Planner")?.user?.name ||
     project.createdBy?.name ||
     defaultDashboardData.planner;
+
+  // Programme has run its course once the latest activity finish date is in the
+  // past. Reupload is only allowed then (a new programme replaces a finished one).
+  const programmeEnded = (() => {
+    const acts = lookaheadData?.activities || [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    let latestFinish: Date | null = null;
+    for (const a of acts) {
+      const f = parseDate(a.finishDate || "");
+      if (f && (!latestFinish || f > latestFinish)) latestFinish = f;
+    }
+    return latestFinish !== null && latestFinish < today;
+  })();
 
   return (
     <AdminLayout
@@ -2349,6 +2473,20 @@ const AdminProjectWorkspace = () => {
                     sixWeekEnd.setDate(todayDate.getDate() + 42); // 6 weeks = 42 days
 
                     const activitiesIn6Weeks = activities.filter((a) => {
+                      // Always include activities the backend has flagged
+                      // Blocked/Red (overdue) or Completed/Blue — even if their
+                      // start date falls outside the forward 6-week window — so
+                      // the tiles reflect the full programme, not just upcoming.
+                      if (
+                        a.activityStatus === "Blocked" ||
+                        a.ragStatus === "Blocked" ||
+                        a.ragStatus === "Red" ||
+                        a.activityStatus === "Completed" ||
+                        a.activityStatus === "Complete" ||
+                        a.ragStatus === "Blue"
+                      ) {
+                        return true;
+                      }
                       const activityStart = parseDateStr(a.startDate || "");
                       if (!activityStart) return false; // Exclude activities without start date
                       return (
@@ -2356,21 +2494,26 @@ const AdminProjectWorkspace = () => {
                       );
                     });
 
+                    // Program Upload Summary is driven by assignment/action
+                    // state: Ready (No Action), At Risk (action assigned),
+                    // Completed (all actions done), Blocked (open past cycle).
                     const readyCount = activitiesIn6Weeks.filter(
-                      (a) =>
-                        a.activityStatus === "Ready" ||
-                        (!a.activityStatus && a.ragStatus !== "Blocked"),
+                      (a) => a.activityStatus === "Ready",
                     ).length;
                     const atRiskCount = activitiesIn6Weeks.filter(
                       (a) => a.activityStatus === "At Risk",
                     ).length;
                     const completeCount = activitiesIn6Weeks.filter(
-                      (a) => a.activityStatus === "Complete",
+                      (a) =>
+                        a.activityStatus === "Complete" ||
+                        a.activityStatus === "Completed" ||
+                        a.ragStatus === "Blue",
                     ).length;
                     const blockedCount = activitiesIn6Weeks.filter(
                       (a) =>
                         a.activityStatus === "Blocked" ||
-                        a.ragStatus === "Blocked",
+                        a.ragStatus === "Blocked" ||
+                        a.ragStatus === "Red",
                     ).length;
                     return (
                       <>
@@ -2528,6 +2671,47 @@ const AdminProjectWorkspace = () => {
                   >
                     View Activities & Lookahead
                   </Button>
+                  <Tooltip
+                    title={
+                      programmeEnded
+                        ? "Upload a new programme for this project"
+                        : "Reupload is available once the last activity's finish date has passed"
+                    }
+                  >
+                    <span>
+                      <Button
+                        disabled={!programmeEnded}
+                        onClick={() => {
+                          // Return to the upload view so a new programme PDF can
+                          // be uploaded for this project.
+                          setUploadedProgramme(null);
+                          setUploadedFile(null);
+                          setUploadError("");
+                        }}
+                        sx={{
+                          bgcolor: "transparent",
+                          color: COLORS.textPrimary,
+                          border: `1px solid ${COLORS.border}`,
+                          textTransform: "none",
+                          px: 3,
+                          py: 1,
+                          borderRadius: "8px",
+                          fontSize: "14px",
+                          fontWeight: 500,
+                          "&:hover": {
+                            bgcolor: COLORS.bgTertiary,
+                          },
+                          "&.Mui-disabled": {
+                            color: COLORS.textMuted,
+                            borderColor: COLORS.border,
+                            opacity: 0.5,
+                          },
+                        }}
+                      >
+                        Reupload Programme
+                      </Button>
+                    </span>
+                  </Tooltip>
                   {/* <Button
                     onClick={() => {
                       if (uploadedProgramme?._id) {
@@ -3016,40 +3200,22 @@ const AdminProjectWorkspace = () => {
               </Box>
               {[
                 {
-                  week: "Week 1",
+                  week: "Weeks 1-2",
                   label: "Committed",
                   color: COLORS.green,
                   weekNum: 1,
                 },
                 {
-                  week: "Week 2",
-                  label: "Committed",
-                  color: COLORS.green,
-                  weekNum: 2,
-                },
-                {
-                  week: "Week 3",
+                  week: "Weeks 3-4",
                   label: "Readiness",
                   color: COLORS.amber,
                   weekNum: 3,
                 },
                 {
-                  week: "Week 4",
-                  label: "Readiness",
-                  color: COLORS.amber,
-                  weekNum: 4,
-                },
-                {
-                  week: "Week 5",
+                  week: "Weeks 5-6",
                   label: "Strategic",
                   color: COLORS.red,
                   weekNum: 5,
-                },
-                {
-                  week: "Week 6",
-                  label: "Strategic",
-                  color: COLORS.red,
-                  weekNum: 6,
                 },
               ].map((item, index) => (
                 <Box
@@ -3191,15 +3357,24 @@ const AdminProjectWorkspace = () => {
                     ragFilter === "all" ||
                     activity.activityStatus === ragFilter;
                   if (!matchesStatus) return false;
+
+                  // "All" zone (no 2-week pair selected): show every activity,
+                  // including past-dated ones (Completed / overdue-Blocked) that
+                  // fall outside the forward 6-week window.
+                  if (weekFilter === null) return true;
+
+                  // A specific 2-week zone (1, 3 or 5) is selected: forward
+                  // window only.
                   const activityStart = parseDate(activity.startDate);
                   if (!activityStart) return true;
                   if (activityStart < today || activityStart >= sixWeekEnd)
                     return false;
-                  if (weekFilter !== null) {
-                    const activityWeek = getActivityWeek(activity.startDate);
-                    return activityWeek !== null && activityWeek === weekFilter;
-                  }
-                  return true;
+                  const activityWeek = getActivityWeek(activity.startDate);
+                  return (
+                    activityWeek !== null &&
+                    (activityWeek === weekFilter ||
+                      activityWeek === weekFilter + 1)
+                  );
                 })
                 .sort((a, b) => {
                   const getZone = (activity: typeof a) => {
@@ -3214,6 +3389,7 @@ const AdminProjectWorkspace = () => {
                     ) {
                       return "Completed";
                     }
+                    if (activity.activityStatus === "Blocked") return "Overdue";
                     if (!start) return "Unknown";
                     const msPerDay = 1000 * 60 * 60 * 24;
                     const daysFromToday = Math.floor(
@@ -3223,6 +3399,7 @@ const AdminProjectWorkspace = () => {
                     if (weekNum <= 2) return "Weeks 1-2";
                     if (weekNum <= 4) return "Weeks 3-4";
                     if (weekNum <= 6) return "Weeks 5-6";
+                    if (weekNum <= 0) return "Overdue";
                     return "Beyond";
                   };
                   return (
@@ -3247,6 +3424,11 @@ const AdminProjectWorkspace = () => {
                 ) {
                   return { zone: "Completed", color: "blue" };
                 }
+                // Blocked/overdue activities are past-dated (outside the forward
+                // week zones) — label them "Overdue" instead of a negative week.
+                if (activityStatus === "Blocked") {
+                  return { zone: "Overdue", color: "red" };
+                }
                 if (!startDate) return { zone: "N/A", color: "muted" };
                 const start = parseDate(startDate);
                 if (!start) return { zone: "N/A", color: "muted" };
@@ -3258,6 +3440,7 @@ const AdminProjectWorkspace = () => {
                 if (weekNum <= 2) return { zone: "Weeks 1-2", color: "green" };
                 if (weekNum <= 4) return { zone: "Weeks 3-4", color: "amber" };
                 if (weekNum <= 6) return { zone: "Weeks 5-6", color: "red" };
+                if (weekNum <= 0) return { zone: "Overdue", color: "red" };
                 return { zone: `Week ${weekNum}`, color: "muted" };
               };
 
@@ -3273,11 +3456,14 @@ const AdminProjectWorkspace = () => {
                   case "Completed":
                     return "blue";
                   case "Action Open":
-                    return "blue";
+                    return "amber";
                   case "Action Overdue":
                     return "red";
+                  case "Unassigned":
+                  case "Not Ready":
+                    return "grey";
                   default:
-                    return "green";
+                    return "grey";
                 }
               };
 
@@ -3299,7 +3485,7 @@ const AdminProjectWorkspace = () => {
                 const displayStatus =
                   activity.activityStatus === "Complete"
                     ? "Completed"
-                    : activity.activityStatus || "Ready";
+                    : activity.activityStatus || "Unassigned";
                 return {
                   id: activity.activityId,
                   name: activity.activityName,
@@ -3338,7 +3524,15 @@ const AdminProjectWorkspace = () => {
                 <Box sx={{ mb: 3 }}>
                   <ActivitiesTable
                     activities={pageItems}
-                    onAssignClick={(a) => {
+                    onAssignClick={(a) =>
+                      openAssignChoice({
+                        id: a.id,
+                        name: a.name,
+                        startDate: a.startDate,
+                        endDate: a.endDate,
+                      })
+                    }
+                    onAddActionClick={(a) => {
                       const startDateFormatted = toDateInputFormat(a.startDate);
                       setAssigningActivity({
                         activityId: a.id,
@@ -3352,7 +3546,7 @@ const AdminProjectWorkspace = () => {
                         type: "Required",
                         priority: "Medium",
                         assignee: "",
-                        dueDate: startDateFormatted,
+                        dueDate: new Date().toLocaleDateString("en-CA"),
                       });
                       setAssignModalOpen(true);
                     }}
@@ -3416,13 +3610,16 @@ const AdminProjectWorkspace = () => {
                 if (activityStart < today || activityStart >= sixWeekEnd)
                   return false;
 
-                // Then apply week filter if selected
+                // Then apply week filter if selected (2-week pair)
                 if (weekFilter !== null) {
                   const activityWeek = getActivityWeekForSummary(
                     activity.startDate,
                   );
                   if (activityWeek === null) return false;
-                  return activityWeek === weekFilter;
+                  return (
+                    activityWeek === weekFilter ||
+                    activityWeek === weekFilter + 1
+                  );
                 }
 
                 return true;
@@ -4255,8 +4452,9 @@ const AdminProjectWorkspace = () => {
                     <Typography
                       sx={{ color: COLORS.textSecondary, fontSize: "12px" }}
                     >
-                      {getWeekDateRangeFromToday()} •{" "}
-                      {weeklyControlData.weekInfo.totalActivities} activities
+                      {weeklyControlData.weekInfo.dateRange ||
+                        getWeekDateRangeFromToday()}{" "}
+                      • {weeklyControlData.weekInfo.totalActivities} activities
                       these weeks
                     </Typography>
                   </Box>
@@ -4578,6 +4776,7 @@ const AdminProjectWorkspace = () => {
                         green: 0,
                         amber: 0,
                         red: 0,
+                        grey: 0,
                       };
                       const data = [
                         {
@@ -4598,6 +4797,17 @@ const AdminProjectWorkspace = () => {
                           tooltip: "Blocked - Activities that are blocked",
                         },
                       ].filter((d) => d.value > 0);
+                      // Grey is only a placeholder while nothing is triaged yet
+                      // (avoids an empty chart). Drop it as soon as any
+                      // green/amber/red appears.
+                      if (data.length === 0 && (ragData.grey ?? 0) > 0) {
+                        data.push({
+                          value: ragData.grey ?? 0,
+                          color: "#6B7280",
+                          tooltip:
+                            "Unassigned - Activities awaiting triage (no action assigned yet)",
+                        });
+                      }
                       const total = data.reduce((sum, d) => sum + d.value, 0);
                       if (total === 0) return null;
                       const strokeWidth = 28;
@@ -4691,12 +4901,21 @@ const AdminProjectWorkspace = () => {
                     green: 0,
                     amber: 0,
                     red: 0,
+                    grey: 0,
                   };
+                  const grey = ragData.grey ?? 0;
                   const total = ragData.green + ragData.amber + ragData.red;
-                  if (total === 0) return null;
-                  const greenPct = Math.round((ragData.green / total) * 100);
-                  const amberPct = Math.round((ragData.amber / total) * 100);
-                  const redPct = Math.round((ragData.red / total) * 100);
+                  // Hide the legend only when there are no activities at all.
+                  // While everything is untriaged (grey), still show the RAG
+                  // legend at 0% so the user sees the categories. Grey/unassigned
+                  // itself is intentionally not labelled.
+                  if (total + grey === 0) return null;
+                  const greenPct =
+                    total > 0 ? Math.round((ragData.green / total) * 100) : 0;
+                  const amberPct =
+                    total > 0 ? Math.round((ragData.amber / total) * 100) : 0;
+                  const redPct =
+                    total > 0 ? Math.round((ragData.red / total) * 100) : 0;
                   const tooltipStyles = {
                     tooltip: {
                       sx: {
@@ -5105,23 +5324,16 @@ const AdminProjectWorkspace = () => {
                 }
                 weeklyPlanPreview={weeklyControlData?.weeklyPlanPreview || []}
                 plannerToDo={weeklyControlData?.plannerToDo || []}
-                onAssignClick={(activity) => {
-                  setAssigningActivity({
-                    activityId: activity.activityId,
-                    activityName: activity.activityName,
-                    startDate: toDateInputFormat(activity.startDate || ""),
-                    finishDate: toDateInputFormat(activity.finishDate || ""),
-                  });
-                  setAssignFormData({
-                    title: "",
-                    description: "",
-                    type: "Required",
-                    priority: "Medium",
-                    assignee: "",
-                    dueDate: "",
-                  });
-                  setAssignModalOpen(true);
-                }}
+                onAssignClick={(activity) =>
+                  // Same chooser as Activities & Lookahead: No Action Required
+                  // vs Action Required.
+                  openAssignChoice({
+                    id: activity.activityId,
+                    name: activity.activityName,
+                    startDate: activity.startDate || "",
+                    endDate: activity.finishDate || "",
+                  })
+                }
                 onUnblockClick={async (activityId) => {
                   const progId =
                     weeklyControlData?.programmeId || uploadedProgramme?._id;
@@ -5130,9 +5342,11 @@ const AdminProjectWorkspace = () => {
                     return;
                   }
                   try {
+                    // Acknowledge the overdue activity: backend drops it from
+                    // Blocked to At Risk so it stays listed and becomes
+                    // assignable, and won't auto-reblock on refresh.
                     await programmeAPI.updateActivity(progId, activityId, {
-                      isBlocked: false,
-                      activityStatus: "Ready",
+                      overdueAcknowledged: true,
                     });
                     // Refresh both Weekly Control and Activities & Lookahead data
                     const weekNum =
@@ -5287,7 +5501,55 @@ const AdminProjectWorkspace = () => {
                 </Box>
               ) : cycleStage === "execution" ? (
                 <Box>
-                  {weeklyActionStats.openRequired === 0 ? (
+                  {(weeklyControlData?.unassignedInWeek || 0) > 0 ? (
+                    /* Weekly closure condition #1: every activity must be
+                       assigned before the week can be closed. */
+                    <>
+                      <Box
+                        sx={{
+                          bgcolor: "#2D2A24",
+                          border: `1px solid ${COLORS.amber}`,
+                          borderRadius: "8px",
+                          px: 2,
+                          py: 1.5,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 1.5,
+                          mb: 2,
+                        }}
+                      >
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                          <circle cx="10" cy="10" r="8.5" stroke="#F59E0B" strokeWidth="1.5" />
+                          <path d="M10 6V10.5" stroke="#F59E0B" strokeWidth="1.5" strokeLinecap="round" />
+                          <circle cx="10" cy="13.5" r="0.75" fill="#F59E0B" />
+                        </svg>
+                        <Typography
+                          sx={{ color: COLORS.amber, fontSize: "13px", fontWeight: 500 }}
+                        >
+                          {weeklyControlData?.unassignedInWeek} activit
+                          {weeklyControlData?.unassignedInWeek === 1 ? "y" : "ies"} in
+                          this week {weeklyControlData?.unassignedInWeek === 1 ? "is" : "are"}{" "}
+                          still unassigned. Assign every activity before closing.
+                        </Typography>
+                      </Box>
+                      <Button
+                        onClick={() => setActiveTab(2)}
+                        sx={{
+                          bgcolor: COLORS.blue,
+                          color: "#fff",
+                          textTransform: "none",
+                          px: 2,
+                          py: 1,
+                          borderRadius: "8px",
+                          fontSize: "13px",
+                          fontWeight: 500,
+                          "&:hover": { bgcolor: COLORS.blueHover },
+                        }}
+                      >
+                        Go to Activities
+                      </Button>
+                    </>
+                  ) : weeklyActionStats.openRequired === 0 ? (
                     /* Ready for close-out - all Required actions completed */
                     <>
                       <Box
@@ -5479,24 +5741,76 @@ const AdminProjectWorkspace = () => {
                         >
                           Go to Actions
                         </Button>
-                        <Button
-                          onClick={() => setShowOverrideForm(!showOverrideForm)}
-                          sx={{
-                            bgcolor: "transparent",
-                            color: COLORS.amber,
-                            border: `1px solid ${COLORS.amber}`,
-                            textTransform: "none",
-                            px: 2,
-                            py: 1,
-                            borderRadius: "8px",
-                            fontSize: "13px",
-                            fontWeight: 500,
-                            "&:hover": { bgcolor: "rgba(245, 158, 11, 0.1)" },
-                          }}
-                        >
-                          PM Override
-                        </Button>
+                        {(() => {
+                          // PM Override bypasses incomplete actions, NOT the
+                          // calendar. Disable it until the current 2-week pair's
+                          // window has ended (canClose === true).
+                          const currentUnclosed = weeksStatus?.weeks?.find(
+                            (w) => !w.isClosed,
+                          );
+                          const canCloseByDate = !!currentUnclosed?.canClose;
+                          const disabledReason =
+                            currentUnclosed?.canCloseReason ||
+                            "This 2-week period has not ended yet";
+                          return (
+                            <Tooltip
+                              title={!canCloseByDate ? disabledReason : ""}
+                              placement="top"
+                              arrow
+                            >
+                              <span>
+                                <Button
+                                  onClick={() =>
+                                    setShowOverrideForm(!showOverrideForm)
+                                  }
+                                  disabled={!canCloseByDate}
+                                  sx={{
+                                    bgcolor: "transparent",
+                                    color: COLORS.amber,
+                                    border: `1px solid ${COLORS.amber}`,
+                                    textTransform: "none",
+                                    px: 2,
+                                    py: 1,
+                                    borderRadius: "8px",
+                                    fontSize: "13px",
+                                    fontWeight: 500,
+                                    "&:hover": {
+                                      bgcolor: "rgba(245, 158, 11, 0.1)",
+                                    },
+                                    "&.Mui-disabled": {
+                                      color: COLORS.textMuted,
+                                      borderColor: COLORS.border,
+                                    },
+                                  }}
+                                >
+                                  PM Override
+                                </Button>
+                              </span>
+                            </Tooltip>
+                          );
+                        })()}
                       </Box>
+                      {(() => {
+                        const currentUnclosed = weeksStatus?.weeks?.find(
+                          (w) => !w.isClosed,
+                        );
+                        if (!currentUnclosed || currentUnclosed.canClose)
+                          return null;
+                        const reason =
+                          currentUnclosed.canCloseReason ||
+                          "this 2-week period has not ended yet";
+                        return (
+                          <Typography
+                            sx={{
+                              color: COLORS.textMuted,
+                              fontSize: "12px",
+                              mt: 1.5,
+                            }}
+                          >
+                            PM Override is unavailable — {reason}.
+                          </Typography>
+                        );
+                      })()}
                       {showOverrideForm && (
                         <Box
                           sx={{
@@ -6428,28 +6742,73 @@ const AdminProjectWorkspace = () => {
                             >
                               Go to Actions
                             </Button>
-                            <Button
-                              onClick={() =>
-                                setShowOverrideForm(!showOverrideForm)
-                              }
-                              sx={{
-                                bgcolor: "transparent",
-                                color: COLORS.amber,
-                                border: `1px solid ${COLORS.amber}`,
-                                textTransform: "none",
-                                px: 2,
-                                py: 1,
-                                borderRadius: "8px",
-                                fontSize: "13px",
-                                fontWeight: 500,
-                                "&:hover": {
-                                  bgcolor: "rgba(245, 158, 11, 0.1)",
-                                },
-                              }}
-                            >
-                              PM Override
-                            </Button>
+                            {(() => {
+                              const currentUnclosed = weeksStatus?.weeks?.find(
+                                (w) => !w.isClosed,
+                              );
+                              const canCloseByDate = !!currentUnclosed?.canClose;
+                              const disabledReason =
+                                currentUnclosed?.canCloseReason ||
+                                "This 2-week period has not ended yet";
+                              return (
+                                <Tooltip
+                                  title={!canCloseByDate ? disabledReason : ""}
+                                  placement="top"
+                                  arrow
+                                >
+                                  <span>
+                                    <Button
+                                      onClick={() =>
+                                        setShowOverrideForm(!showOverrideForm)
+                                      }
+                                      disabled={!canCloseByDate}
+                                      sx={{
+                                        bgcolor: "transparent",
+                                        color: COLORS.amber,
+                                        border: `1px solid ${COLORS.amber}`,
+                                        textTransform: "none",
+                                        px: 2,
+                                        py: 1,
+                                        borderRadius: "8px",
+                                        fontSize: "13px",
+                                        fontWeight: 500,
+                                        "&:hover": {
+                                          bgcolor: "rgba(245, 158, 11, 0.1)",
+                                        },
+                                        "&.Mui-disabled": {
+                                          color: COLORS.textMuted,
+                                          borderColor: COLORS.border,
+                                        },
+                                      }}
+                                    >
+                                      PM Override
+                                    </Button>
+                                  </span>
+                                </Tooltip>
+                              );
+                            })()}
                           </Box>
+                          {(() => {
+                            const currentUnclosed = weeksStatus?.weeks?.find(
+                              (w) => !w.isClosed,
+                            );
+                            if (!currentUnclosed || currentUnclosed.canClose)
+                              return null;
+                            const reason =
+                              currentUnclosed.canCloseReason ||
+                              "this 2-week period has not ended yet";
+                            return (
+                              <Typography
+                                sx={{
+                                  color: COLORS.textMuted,
+                                  fontSize: "12px",
+                                  mt: 1.5,
+                                }}
+                              >
+                                PM Override is unavailable — {reason}.
+                              </Typography>
+                            );
+                          })()}
                           {showOverrideForm && (
                             <Box
                               sx={{
@@ -7369,6 +7728,12 @@ const AdminProjectWorkspace = () => {
                     onChange={(e) =>
                       handleEditChange("dueDate", e.target.value)
                     }
+                    slotProps={{
+                      htmlInput: {
+                        // Due date can be set from today onward.
+                        min: new Date().toLocaleDateString("en-CA"),
+                      },
+                    }}
                     sx={{
                       "& .MuiOutlinedInput-root": {
                         bgcolor: COLORS.bgPrimary,
@@ -7676,6 +8041,124 @@ const AdminProjectWorkspace = () => {
               )}
             </Button>
           </DialogActions>
+        </Dialog>
+
+        {/* Assign Choice Modal (No Action / Action Required) */}
+        <Dialog
+          open={assignChoiceOpen}
+          onClose={handleAssignChoiceClose}
+          maxWidth="xs"
+          fullWidth
+          slotProps={{
+            backdrop: { sx: { bgcolor: "rgba(0, 0, 0, 0.8)" } },
+            paper: {
+              sx: {
+                bgcolor: COLORS.bgPrimary,
+                border: `1px solid ${COLORS.border}`,
+                borderRadius: "12px",
+              },
+            },
+          }}
+        >
+          <Box sx={{ p: 3 }}>
+            <Typography
+              sx={{
+                color: COLORS.textPrimary,
+                fontSize: "18px",
+                fontWeight: 600,
+                mb: 0.5,
+              }}
+            >
+              Assign Activity
+            </Typography>
+            <Typography
+              sx={{ color: COLORS.textSecondary, fontSize: "13px", mb: 2.5 }}
+            >
+              {assignChoiceActivity?.activityName || "this activity"}
+            </Typography>
+
+            {assignError && (
+              <Typography
+                sx={{ color: COLORS.red, fontSize: "13px", mb: 1.5 }}
+              >
+                {assignError}
+              </Typography>
+            )}
+
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+              <Button
+                onClick={handleChooseNoAction}
+                disabled={noActionLoading}
+                sx={{
+                  textTransform: "none",
+                  justifyContent: "flex-start",
+                  textAlign: "left",
+                  p: 2,
+                  borderRadius: "8px",
+                  border: `1px solid ${COLORS.green}55`,
+                  bgcolor: `${COLORS.green}10`,
+                  color: COLORS.textPrimary,
+                  "&:hover": { bgcolor: `${COLORS.green}20` },
+                }}
+              >
+                <Box>
+                  <Typography
+                    sx={{ fontWeight: 600, fontSize: "14px", color: COLORS.green }}
+                  >
+                    {noActionLoading ? "Saving..." : "No Action"}
+                  </Typography>
+                  <Typography
+                    sx={{ fontSize: "12px", color: COLORS.textSecondary }}
+                  >
+                    Mark as Ready (Green). No action needed for this activity.
+                  </Typography>
+                </Box>
+              </Button>
+
+              <Button
+                onClick={handleChooseActionRequired}
+                disabled={noActionLoading}
+                sx={{
+                  textTransform: "none",
+                  justifyContent: "flex-start",
+                  textAlign: "left",
+                  p: 2,
+                  borderRadius: "8px",
+                  border: `1px solid ${COLORS.amber}55`,
+                  bgcolor: `${COLORS.amber}10`,
+                  color: COLORS.textPrimary,
+                  "&:hover": { bgcolor: `${COLORS.amber}20` },
+                }}
+              >
+                <Box>
+                  <Typography
+                    sx={{ fontWeight: 600, fontSize: "14px", color: COLORS.amber }}
+                  >
+                    Action Required
+                  </Typography>
+                  <Typography
+                    sx={{ fontSize: "12px", color: COLORS.textSecondary }}
+                  >
+                    Assign an action. Activity becomes At Risk (Amber).
+                  </Typography>
+                </Box>
+              </Button>
+            </Box>
+
+            <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 2.5 }}>
+              <Button
+                onClick={handleAssignChoiceClose}
+                disabled={noActionLoading}
+                sx={{
+                  textTransform: "none",
+                  color: COLORS.textSecondary,
+                  fontSize: "13px",
+                }}
+              >
+                Cancel
+              </Button>
+            </Box>
+          </Box>
         </Dialog>
 
         {/* Assign Activity Modal */}
@@ -8072,8 +8555,9 @@ const AdminProjectWorkspace = () => {
                     }
                     slotProps={{
                       htmlInput: {
-                        min: assigningActivity?.startDate,
-                        max: assigningActivity?.finishDate,
+                        // Due date can be set from today onward; the activity's
+                        // start date is no longer the floor. No upper bound.
+                        min: new Date().toLocaleDateString("en-CA"),
                       },
                     }}
                     sx={{
@@ -8437,18 +8921,25 @@ const AdminProjectWorkspace = () => {
         <Snackbar
           open={toastOpen}
           autoHideDuration={4000}
-          onClose={() => setToastOpen(false)}
+          onClose={() => {
+            setToastOpen(false);
+            setToastSeverity("warning");
+          }}
           anchorOrigin={{ vertical: "top", horizontal: "center" }}
         >
           <Alert
-            onClose={() => setToastOpen(false)}
-            severity="warning"
+            onClose={() => {
+              setToastOpen(false);
+              setToastSeverity("warning");
+            }}
+            severity={toastSeverity}
             sx={{
-              bgcolor: COLORS.amber,
-              color: "#000",
+              bgcolor:
+                toastSeverity === "success" ? COLORS.green : COLORS.amber,
+              color: toastSeverity === "success" ? "#fff" : "#000",
               fontWeight: 500,
               "& .MuiAlert-icon": {
-                color: "#000",
+                color: toastSeverity === "success" ? "#fff" : "#000",
               },
             }}
           >
