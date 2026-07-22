@@ -13,11 +13,7 @@ import {
   Typography,
   Button,
 } from "@mui/material";
-import {
-  KeyboardArrowDown,
-  KeyboardArrowRight,
-  ChevronRight,
-} from "@mui/icons-material";
+import { KeyboardArrowDown, KeyboardArrowRight } from "@mui/icons-material";
 import { COLORS, getStatusColor } from "../constants/colors";
 
 // Format date from various formats to YYYY-MM-DD
@@ -74,6 +70,11 @@ const formatDate = (dateStr: string): string => {
 
   return "-";
 };
+
+// Shared row height for the expanded LINKED ACTIONS / REASSIGN / ASSIGNEE
+// columns. Sized to the Reassign button (the tallest cell) so the three
+// columns stay aligned row-for-row.
+const ACTION_ROW_HEIGHT = "26px";
 
 export interface ActivityAction {
   _id: string;
@@ -733,8 +734,8 @@ const ActivityRow = ({
                   px: 3,
                   display: "grid",
                   gridTemplateColumns: onReassignClick
-                    ? "1fr 1fr 1fr"
-                    : "1fr 1fr",
+                    ? "1fr 1fr 1fr 1fr"
+                    : "1fr 1fr 1fr",
                   gap: 4,
                 }}
               >
@@ -762,11 +763,21 @@ const ActivityRow = ({
                           display: "flex",
                           alignItems: "center",
                           gap: 1,
+                          minHeight: ACTION_ROW_HEIGHT,
                           mb: 0.75,
                         }}
                       >
-                        <ChevronRight
-                          sx={{ color: COLORS.blue, fontSize: "1rem" }}
+                        <Box
+                          sx={{
+                            width: "5px",
+                            height: "5px",
+                            borderRadius: "50%",
+                            bgcolor: COLORS.blue,
+                            flexShrink: 0,
+                            // Match the chevron's footprint so the titles stay
+                            // on the same left edge as before.
+                            mx: "5.5px",
+                          }}
                         />
                         <Typography
                           onClick={() => onActionClick?.()}
@@ -830,7 +841,15 @@ const ActivityRow = ({
                       REASSIGN
                     </Typography>
                     {activity.linkedActionsData.map((action) => (
-                      <Box key={action._id} sx={{ mb: 0.75 }}>
+                      <Box
+                        key={action._id}
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          minHeight: ACTION_ROW_HEIGHT,
+                          mb: 0.75,
+                        }}
+                      >
                         <Button
                           disabled={action.status === "Completed"}
                           onClick={() =>
@@ -867,6 +886,44 @@ const ActivityRow = ({
                     ))}
                   </Box>
                 )}
+                <Box>
+                  <Typography
+                    sx={{
+                      color: COLORS.textMuted,
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      mb: 1.5,
+                      letterSpacing: "0.05em",
+                    }}
+                  >
+                    ASSIGNEE
+                  </Typography>
+                  {activity.linkedActionsData.map((action) => (
+                    <Box
+                      key={action._id}
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        minHeight: ACTION_ROW_HEIGHT,
+                        mb: 0.75,
+                      }}
+                    >
+                      <Typography
+                        sx={{
+                          color: action.assignee?.name
+                            ? COLORS.textLight
+                            : COLORS.textMuted,
+                          fontSize: "13px",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {action.assignee?.name || "Unassigned"}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
                 <Box
                   sx={{
                     display: "flex",

@@ -410,6 +410,8 @@ const AdminActivities = () => {
     );
   };
 
+  const assignableUsers = users.filter((u) => u.status === "active");
+
   // Update activities with linked actions when programmeActions changes
   useEffect(() => {
     if (activities.length > 0 && programmeActions.length > 0) {
@@ -1296,13 +1298,16 @@ const AdminActivities = () => {
                   <MenuItem value="" disabled>
                     Select assignee...
                   </MenuItem>
-                  {users
-                    .filter((u) => u.status === "active")
-                    .map((u) => (
-                      <MenuItem key={u._id} value={u._id}>
-                        {u.name}
-                      </MenuItem>
-                    ))}
+                  {assignableUsers.length === 0 && (
+                    <MenuItem value="" disabled>
+                      None
+                    </MenuItem>
+                  )}
+                  {assignableUsers.map((u) => (
+                    <MenuItem key={u._id} value={u._id}>
+                      {u.name}
+                    </MenuItem>
+                  ))}
                 </Select>
               </Box>
               <Box>

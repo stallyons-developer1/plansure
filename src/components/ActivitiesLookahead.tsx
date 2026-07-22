@@ -166,17 +166,21 @@ const ActivitiesLookahead = ({
   let completeCount = 0;
   sortedActivities.forEach((a) => {
     switch (a.status) {
+      case "Ready":
+        readyCount++;
+        break;
       case "At Risk":
         atRiskCount++;
         break;
       case "Blocked":
         blockedCount++;
         break;
+      case "Complete":
       case "Completed":
         completeCount++;
         break;
-      default:
-        readyCount++;
+      // Unassigned (untriaged) is deliberately uncounted — it is
+      // not Ready. Chips will not sum to the total.
     }
   });
 

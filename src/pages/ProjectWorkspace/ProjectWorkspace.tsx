@@ -1068,7 +1068,7 @@ const ProjectWorkspace = () => {
                 startDate: string,
                 finishDate: string,
                 activityStatus?: string,
-              ): { zone: string; color: string } => {
+              ): { zone: string; color: string; beyond?: boolean } => {
                 if (
                   activityStatus === "Complete" ||
                   activityStatus === "Completed" ||
@@ -1088,7 +1088,7 @@ const ProjectWorkspace = () => {
                 if (weekNum <= 2) return { zone: "Weeks 1-2", color: "green" };
                 if (weekNum <= 4) return { zone: "Weeks 3-4", color: "amber" };
                 if (weekNum <= 6) return { zone: "Weeks 5-6", color: "red" };
-                return { zone: `Week ${weekNum}`, color: "muted" };
+                return { zone: `Week ${weekNum}`, color: "muted", beyond: true };
               };
 
               const statusTypeFor = (status: string): string => {
@@ -1111,7 +1111,16 @@ const ProjectWorkspace = () => {
                 }
               };
 
-              const mapped: TableActivity[] = filtered.map((activity) => {
+              const withinLookahead = filtered.filter(
+                (activity) =>
+                  !ragZoneFor(
+                    activity.startDate,
+                    activity.finishDate,
+                    activity.activityStatus,
+                  ).beyond,
+              );
+
+              const mapped: TableActivity[] = withinLookahead.map((activity) => {
                 const rag = ragZoneFor(
                   activity.startDate,
                   activity.finishDate,
@@ -1162,17 +1171,21 @@ const ProjectWorkspace = () => {
               let completeCount = 0;
               mapped.forEach((m) => {
                 switch (m.status) {
+                  case "Ready":
+                    readyCount++;
+                    break;
                   case "At Risk":
                     atRiskCount++;
                     break;
                   case "Blocked":
                     blockedCount++;
                     break;
+                  case "Complete":
                   case "Completed":
                     completeCount++;
                     break;
-                  default:
-                    readyCount++;
+                  // Unassigned (untriaged) is deliberately uncounted — it is
+                  // not Ready. Chips will not sum to the total.
                 }
               });
               const now = new Date();

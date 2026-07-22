@@ -27,7 +27,25 @@
       "Bash(mdls -name kMDItemNumberOfPages Plansureguide.pdf)",
       "Bash(node --check routes/programmeUploadRoutes.js)",
       "Bash(node --check routes/actionRoutes.js)",
-      "Bash(node --check models/Programme.js)"
+      "Bash(node --check models/Programme.js)",
+      "Bash(awk '{printf \"%d:%s\\\\n\", $1+1974, substr\\($0, index\\($0,$2\\)\\)}')",
+      "Bash(awk 'NR>=2040 && NR<=2110 {printf \"%d: %s\\\\n\", NR, $0}' routes/programmeUploadRoutes.js)",
+      "Bash(awk 'NR>=1895 && NR<=1935 {printf \"%d: %s\\\\n\", NR, $0}' routes/programmeUploadRoutes.js)",
+      "Bash(awk 'NR>=2190 && NR<=2235 {printf \"%d: %s\\\\n\", NR, $0}' routes/programmeUploadRoutes.js)",
+      "Bash(awk 'NR>=2480 && NR<=2500 {printf \"%d: %s\\\\n\", NR, $0}' routes/programmeUploadRoutes.js)",
+      "Bash(awk 'NR>=2455 && NR<=2540 {printf \"%d: %s\\\\n\", NR, $0}' routes/programmeUploadRoutes.js)",
+      "Bash(awk 'NR>=2428 && NR<=2456 {printf \"%d: %s\\\\n\", NR, $0}' routes/programmeUploadRoutes.js)",
+      "Bash(awk 'NR>=2537 && NR<=2600 {printf \"%d: %s\\\\n\", NR, $0}' routes/programmeUploadRoutes.js)",
+      "Bash(awk 'NR>=2755 && NR<=2800 {printf \"%d: %s\\\\n\", NR, $0}' routes/programmeUploadRoutes.js)",
+      "Bash(awk 'NR>=1100 && NR<=1140 {printf \"%d: %s\\\\n\", NR, $0}' routes/programmeUploadRoutes.js)",
+      "Bash(awk 'NR>=3472 && NR<=3530 {printf \"%d: %s\\\\n\", NR, $0}' routes/programmeUploadRoutes.js)",
+      "Bash(python3 -c \"import json;d=json.load\\(open\\('package.json'\\)\\);print\\('type:',d.get\\('type'\\)\\);print\\('scripts:',json.dumps\\(d.get\\('scripts'\\),indent=2\\)\\);print\\('pdfkit dep:',d.get\\('dependencies',{}\\).get\\('pdfkit'\\), d.get\\('devDependencies',{}\\).get\\('pdfkit'\\)\\)\")",
+      "Bash(npx tsc *)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(sed -i '' '/setProgrammeActions\\(response.actions\\);/d' src/pages/Admin/AdminWeeklyDashboard.tsx src/pages/Planner/PlannerWeeklyDashboard.tsx)",
+      "Bash(git rm *)",
+      "Bash(echo \"=== tsc exit: $?\")",
+      "Bash(echo \"EXIT: $?\")"
     ]
   }
 }

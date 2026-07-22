@@ -369,7 +369,7 @@ const PlannerProjectWorkspace = () => {
       type: string;
       status: string;
       priority: string;
-      assignee?: { name: string };
+      assignee?: { _id?: string; name: string };
       dueDate: string;
       createdAt?: string;
     }>
@@ -499,6 +499,7 @@ const PlannerProjectWorkspace = () => {
     }>;
     activityCounts?: {
       completed: number;
+      noAction: number;
       blocked: number;
       atRisk: number;
     };
@@ -1732,17 +1733,25 @@ const PlannerProjectWorkspace = () => {
       // Activity counts from backend (for Weekly Plan export)
       const completedActivitiesCount =
         weeklyControlData.activityCounts?.completed || 0;
+      const noActionActivitiesCount =
+        weeklyControlData.activityCounts?.noAction || 0;
       const blockedActivitiesCount =
         weeklyControlData.activityCounts?.blocked || 0;
       const atRiskActivitiesCount =
         weeklyControlData.activityCounts?.atRisk || 0;
 
-      // Weekly Plan total = Actions + Activities (Completed + Blocked + At Risk)
+      // Weekly Plan total = Actions + Activities (Completed + No Action + Blocked
+      // + At Risk). Must mirror the sheets the export actually produces, or this
+      // card disagrees with the downloaded file.
+      // Actions here are week-scoped: actionsByStatus is programme-wide, so it
+      // carried every past week's closed/overdue actions into this week's total.
+      // pmOverride has no weeklyActionsByStatus equivalent and stays programme-wide.
       const weeklyPlanTotal =
-        completedActions +
-        overdueActions +
+        (weeklyControlData.weeklyActionsByStatus?.closed || 0) +
+        (weeklyControlData.weeklyActionsByStatus?.overdue || 0) +
         pmOverrideActions +
         completedActivitiesCount +
+        noActionActivitiesCount +
         blockedActivitiesCount +
         atRiskActivitiesCount;
 
@@ -2172,6 +2181,7 @@ const PlannerProjectWorkspace = () => {
               // Refetch data when switching tabs
               if (uploadedProgramme?._id) {
                 switch (newValue) {
+                  case 6: // Open Meeting
                   case 0: // Overview
                   case 1: // Programme Upload
                   case 2: // Activities & Lookahead
@@ -2230,12 +2240,13 @@ const PlannerProjectWorkspace = () => {
               },
             }}
           >
-            <Tab label="Overview" />
-            <Tab label="Programme Upload" />
-            <Tab label="Activities & Lookahead" />
-            <Tab label="Actions" />
-            <Tab label="Weekly Control" />
-            <Tab label="Closure & Export" />
+            <Tab label="Overview" value={0} />
+            <Tab label="Open Meeting" value={6} />
+            <Tab label="Programme Upload" value={1} />
+            <Tab label="Activities & Lookahead" value={2} />
+            <Tab label="Actions" value={3} />
+            <Tab label="Weekly Control" value={4} />
+            <Tab label="Closure & Export" value={5} />
           </Tabs>
         </Box>
 
@@ -2306,6 +2317,71 @@ const PlannerProjectWorkspace = () => {
               </>
             );
           })()}
+
+        {activeTab === 6 && (
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+            <Box
+              sx={{
+                bgcolor: COLORS.bgSecondary,
+                border: `1px solid ${COLORS.border}`,
+                borderRadius: "12px",
+                p: 3,
+              }}
+            >
+              <Typography
+                sx={{
+                  color: COLORS.textPrimary,
+                  fontSize: "14px",
+                  fontWeight: 600,
+                  mb: 0.5,
+                }}
+              >
+                Cycle Control
+              </Typography>
+              <Typography
+                sx={{
+                  color: COLORS.textSecondary,
+                  fontSize: "13px",
+                  fontWeight: 400,
+                  mb: 2,
+                }}
+              >
+                {!uploadedProgramme?._id
+                  ? "Upload a programme to open the planning meeting."
+                  : uploadedProgramme?.cycleStatus === "Closed" || isWeekClosed
+                    ? "This week is closed and locked. No changes allowed."
+                    : cycleStage === "draft"
+                      ? "Programme uploaded. Review activities and open the planning meeting."
+                      : "Planning meeting is open. Continue the cycle from the Weekly Control tab."}
+              </Typography>
+              <Button
+                onClick={handleCycleAction}
+                disabled={
+                  !uploadedProgramme?._id ||
+                  cycleStage !== "draft" ||
+                  weeklyControlData?.isProjectEnded
+                }
+                sx={{
+                  bgcolor: COLORS.blue,
+                  color: "#fff",
+                  textTransform: "none",
+                  px: 2.5,
+                  py: 1,
+                  borderRadius: "8px",
+                  fontSize: "13px",
+                  fontWeight: 500,
+                  "&:hover": { bgcolor: COLORS.blueHover },
+                  "&.Mui-disabled": {
+                    bgcolor: "#3a3a3a",
+                    color: "#666",
+                  },
+                }}
+              >
+                Open Meeting
+              </Button>
+            </Box>
+          </Box>
+        )}
 
         {activeTab === 1 && (
           <Box>
@@ -2477,9 +2553,13 @@ const PlannerProjectWorkspace = () => {
                       }
                       const activityStart = parseDateStr(a.startDate || "");
                       if (!activityStart) return false; // Exclude activities without start date
-                      return (
-                        activityStart >= todayDate && activityStart < sixWeekEnd
-                      );
+                      // Overlap, not start-date-only: an activity that started
+                      // before today but finishes later is live work and belongs
+                      // in the window. Testing activityStart >= todayDate dropped
+                      // anything already underway out of every tile.
+                      const activityFinish = parseDateStr(a.finishDate || "");
+                      const activityEnd = activityFinish ?? activityStart;
+                      return activityEnd >= todayDate && activityStart < sixWeekEnd;
                     });
 
                     // Program Upload Summary is driven by assignment/action
@@ -3274,7 +3354,7 @@ const PlannerProjectWorkspace = () => {
                 startDate: string,
                 finishDate: string,
                 activityStatus?: string,
-              ): { zone: string; color: string } => {
+              ): { zone: string; color: string; beyond?: boolean } => {
                 if (
                   activityStatus === "Complete" ||
                   activityStatus === "Completed" ||
@@ -3300,7 +3380,11 @@ const PlannerProjectWorkspace = () => {
                 if (weekNum <= 4) return { zone: "Weeks 3-4", color: "amber" };
                 if (weekNum <= 6) return { zone: "Weeks 5-6", color: "red" };
                 if (weekNum <= 0) return { zone: "Overdue", color: "red" };
-                return { zone: `Week ${weekNum}`, color: "muted" };
+                return {
+                  zone: `Week ${weekNum}`,
+                  color: "muted",
+                  beyond: true,
+                };
               };
 
               const statusTypeFor = (status: string): string => {
@@ -3334,7 +3418,16 @@ const PlannerProjectWorkspace = () => {
                 .toUpperCase()
                 .slice(0, 2);
 
-              const mapped: Activity[] = filtered.map((activity) => {
+              const withinLookahead = filtered.filter(
+                (activity) =>
+                  !ragZoneFor(
+                    activity.startDate,
+                    activity.finishDate,
+                    activity.activityStatus,
+                  ).beyond,
+              );
+
+              const mapped: Activity[] = withinLookahead.map((activity) => {
                 const rag = ragZoneFor(
                   activity.startDate,
                   activity.finishDate,
@@ -3491,10 +3584,11 @@ const PlannerProjectWorkspace = () => {
                     blockedCount++;
                     break;
                   case "Complete":
+                  case "Completed":
                     completeCount++;
                     break;
-                  default:
-                    readyCount++;
+                  // Unassigned (untriaged) is deliberately uncounted — it is
+                  // not Ready. Chips will not sum to the total.
                 }
               });
 
@@ -5358,18 +5452,44 @@ const PlannerProjectWorkspace = () => {
                           mb: 2,
                         }}
                       >
-                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                          <circle cx="10" cy="10" r="8.5" stroke="#F59E0B" strokeWidth="1.5" />
-                          <path d="M10 6V10.5" stroke="#F59E0B" strokeWidth="1.5" strokeLinecap="round" />
+                        <svg
+                          width="20"
+                          height="20"
+                          viewBox="0 0 20 20"
+                          fill="none"
+                        >
+                          <circle
+                            cx="10"
+                            cy="10"
+                            r="8.5"
+                            stroke="#F59E0B"
+                            strokeWidth="1.5"
+                          />
+                          <path
+                            d="M10 6V10.5"
+                            stroke="#F59E0B"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                          />
                           <circle cx="10" cy="13.5" r="0.75" fill="#F59E0B" />
                         </svg>
                         <Typography
-                          sx={{ color: COLORS.amber, fontSize: "13px", fontWeight: 500 }}
+                          sx={{
+                            color: COLORS.amber,
+                            fontSize: "13px",
+                            fontWeight: 500,
+                          }}
                         >
                           {weeklyControlData?.unassignedInWeek} activit
-                          {weeklyControlData?.unassignedInWeek === 1 ? "y" : "ies"} in
-                          this week {weeklyControlData?.unassignedInWeek === 1 ? "is" : "are"}{" "}
-                          still unassigned. Assign every activity before closing.
+                          {weeklyControlData?.unassignedInWeek === 1
+                            ? "y"
+                            : "ies"}{" "}
+                          in this week{" "}
+                          {weeklyControlData?.unassignedInWeek === 1
+                            ? "is"
+                            : "are"}{" "}
+                          still unassigned. Assign every activity before
+                          closing.
                         </Typography>
                       </Box>
                       <Button
@@ -6586,7 +6706,8 @@ const PlannerProjectWorkspace = () => {
                               const currentUnclosed = weeksStatus?.weeks?.find(
                                 (w) => !w.isClosed,
                               );
-                              const canCloseByDate = !!currentUnclosed?.canClose;
+                              const canCloseByDate =
+                                !!currentUnclosed?.canClose;
                               const disabledReason =
                                 currentUnclosed?.canCloseReason ||
                                 "This 2-week period has not ended yet";
@@ -8302,12 +8423,18 @@ const PlannerProjectWorkspace = () => {
                     <MenuItem value="" disabled>
                       Select assignee
                     </MenuItem>
-                    {users.map(
-                      (u: { _id: string; name: string; email: string }) => (
-                        <MenuItem key={u._id} value={u._id}>
-                          {u.name}
-                        </MenuItem>
-                      ),
+                    {users.length === 0 ? (
+                      <MenuItem value="" disabled>
+                        None
+                      </MenuItem>
+                    ) : (
+                      users.map(
+                        (u: { _id: string; name: string; email: string }) => (
+                          <MenuItem key={u._id} value={u._id}>
+                            {u.name}
+                          </MenuItem>
+                        ),
+                      )
                     )}
                   </Select>
                 </Box>
