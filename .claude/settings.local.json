@@ -45,7 +45,8 @@
       "Bash(sed -i '' '/setProgrammeActions\\(response.actions\\);/d' src/pages/Admin/AdminWeeklyDashboard.tsx src/pages/Planner/PlannerWeeklyDashboard.tsx)",
       "Bash(git rm *)",
       "Bash(echo \"=== tsc exit: $?\")",
-      "Bash(echo \"EXIT: $?\")"
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(awk 'NR>=740 && NR<=870 && /weekZone|generateWeekZones|getWeekZone|router.get|extractedData.activities|\\\\.map\\\\\\(/' routes/programmeUploadRoutes.js)"
     ]
   }
 }

@@ -78,8 +78,8 @@ const defaultDashboardData = {
 };
 
 const steps = [
-  "Draft",
-  "Meeting Open",
+  "Open Meeting",
+  "Upload a program",
   "Execution",
   "Close-Out Eligible",
   "Closed",
@@ -242,6 +242,7 @@ const PlannerProjectWorkspace = () => {
     return 1;
   });
   const [currentStep, setCurrentStep] = useState(1);
+  const [meetingOpenLocal, setMeetingOpenLocal] = useState(false);
   const [ragFilter, setRagFilter] = useState("all");
   const [weekFilter, setWeekFilter] = useState<number | null>(null); // null = all weeks, 1-6 = specific week
   const [activitiesPage, setActivitiesPage] = useState(1);
@@ -449,6 +450,15 @@ const PlannerProjectWorkspace = () => {
     else if (tabParam === "weekly") setActiveTab(4);
     else if (tabParam === "governance") setActiveTab(5);
   }, [location.search]);
+
+  // Option A: frontend-enforced ordering — restore the per-project
+  // "meeting opened" gate so the Programme Upload tab stays locked until then.
+  useEffect(() => {
+    if (!projectId) return;
+    setMeetingOpenLocal(
+      localStorage.getItem(`plansure_meeting_open_${projectId}`) === "true",
+    );
+  }, [projectId]);
 
   const [weeklyControlData, setWeeklyControlData] = useState<{
     stats: {
@@ -1017,7 +1027,7 @@ const PlannerProjectWorkspace = () => {
 
       if (cycleStage === "draft") {
         nextStatus = "Meeting Open";
-        nextStep = 2;
+        nextStep = 3;
       } else if (cycleStage === "meetingOpen") {
         nextStatus = "Execution";
         nextStep = 3;
@@ -1031,6 +1041,11 @@ const PlannerProjectWorkspace = () => {
         if (response.success) {
           if (cycleStage === "draft") {
             setCycleStage("meetingOpen");
+            // Keep the meeting-open gate in sync when opened from any panel.
+            setMeetingOpenLocal(true);
+            if (projectId) {
+              localStorage.setItem(`plansure_meeting_open_${projectId}`, "true");
+            }
           } else if (cycleStage === "meetingOpen") {
             setCycleStage("execution");
           }
@@ -1211,6 +1226,28 @@ const PlannerProjectWorkspace = () => {
     if (cycleStage === "draft") return "Draft";
     if (cycleStage === "meetingOpen") return "Meeting Open";
     return "Execution";
+  };
+
+  // Option A: the meeting counts as "open" once the planner opens it for this
+  // project (persisted locally) OR the current programme's real cycle has
+  // already advanced past upload/draft.
+  const isMeetingOpen =
+    meetingOpenLocal ||
+    (!!uploadedProgramme &&
+      ["Meeting Open", "Execution", "Close-Out Eligible", "Closed"].includes(
+        uploadedProgramme.cycleStatus || "",
+      ));
+
+  const handleOpenMeeting = async () => {
+    setMeetingOpenLocal(true);
+    if (projectId) {
+      localStorage.setItem(`plansure_meeting_open_${projectId}`, "true");
+    }
+    setCurrentStep((step) => (step < 2 ? 2 : step));
+    // If a programme already exists in draft, advance its real cycle status too.
+    if (uploadedProgramme?._id && cycleStage === "draft") {
+      await handleCycleAction();
+    }
   };
 
   const handleEditClick = (
@@ -1692,8 +1729,10 @@ const PlannerProjectWorkspace = () => {
         setCycleStage("draft");
         setCurrentStep(1);
       } else if (cycleStatus === "Meeting Open") {
+        // Reframed stepper: an uploaded programme awaiting "Start Execution"
+        // sits on the Execution step (step 3), not the upload step.
         setCycleStage("meetingOpen");
-        setCurrentStep(2);
+        setCurrentStep(3);
       } else if (cycleStatus === "Execution") {
         setCycleStage("execution");
         setCurrentStep(3);
@@ -1899,6 +1938,25 @@ const PlannerProjectWorkspace = () => {
           },
         });
         setUploadedFile(null);
+
+        // Reframed flow: the meeting is already open, so uploading the programme
+        // advances the cycle to "Meeting Open" and moves the stepper to the
+        // Execution step. Execution itself stays a manual "Start Execution" step.
+        if (programme._id && isMeetingOpen) {
+          try {
+            await programmeAPI.updateCycleStatus(programme._id, "Meeting Open");
+            setUploadedProgramme((prev) =>
+              prev ? { ...prev, cycleStatus: "Meeting Open" } : prev,
+            );
+            setCycleStage("meetingOpen");
+            setCurrentStep(3);
+          } catch (e) {
+            console.error(
+              "Failed to advance cycle to Meeting Open after upload",
+              e,
+            );
+          }
+        }
 
         setLookaheadData({
           activities: activities.map(
@@ -2346,39 +2404,57 @@ const PlannerProjectWorkspace = () => {
                   mb: 2,
                 }}
               >
-                {!uploadedProgramme?._id
-                  ? "Upload a programme to open the planning meeting."
-                  : uploadedProgramme?.cycleStatus === "Closed" || isWeekClosed
-                    ? "This week is closed and locked. No changes allowed."
-                    : cycleStage === "draft"
-                      ? "Programme uploaded. Review activities and open the planning meeting."
-                      : "Planning meeting is open. Continue the cycle from the Weekly Control tab."}
+                {uploadedProgramme?.cycleStatus === "Closed" || isWeekClosed
+                  ? "This week is closed and locked. No changes allowed."
+                  : cycleStage === "execution"
+                    ? "Execution in progress. Manage the cycle from the Weekly Control tab."
+                    : cycleStage === "meetingOpen"
+                      ? "Programme uploaded. Start execution to begin the weekly cycle."
+                      : isMeetingOpen
+                        ? "Planning meeting is open. Upload the programme to continue."
+                        : "Open the planning meeting to begin. You can upload the programme once the meeting is open."}
               </Typography>
-              <Button
-                onClick={handleCycleAction}
-                disabled={
-                  !uploadedProgramme?._id ||
-                  cycleStage !== "draft" ||
-                  weeklyControlData?.isProjectEnded
-                }
-                sx={{
-                  bgcolor: COLORS.blue,
-                  color: "#fff",
-                  textTransform: "none",
-                  px: 2.5,
-                  py: 1,
-                  borderRadius: "8px",
-                  fontSize: "13px",
-                  fontWeight: 500,
-                  "&:hover": { bgcolor: COLORS.blueHover },
-                  "&.Mui-disabled": {
-                    bgcolor: "#3a3a3a",
-                    color: "#666",
-                  },
-                }}
-              >
-                Open Meeting
-              </Button>
+              {uploadedProgramme?.cycleStatus === "Closed" ||
+              isWeekClosed ? null : (
+                <Button
+                  onClick={
+                    cycleStage === "execution"
+                      ? () => setActiveTab(4)
+                      : cycleStage === "meetingOpen"
+                        ? async () => {
+                            await handleCycleAction();
+                            setActiveTab(4);
+                          }
+                        : isMeetingOpen
+                          ? () => setActiveTab(1)
+                          : handleOpenMeeting
+                  }
+                  disabled={weeklyControlData?.isProjectEnded}
+                  sx={{
+                    bgcolor: COLORS.blue,
+                    color: "#fff",
+                    textTransform: "none",
+                    px: 2.5,
+                    py: 1,
+                    borderRadius: "8px",
+                    fontSize: "13px",
+                    fontWeight: 500,
+                    "&:hover": { bgcolor: COLORS.blueHover },
+                    "&.Mui-disabled": {
+                      bgcolor: "#3a3a3a",
+                      color: "#666",
+                    },
+                  }}
+                >
+                  {cycleStage === "execution"
+                    ? "Go to Weekly Control"
+                    : cycleStage === "meetingOpen"
+                      ? "Start Execution"
+                      : isMeetingOpen
+                        ? "Go to Programme Upload"
+                        : "Open Meeting"}
+                </Button>
+              )}
             </Box>
           </Box>
         )}
@@ -2859,10 +2935,14 @@ const PlannerProjectWorkspace = () => {
                     mb: 2,
                   }}
                 >
-                  No programme uploaded yet. Upload a PDF first.
+                  {isMeetingOpen
+                    ? "No programme uploaded yet. Upload a PDF first."
+                    : "Open the meeting before uploading a programme."}
                 </Typography>
                 <Button
-                  onClick={handleBrowseClick}
+                  onClick={
+                    isMeetingOpen ? handleBrowseClick : () => setActiveTab(6)
+                  }
                   sx={{
                     bgcolor: COLORS.blue,
                     color: "#fff",
@@ -2877,7 +2957,7 @@ const PlannerProjectWorkspace = () => {
                     },
                   }}
                 >
-                  Go to Upload
+                  {isMeetingOpen ? "Go to Upload" : "Open Meeting"}
                 </Button>
               </Box>
             ) : (
@@ -5702,13 +5782,12 @@ const PlannerProjectWorkspace = () => {
                           Go to Actions
                         </Button>
                         {(() => {
-                          // PM Override bypasses incomplete actions, NOT the
-                          // calendar. Disable it until the current 2-week pair's
-                          // window has ended (canClose === true).
+                          // PM Override force-closes past incomplete actions, so
+                          // it stays available while actions remain open.
                           const currentUnclosed = weeksStatus?.weeks?.find(
                             (w) => !w.isClosed,
                           );
-                          const canCloseByDate = !!currentUnclosed?.canClose;
+                          const canCloseByDate = true;
                           const disabledReason =
                             currentUnclosed?.canCloseReason ||
                             "This 2-week period has not ended yet";
@@ -5750,27 +5829,6 @@ const PlannerProjectWorkspace = () => {
                           );
                         })()}
                       </Box>
-                      {(() => {
-                        const currentUnclosed = weeksStatus?.weeks?.find(
-                          (w) => !w.isClosed,
-                        );
-                        if (!currentUnclosed || currentUnclosed.canClose)
-                          return null;
-                        const reason =
-                          currentUnclosed.canCloseReason ||
-                          "this 2-week period has not ended yet";
-                        return (
-                          <Typography
-                            sx={{
-                              color: COLORS.textMuted,
-                              fontSize: "12px",
-                              mt: 1.5,
-                            }}
-                          >
-                            PM Override is unavailable — {reason}.
-                          </Typography>
-                        );
-                      })()}
                       {showOverrideForm && (
                         <Box
                           sx={{
@@ -6706,8 +6764,7 @@ const PlannerProjectWorkspace = () => {
                               const currentUnclosed = weeksStatus?.weeks?.find(
                                 (w) => !w.isClosed,
                               );
-                              const canCloseByDate =
-                                !!currentUnclosed?.canClose;
+                              const canCloseByDate = true;
                               const disabledReason =
                                 currentUnclosed?.canCloseReason ||
                                 "This 2-week period has not ended yet";
@@ -6749,27 +6806,6 @@ const PlannerProjectWorkspace = () => {
                               );
                             })()}
                           </Box>
-                          {(() => {
-                            const currentUnclosed = weeksStatus?.weeks?.find(
-                              (w) => !w.isClosed,
-                            );
-                            if (!currentUnclosed || currentUnclosed.canClose)
-                              return null;
-                            const reason =
-                              currentUnclosed.canCloseReason ||
-                              "this 2-week period has not ended yet";
-                            return (
-                              <Typography
-                                sx={{
-                                  color: COLORS.textMuted,
-                                  fontSize: "12px",
-                                  mt: 1.5,
-                                }}
-                              >
-                                PM Override is unavailable — {reason}.
-                              </Typography>
-                            );
-                          })()}
                           {showOverrideForm && (
                             <Box
                               sx={{
