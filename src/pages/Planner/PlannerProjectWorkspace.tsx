@@ -239,10 +239,22 @@ const PlannerProjectWorkspace = () => {
     if (tabParam === "activities") return 2;
     if (tabParam === "weekly") return 4;
     if (tabParam === "governance") return 5;
+    if (tabParam === "open-meeting") return 6;
     return 1;
   });
-  const [currentStep, setCurrentStep] = useState(1);
+  // Starts at 0 so NO step is active until the planner opens the meeting.
+  const [currentStep, setCurrentStep] = useState(0);
   const [meetingOpenLocal, setMeetingOpenLocal] = useState(false);
+  // Week just closed, awaiting the planner to acknowledge ("Move to Week N+1").
+  // Persisted per project so the modal reappears on every workspace open.
+  const [closedWeekAck, setClosedWeekAck] = useState<number | null>(null);
+  // The current programme's own start date (lookaheadStartDate): project start
+  // for week 1, the upload/meeting-open date for re-uploaded weeks 2+. Zones
+  // and the lookahead window count weeks from here.
+  const [programmeAnchor, setProgrammeAnchor] = useState<string | null>(null);
+  // Project-level cycle counter — "Week N" = number of upload+close cycles.
+  // Increments each time the planner moves to the next week. Persisted per project.
+  const [weekNum, setWeekNum] = useState(1);
   const [ragFilter, setRagFilter] = useState("all");
   const [weekFilter, setWeekFilter] = useState<number | null>(null); // null = all weeks, 1-6 = specific week
   const [activitiesPage, setActivitiesPage] = useState(1);
@@ -449,16 +461,58 @@ const PlannerProjectWorkspace = () => {
     else if (tabParam === "activities") setActiveTab(2);
     else if (tabParam === "weekly") setActiveTab(4);
     else if (tabParam === "governance") setActiveTab(5);
+    else if (tabParam === "open-meeting") setActiveTab(6);
   }, [location.search]);
 
   // Option A: frontend-enforced ordering — restore the per-project
   // "meeting opened" gate so the Programme Upload tab stays locked until then.
   useEffect(() => {
     if (!projectId) return;
-    setMeetingOpenLocal(
-      localStorage.getItem(`plansure_meeting_open_${projectId}`) === "true",
+    const opened =
+      localStorage.getItem(`plansure_meeting_open_${projectId}`) === "true";
+    setMeetingOpenLocal(opened);
+    // Reflect an already-opened meeting on the stepper after a page reload.
+    if (opened) setCurrentStep((step) => (step < 1 ? 1 : step));
+    // Restore a pending "week closed" acknowledgement so the modal reappears
+    // (e.g. after clicking "View Dashboard") until the planner moves on.
+    const pendingClose = localStorage.getItem(
+      `plansure_week_closed_ack_${projectId}`,
     );
+    setClosedWeekAck(pendingClose ? Number(pendingClose) : null);
+    // Restore the project-level cycle counter ("Week N").
+    const storedWeekNum = localStorage.getItem(
+      `plansure_week_num_${projectId}`,
+    );
+    setWeekNum(storedWeekNum ? Number(storedWeekNum) : 1);
   }, [projectId]);
+
+  // "Move to Week N+1": acknowledge the closed week and start the next fresh.
+  const handleAckClosedWeek = async () => {
+    if (projectId) {
+      localStorage.removeItem(`plansure_week_closed_ack_${projectId}`);
+    }
+    setClosedWeekAck(null);
+    // Loop: start the next week fresh — empty EVERYTHING until a new programme
+    // PDF is uploaded, and jump to the Open Meeting tab. The awaiting-upload
+    // flag keeps the workspace empty across re-fetches / View Dashboard.
+    const nextWeek = weekNum + 1;
+    setWeekNum(nextWeek);
+    if (projectId) {
+      localStorage.removeItem(`plansure_meeting_open_${projectId}`);
+      localStorage.setItem(`plansure_awaiting_upload_${projectId}`, "true");
+      localStorage.setItem(`plansure_week_num_${projectId}`, String(nextWeek));
+    }
+    setMeetingOpenLocal(false);
+    setCurrentStep(0);
+    setCycleStage("draft");
+    setLockedViewWeek(null);
+    setUploadedProgramme(null);
+    setLookaheadData(null);
+    setWeeklyControlData(null);
+    setProgrammeAnchor(null);
+    setProjectActions([]);
+    setActiveTab(6);
+  };
 
   const [weeklyControlData, setWeeklyControlData] = useState<{
     stats: {
@@ -591,10 +645,21 @@ const PlannerProjectWorkspace = () => {
   // Reusable function to fetch programme data
   const refetchProgramme = async () => {
     if (!projectId) return;
+    // Awaiting a fresh upload for the next week: keep the workspace empty so the
+    // previous week's programme doesn't reload.
+    if (
+      localStorage.getItem(`plansure_awaiting_upload_${projectId}`) === "true"
+    ) {
+      setUploadedProgramme(null);
+      setLookaheadData(null);
+      setWeeklyControlData(null);
+      return;
+    }
     try {
       const response = await programmeAPI.getByProject(projectId);
       if (response.success && response.programme) {
         const programme = response.programme;
+        setProgrammeAnchor(programme.lookaheadStartDate || null);
         // Owner column shows whoever uploaded the programme PDF
         setUploaderName(programme.uploadedBy?.name || "");
         const activities = programme.extractedData?.activities || [];
@@ -674,10 +739,19 @@ const PlannerProjectWorkspace = () => {
   useEffect(() => {
     const fetchProgramme = async () => {
       if (!projectId) return;
+      // Awaiting a fresh upload for the next week: keep the workspace empty but
+      // stop the loading skeleton so the Programme Upload tab shows its UI.
+      if (
+        localStorage.getItem(`plansure_awaiting_upload_${projectId}`) === "true"
+      ) {
+        setIsLoadingProgramme(false);
+        return;
+      }
       try {
         const response = await programmeAPI.getByProject(projectId);
         if (response.success && response.programme) {
           const programme = response.programme;
+          setProgrammeAnchor(programme.lookaheadStartDate || null);
           const activities = programme.extractedData?.activities || [];
           const summary = programme.extractedData?.summary || {
             total: 0,
@@ -868,23 +942,12 @@ const PlannerProjectWorkspace = () => {
       );
       console.log("[PM Override] response1:", response1);
 
-      let response2: {
+      // Single-week close: only the selected week is closed (no 2-week pairing).
+      const response2: {
         success: boolean;
         isFullyClosed: boolean;
         isLastWeek?: boolean;
       } = { success: false, isFullyClosed: false };
-      if (response1.success && !response1.isFullyClosed) {
-        // Close the second week - pass isSecondOfPair=true for safety
-        console.log("[PM Override] Closing week", weekNumber + 1);
-        response2 = await programmeAPI.closeWeek(
-          uploadedProgramme._id,
-          weekNumber + 1,
-          closeType,
-          closeType === "PM Override" ? overrideReason : undefined,
-          true, // isSecondOfPair
-        );
-        console.log("[PM Override] response2:", response2);
-      }
 
       if (response1.success) {
         console.log(
@@ -934,6 +997,16 @@ const PlannerProjectWorkspace = () => {
           await refetchProgramme();
         }
 
+        // Show the persistent "Week N closed → Move to Week N+1" modal, where N
+        // is the project-level cycle counter (number of upload+close cycles).
+        if (projectId) {
+          localStorage.setItem(
+            `plansure_week_closed_ack_${projectId}`,
+            String(weekNum),
+          );
+        }
+        setClosedWeekAck(weekNum);
+
         // Update programme status based on response
         if (response1.isLastWeek || response2.isLastWeek) {
           // All weeks completed - set to Close-Out Eligible
@@ -949,9 +1022,9 @@ const PlannerProjectWorkspace = () => {
             prev ? { ...prev, cycleStatus: "Closed", isLocked: true } : null,
           );
         } else {
-          // Reset to Draft for next week
+          // Loop: the next week starts a fresh cycle (Open Meeting -> re-upload).
           setCycleStage("draft");
-          setCurrentStep(1);
+          setCurrentStep(0);
           setUploadedProgramme((prev) =>
             prev ? { ...prev, cycleStatus: "Draft" } : null,
           );
@@ -1027,7 +1100,7 @@ const PlannerProjectWorkspace = () => {
 
       if (cycleStage === "draft") {
         nextStatus = "Meeting Open";
-        nextStep = 3;
+        nextStep = 2;
       } else if (cycleStage === "meetingOpen") {
         nextStatus = "Execution";
         nextStep = 3;
@@ -1078,24 +1151,15 @@ const PlannerProjectWorkspace = () => {
 
   const handleFinalClose = async () => {
     if (!uploadedProgramme?._id) return;
-
-    try {
-      const response = await programmeAPI.updateCycleStatus(
-        uploadedProgramme._id,
-        "Closed",
-      );
-      if (response.success) {
-        setCurrentStep(5);
-        setIsWeekClosed(true);
-        setUploadedProgramme({
-          ...uploadedProgramme,
-          cycleStatus: "Closed",
-          isLocked: true,
-        });
-      }
-    } catch (error) {
-      console.error("Failed to close week:", error);
-    }
+    // Close the CURRENT week via the per-week close (creates cycle history,
+    // triggers the "Week N closed → Move to Week N+1" modal, and lets the
+    // programme continue to the next week instead of locking the whole thing).
+    const weekToClose =
+      lockedViewWeek ??
+      weeksStatus?.weeks.find((w) => !w.isClosed)?.weekNumber ??
+      weeksStatus?.currentWeekNumber ??
+      1;
+    await handleCloseSpecificWeek(weekToClose, "Normal Close");
   };
 
   const handleOverrideClose = async () => {
@@ -1139,22 +1203,13 @@ const PlannerProjectWorkspace = () => {
       setSavedOverrideReason(overrideReason);
       setShowOverrideForm(false);
 
-      // Close 2 weeks at once
+      // Single-week close (no 2-week pairing)
       const response1 = await programmeAPI.closeWeek(
         uploadedProgramme._id,
         weekToClose,
         "PM Override",
         overrideReason,
       );
-
-      if (response1.success && !response1.isFullyClosed) {
-        await programmeAPI.closeWeek(
-          uploadedProgramme._id,
-          weekToClose + 1,
-          "PM Override",
-          overrideReason,
-        );
-      }
 
       if (response1.success) {
         // Lock the view to the closed week BEFORE updating weeksStatus
@@ -1243,7 +1298,7 @@ const PlannerProjectWorkspace = () => {
     if (projectId) {
       localStorage.setItem(`plansure_meeting_open_${projectId}`, "true");
     }
-    setCurrentStep((step) => (step < 2 ? 2 : step));
+    setCurrentStep((step) => (step < 1 ? 1 : step));
     // If a programme already exists in draft, advance its real cycle status too.
     if (uploadedProgramme?._id && cycleStage === "draft") {
       await handleCycleAction();
@@ -1366,6 +1421,7 @@ const PlannerProjectWorkspace = () => {
           const weekNumber =
             closableWeek?.weekNumber || weeksStatus?.currentWeekNumber;
           await fetchWeeklyControlData(uploadedProgramme._id, weekNumber);
+          await refreshWeeksStatus();
         }
         handleCloseCompleteConfirm();
       }
@@ -1432,6 +1488,14 @@ const PlannerProjectWorkspace = () => {
     handleOpenAssignModal(activity);
   };
 
+  // Refresh the per-week close gate (weeksStatus drives canClose) so the Close
+  // button updates immediately after assigning/completing — no page refresh.
+  const refreshWeeksStatus = async () => {
+    if (!uploadedProgramme?._id) return;
+    const res = await programmeAPI.getWeeksStatus(uploadedProgramme._id);
+    if (res?.success) setWeeksStatus(res);
+  };
+
   // "No Action" -> mark the activity Ready (Green) without creating an action.
   const handleChooseNoAction = async () => {
     if (!assignChoiceActivity || !uploadedProgramme?._id) return;
@@ -1449,6 +1513,7 @@ const PlannerProjectWorkspace = () => {
       await Promise.all([
         refetchProgramme(),
         fetchWeeklyControlData(uploadedProgramme._id, noActionWeek),
+        refreshWeeksStatus(),
       ]);
       setToastMessage("Activity marked as Ready (No Action).");
       setToastSeverity("success");
@@ -1509,6 +1574,7 @@ const PlannerProjectWorkspace = () => {
 
         // Fetch weekly control data FIRST (this updates all 3 tabs)
         await fetchWeeklyControlData(uploadedProgramme._id, weekNumber);
+        await refreshWeeksStatus();
 
         // Refresh actions and lookahead data
         const [actionsRes, lookaheadRes] = await Promise.all([
@@ -1729,10 +1795,10 @@ const PlannerProjectWorkspace = () => {
         setCycleStage("draft");
         setCurrentStep(1);
       } else if (cycleStatus === "Meeting Open") {
-        // Reframed stepper: an uploaded programme awaiting "Start Execution"
-        // sits on the Execution step (step 3), not the upload step.
+        // Programme uploaded, awaiting "Start Execution": sits on the Upload
+        // step (step 2). Execution (step 3) lights only after Start Execution.
         setCycleStage("meetingOpen");
-        setCurrentStep(3);
+        setCurrentStep(2);
       } else if (cycleStatus === "Execution") {
         setCycleStage("execution");
         setCurrentStep(3);
@@ -1852,6 +1918,28 @@ const PlannerProjectWorkspace = () => {
 
       // Update checklist
       setClosureChecklist((prev) => ({ ...prev, plannerReview: true }));
+
+      // Downloading the weekly plan advances the cycle to Close-Out Eligible
+      // (stepper step 4). The backend allows this from Execution once the week
+      // is ready; otherwise the call is a no-op.
+      try {
+        const statusRes = await programmeAPI.updateCycleStatus(
+          uploadedProgramme._id,
+          "Close-Out Eligible",
+        );
+        if (statusRes?.success) {
+          setUploadedProgramme((prev) =>
+            prev ? { ...prev, cycleStatus: "Close-Out Eligible" } : prev,
+          );
+          setCurrentStep(4);
+          await Promise.all([
+            refreshWeeksStatus(),
+            fetchWeeklyControlData(uploadedProgramme._id, weekNumber),
+          ]);
+        }
+      } catch (e) {
+        console.error("Failed to advance cycle to Close-Out Eligible", e);
+      }
     } catch (error) {
       console.error("Error exporting weekly plan:", error);
     } finally {
@@ -1909,7 +1997,12 @@ const PlannerProjectWorkspace = () => {
       );
 
       if (response.success) {
+        // New PDF uploaded for this week — clear the awaiting-upload gate.
+        if (projectId) {
+          localStorage.removeItem(`plansure_awaiting_upload_${projectId}`);
+        }
         const programme = response.programme;
+        setProgrammeAnchor(programme.lookaheadStartDate || null);
         const activities =
           programme.activities || programme.extractedData?.activities || [];
         const summary = programme.summary ||
@@ -1949,7 +2042,7 @@ const PlannerProjectWorkspace = () => {
               prev ? { ...prev, cycleStatus: "Meeting Open" } : prev,
             );
             setCycleStage("meetingOpen");
-            setCurrentStep(3);
+            setCurrentStep(2);
           } catch (e) {
             console.error(
               "Failed to advance cycle to Meeting Open after upload",
@@ -2207,16 +2300,8 @@ const PlannerProjectWorkspace = () => {
           }}
           projectName={project.name}
           phase={project.phase}
-          week={
-            weeksStatus
-              ? `Week ${weeksStatus.currentWeekNumber}`
-              : defaultDashboardData.week
-          }
-          weekDates={
-            weeksStatus
-              ? `${weeksStatus.closedWeeksCount}/${weeksStatus.totalWeeks} closed`
-              : defaultDashboardData.weekDates
-          }
+          week={`Week ${weekNum}`}
+          weekDates={`${weekNum - 1} closed`}
           planner={planner}
           currentStep={currentStep}
           steps={steps}
@@ -3352,7 +3437,13 @@ const PlannerProjectWorkspace = () => {
             {(() => {
               const allActivities = lookaheadData?.activities || [];
 
-              const today = new Date();
+              // Anchor the lookahead/filter window to the programme's own start
+              // so it matches the table zones (falls back to project start / today).
+              const today = programmeAnchor
+                ? new Date(programmeAnchor)
+                : project?.startDate
+                  ? new Date(project.startDate)
+                  : new Date();
               today.setHours(0, 0, 0, 0);
               const sixWeekEnd = new Date(today);
               sixWeekEnd.setDate(today.getDate() + 42);
@@ -3377,9 +3468,16 @@ const PlannerProjectWorkspace = () => {
                     activity.activityStatus === ragFilter;
                   if (!matchesStatus) return false;
 
-                  // "All" zone (no 2-week pair selected): show every activity,
-                  // including past-dated ones (Completed / overdue-Blocked) that
-                  // fall outside the forward 6-week window.
+                  // Only show activities from the project start date onward —
+                  // the lookahead counts weeks from the project's start, so
+                  // anything before it is out of scope ("today" is the project
+                  // start anchor here).
+                  const startForAnchor = parseDate(activity.startDate);
+                  if (startForAnchor && startForAnchor < today) return false;
+
+                  // "All" zone (no 2-week pair selected): show every activity in
+                  // scope, including past-dated ones (Completed / overdue-Blocked)
+                  // that fall outside the forward 6-week window.
                   if (weekFilter === null) return true;
 
                   // A specific 2-week zone (1, 3 or 5) is selected: forward
@@ -3398,7 +3496,11 @@ const PlannerProjectWorkspace = () => {
                 .sort((a, b) => {
                   const getZone = (activity: typeof a) => {
                     const start = parseDate(activity.startDate);
-                    const todayDate = new Date();
+                    const todayDate = programmeAnchor
+                      ? new Date(programmeAnchor)
+                      : project?.startDate
+                        ? new Date(project.startDate)
+                        : new Date();
                     todayDate.setHours(0, 0, 0, 0);
                     if (
                       activity.activityStatus === "Complete" ||
@@ -3429,6 +3531,15 @@ const PlannerProjectWorkspace = () => {
 
               const startOfToday = new Date();
               startOfToday.setHours(0, 0, 0, 0);
+              // Anchor the week zones to the programme's own start date (project
+              // start for week 1, upload/meeting-open date for weeks 2+), falling
+              // back to the project start / today.
+              const zoneAnchor = programmeAnchor
+                ? new Date(programmeAnchor)
+                : project?.startDate
+                  ? new Date(project.startDate)
+                  : new Date(startOfToday);
+              zoneAnchor.setHours(0, 0, 0, 0);
 
               const ragZoneFor = (
                 startDate: string,
@@ -3453,7 +3564,7 @@ const PlannerProjectWorkspace = () => {
                 if (!start) return { zone: "N/A", color: "muted" };
                 const msPerDay = 1000 * 60 * 60 * 24;
                 const daysFromToday = Math.floor(
-                  (start.getTime() - startOfToday.getTime()) / msPerDay,
+                  (start.getTime() - zoneAnchor.getTime()) / msPerDay,
                 );
                 const weekNum = Math.floor(daysFromToday / 7) + 1;
                 if (weekNum <= 2) return { zone: "Weeks 1-2", color: "green" };
@@ -3518,6 +3629,18 @@ const PlannerProjectWorkspace = () => {
                   activity.activityStatus === "Complete"
                     ? "Completed"
                     : activity.activityStatus || "Unassigned";
+                // If the activity's only open actions were settled by a PM
+                // Override (closed week), treat it as Completed — those actions
+                // are resolved, so it should no longer read as At Risk.
+                const openLinked = linked.filter(
+                  (a) => a.status !== "Completed" && a.status !== "Cancelled",
+                );
+                const isPMOverrideComplete =
+                  openLinked.length > 0 &&
+                  openLinked.every((a) => isActionFromClosedWeek(a));
+                const effectiveStatus = isPMOverrideComplete
+                  ? "Completed"
+                  : displayStatus;
                 return {
                   id: activity.activityId,
                   name: activity.activityName,
@@ -3527,8 +3650,9 @@ const PlannerProjectWorkspace = () => {
                   ragZone: rag.zone,
                   ragColor: rag.color,
                   actions: linked.length,
-                  status: displayStatus,
-                  statusType: statusTypeFor(displayStatus),
+                  status: effectiveStatus,
+                  statusType: statusTypeFor(effectiveStatus),
+                  isPMOverrideComplete,
                   owner: {
                     initials: ownerInitials,
                     name: ownerName,
@@ -3541,6 +3665,7 @@ const PlannerProjectWorkspace = () => {
                     status: a.status,
                     dueDate: a.dueDate,
                     assignee: a.assignee,
+                    isFromClosedWeek: isActionFromClosedWeek(a),
                   })),
                 };
               });
@@ -4457,10 +4582,7 @@ const PlannerProjectWorkspace = () => {
                         fontWeight: 600,
                       }}
                     >
-                      Weeks {weeklyControlData.weekInfo.weekNumber}-
-                      {weeklyControlData.weekInfo.weekNumberEnd ||
-                        weeklyControlData.weekInfo.weekNumber + 1}{" "}
-                      Data
+                      Week {weeklyControlData.weekInfo.weekNumber} Data
                     </Typography>
                     <Typography
                       sx={{ color: COLORS.textSecondary, fontSize: "12px" }}
@@ -4468,7 +4590,7 @@ const PlannerProjectWorkspace = () => {
                       {weeklyControlData.weekInfo.dateRange ||
                         getWeekDateRangeFromToday()}{" "}
                       • {weeklyControlData.weekInfo.totalActivities} activities
-                      these weeks
+                      this week
                     </Typography>
                   </Box>
                 </Box>
@@ -7886,6 +8008,95 @@ const PlannerProjectWorkspace = () => {
               )}
             </Button>
           </DialogActions>
+        </Dialog>
+
+        {/* Week Closed -> Move to Next Week (persistent acknowledgement) */}
+        <Dialog
+          open={closedWeekAck !== null}
+          maxWidth="xs"
+          fullWidth
+          slotProps={{
+            backdrop: { sx: { bgcolor: "rgba(0, 0, 0, 0.8)" } },
+            paper: {
+              sx: {
+                bgcolor: COLORS.bgSecondary,
+                border: `1px solid ${COLORS.border}`,
+                borderRadius: "12px",
+                backgroundImage: "none",
+                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
+              },
+            },
+          }}
+        >
+          <DialogContent sx={{ p: 4, textAlign: "center" }}>
+            <Box
+              sx={{
+                width: 56,
+                height: 56,
+                borderRadius: "50%",
+                bgcolor: "rgba(34, 197, 94, 0.15)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                mx: "auto",
+                mb: 2,
+              }}
+            >
+              <Typography sx={{ color: COLORS.green, fontSize: "28px" }}>
+                ✓
+              </Typography>
+            </Box>
+            <Typography
+              sx={{
+                color: COLORS.textPrimary,
+                fontSize: "18px",
+                fontWeight: 600,
+                mb: 1,
+              }}
+            >
+              Week {closedWeekAck} Closed
+            </Typography>
+            {(() => {
+              const isLast =
+                closedWeekAck !== null &&
+                weeksStatus?.totalWeeks != null &&
+                closedWeekAck >= weeksStatus.totalWeeks;
+              return (
+                <>
+                  <Typography
+                    sx={{
+                      color: COLORS.textSecondary,
+                      fontSize: "14px",
+                      mb: 3,
+                    }}
+                  >
+                    Week {closedWeekAck} is closed and locked.{" "}
+                    {isLast
+                      ? "The programme is now fully closed."
+                      : "Move to the next week to continue."}
+                  </Typography>
+                  <Button
+                    onClick={handleAckClosedWeek}
+                    fullWidth
+                    sx={{
+                      bgcolor: COLORS.blue,
+                      color: "#fff",
+                      textTransform: "none",
+                      py: 1.25,
+                      borderRadius: "8px",
+                      fontSize: "14px",
+                      fontWeight: 500,
+                      "&:hover": { bgcolor: COLORS.blueHover },
+                    }}
+                  >
+                    {isLast
+                      ? "Done"
+                      : `Move to Week ${(closedWeekAck ?? 0) + 1}`}
+                  </Button>
+                </>
+              );
+            })()}
+          </DialogContent>
         </Dialog>
 
         {/* Complete Action Confirmation Modal */}

@@ -82,6 +82,9 @@ export interface ActivityAction {
   status: string;
   dueDate?: string;
   assignee?: { _id?: string; name?: string };
+  // True when this action belongs to a week that was already closed / PM
+  // Override'd — such actions are settled and must not read as Overdue.
+  isFromClosedWeek?: boolean;
 }
 
 export interface Activity {
@@ -95,6 +98,9 @@ export interface Activity {
   actions: number;
   status: string;
   statusType: string;
+  // Status was forced to Completed only because the open actions are all from
+  // a PM Override'd/closed week. Still allow assigning a fresh action.
+  isPMOverrideComplete?: boolean;
   owner: { initials: string; name: string; color: string };
   linkedActions?: string[];
   linkedActionsData?: ActivityAction[];
@@ -464,6 +470,7 @@ const ActivityRow = ({
               );
               const anyOverdue = activity.linkedActionsData.some(
                 (a) =>
+                  !a.isFromClosedWeek &&
                   a.status !== "Completed" &&
                   a.dueDate &&
                   new Date(a.dueDate) < startOfToday,
@@ -753,6 +760,7 @@ const ActivityRow = ({
                   </Typography>
                   {activity.linkedActionsData.map((action) => {
                     const isOverdue =
+                      !action.isFromClosedWeek &&
                       action.status !== "Completed" &&
                       action.dueDate &&
                       new Date(action.dueDate) < startOfToday;
@@ -823,6 +831,22 @@ const ActivityRow = ({
                             Complete
                           </Box>
                         )}
+                        {action.isFromClosedWeek &&
+                          action.status !== "Completed" && (
+                            <Box
+                              sx={{
+                                bgcolor: `${COLORS.amber}20`,
+                                color: COLORS.amber,
+                                px: 1,
+                                py: 0.25,
+                                borderRadius: "4px",
+                                fontSize: "10px",
+                                fontWeight: 500,
+                              }}
+                            >
+                              PM Override
+                            </Box>
+                          )}
                       </Box>
                     );
                   })}
@@ -851,7 +875,10 @@ const ActivityRow = ({
                         }}
                       >
                         <Button
-                          disabled={action.status === "Completed"}
+                          disabled={
+                            action.status === "Completed" ||
+                            action.isFromClosedWeek
+                          }
                           onClick={() =>
                             onReassignClick?.({
                               _id: action._id,
@@ -932,7 +959,8 @@ const ActivityRow = ({
                   }}
                 >
                   {onAddActionClick &&
-                    activity.statusType !== "blue" &&
+                    (activity.statusType !== "blue" ||
+                      activity.isPMOverrideComplete) &&
                     !isProjectEnded && (
                       <Button
                         onClick={(e) => {

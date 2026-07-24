@@ -733,7 +733,7 @@ const PlannerWeeklyDashboard = () => {
   }, [programmeId]);
 
   // Handler for Close Week - closes only 1 week and switches to next week
-  // Handler for Close Week - closes 2 weeks and switches to next closable week
+  // Handler for Close Week - closes the current week and switches to next closable week
   const handleCloseWeek = async () => {
     if (!programmeId || isClosingWeek) return;
 
@@ -746,33 +746,22 @@ const PlannerWeeklyDashboard = () => {
         "Normal Close",
       );
 
-      if (response1.success && !response1.isFullyClosed) {
-        // Close the second week - pass isSecondOfPair=true to skip date validation
-        await programmeAPI.closeWeek(
-          programmeId,
-          currentWeekNumber + 1,
-          "Normal Close",
-          undefined,
-          true, // isSecondOfPair - skip date check for second week
-        );
-      }
-
       if (response1.success) {
         // Refresh weeks status
         const weeksResponse = await programmeAPI.getWeeksStatus(programmeId);
         if (weeksResponse.success && weeksResponse.weeks) {
           setWeeksStatus(weeksResponse.weeks);
 
-          // Find the next closable week or default to currentWeekNumber + 2
+          // Find the next closable week or default to currentWeekNumber + 1
           const nextClosableWeek = weeksResponse.weeks.find(
             (w: WeekStatus) => w.canClose,
           );
           const nextWeekNumber =
-            nextClosableWeek?.weekNumber || currentWeekNumber + 2;
+            nextClosableWeek?.weekNumber || currentWeekNumber + 1;
           setCurrentWeekNumber(nextWeekNumber);
         } else {
-          // Fallback: increment by 2 since we closed 2 weeks
-          setCurrentWeekNumber((prev) => prev + 2);
+          // Fallback: single-week close
+          setCurrentWeekNumber((prev) => prev + 1);
         }
       }
     } catch (error) {
@@ -782,7 +771,7 @@ const PlannerWeeklyDashboard = () => {
     }
   };
 
-  // Handler for PM Override - closes 2 weeks with override reason and switches to next closable week
+  // Handler for PM Override - closes the current week with override reason and switches to next closable week
   const handlePMOverride = async () => {
     if (!programmeId || isClosingWeek || overrideReason.length < 10) return;
 
@@ -796,33 +785,22 @@ const PlannerWeeklyDashboard = () => {
         overrideReason,
       );
 
-      if (response1.success && !response1.isFullyClosed) {
-        // Close the second week with PM Override - pass isSecondOfPair=true to skip date validation
-        await programmeAPI.closeWeek(
-          programmeId,
-          currentWeekNumber + 1,
-          "PM Override",
-          overrideReason,
-          true, // isSecondOfPair - skip date check for second week
-        );
-      }
-
       if (response1.success) {
         // Refresh weeks status
         const weeksResponse = await programmeAPI.getWeeksStatus(programmeId);
         if (weeksResponse.success && weeksResponse.weeks) {
           setWeeksStatus(weeksResponse.weeks);
 
-          // Find the next closable week or default to currentWeekNumber + 2
+          // Find the next closable week or default to currentWeekNumber + 1
           const nextClosableWeek = weeksResponse.weeks.find(
             (w: WeekStatus) => w.canClose,
           );
           const nextWeekNumber =
-            nextClosableWeek?.weekNumber || currentWeekNumber + 2;
+            nextClosableWeek?.weekNumber || currentWeekNumber + 1;
           setCurrentWeekNumber(nextWeekNumber);
         } else {
-          // Fallback: increment by 2 since we closed 2 weeks
-          setCurrentWeekNumber((prev) => prev + 2);
+          // Fallback: single-week close
+          setCurrentWeekNumber((prev) => prev + 1);
         }
 
         // Reset modal state
@@ -1631,7 +1609,7 @@ const PlannerWeeklyDashboard = () => {
                   fontSize: "12px",
                 }}
               >
-                2-week scope
+                1-week scope
               </Typography>
             </Box>
 

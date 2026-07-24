@@ -781,7 +781,9 @@ const AdminProjects = () => {
             <ProjectCard
               key={project._id}
               project={project}
-              onViewDashboard={() => navigate(`/admin/projects/${project._id}`)}
+              onViewDashboard={() =>
+                navigate(`/admin/projects/${project._id}?tab=open-meeting`)
+              }
             />
           ))
         )}

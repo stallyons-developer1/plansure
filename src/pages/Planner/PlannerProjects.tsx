@@ -717,7 +717,7 @@ const PlannerProjects = () => {
               key={project._id}
               project={project}
               onViewDashboard={() =>
-                navigate(`/planner/projects/${project._id}`)
+                navigate(`/planner/projects/${project._id}?tab=open-meeting`)
               }
             />
           ))}
