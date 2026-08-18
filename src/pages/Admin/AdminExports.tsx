@@ -969,11 +969,7 @@ const AdminExports = () => {
 
               <Button
                 onClick={handleExportPlannerTodo}
-                disabled={
-                  !isExportAllowed ||
-                  exportCounts.outstandingActions === 0 ||
-                  exporting === "todo"
-                }
+                disabled={!isExportAllowed || exporting === "todo"}
                 startIcon={
                   exporting === "todo" ? (
                     <CircularProgress size={14} sx={{ color: "inherit" }} />
@@ -986,24 +982,15 @@ const AdminExports = () => {
                   )
                 }
                 sx={{
-                  bgcolor:
-                    isExportAllowed && exportCounts.outstandingActions > 0
-                      ? COLORS.blue
-                      : COLORS.bgTertiary,
-                  color:
-                    isExportAllowed && exportCounts.outstandingActions > 0
-                      ? COLORS.white
-                      : COLORS.textMuted,
+                  bgcolor: isExportAllowed ? COLORS.blue : COLORS.bgTertiary,
+                  color: isExportAllowed ? COLORS.white : COLORS.textMuted,
                   textTransform: "none",
                   py: 1.5,
                   borderRadius: "8px",
                   fontSize: "14px",
                   fontWeight: 500,
                   "&:hover": {
-                    bgcolor:
-                      isExportAllowed && exportCounts.outstandingActions > 0
-                        ? "#2563eb"
-                        : COLORS.bgTertiary,
+                    bgcolor: isExportAllowed ? "#2563eb" : COLORS.bgTertiary,
                   },
                   "&:disabled": {
                     bgcolor: COLORS.bgTertiary,
@@ -1013,11 +1000,9 @@ const AdminExports = () => {
               >
                 {!isExportAllowed
                   ? "Export Gated"
-                  : exportCounts.outstandingActions === 0
-                    ? "No Items to Export"
-                    : exporting === "todo"
-                      ? "Exporting..."
-                      : "Export Planner To-Do"}
+                  : exporting === "todo"
+                    ? "Exporting..."
+                    : "Export Planner To-Do"}
               </Button>
             </Box>
           </Box>

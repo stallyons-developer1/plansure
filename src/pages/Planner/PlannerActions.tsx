@@ -296,6 +296,7 @@ const PlannerActions = () => {
     const isOverdue =
       action.status !== "Completed" &&
       action.status !== "Cancelled" &&
+      action.status !== "PM Override" &&
       new Date(action.dueDate) < startOfToday;
     const displayStatus = isOverdue ? "overdue" : action.status.toLowerCase();
 
@@ -1149,13 +1150,17 @@ const PlannerActions = () => {
                 const isOverdue =
                   action.status !== "Completed" &&
                   action.status !== "Cancelled" &&
+                  // PM Override is terminal, so it can never be overdue.
+                  action.status !== "PM Override" &&
                   new Date(action.dueDate) < startOfToday;
                 const displayStatus = isOverdue ? "Overdue" : action.status;
                 const statusColor = isOverdue
                   ? COLORS.red
                   : action.status === "Completed"
                     ? COLORS.green
-                    : COLORS.blue;
+                    : action.status === "PM Override"
+                      ? COLORS.amber
+                      : COLORS.blue;
 
                 return (
                   <Box

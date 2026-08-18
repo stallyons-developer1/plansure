@@ -670,7 +670,14 @@ const PlannerWeeklyDashboard = () => {
                 };
               }
 
-              if (action.status === "Closed" || action.status === "Completed") {
+              // PM Override force-closes an action, so it belongs in Closed —
+              // never Open, and never Overdue however stale its due date.
+              if (
+                action.status === "Closed" ||
+                action.status === "Completed" ||
+                action.status === "Cancelled" ||
+                action.status === "PM Override"
+              ) {
                 ownershipMap[discipline].closed++;
                 if (actionName)
                   ownershipMap[discipline].closedActions.push(actionName);
@@ -2449,7 +2456,6 @@ const PlannerWeeklyDashboard = () => {
               cycleStatus={cycleStatus}
               overdueActions={data?.stats?.overdueActions || 0}
               blockedActivities={data?.stats?.blockedByActions || 0}
-              outstandingActions={data?.stats?.openActions || 0}
               openRequiredActions={data?.stats?.openRequiredActions || 0}
               weekNumber={data?.cycle?.completedCount || currentWeekNumber}
               canClose={

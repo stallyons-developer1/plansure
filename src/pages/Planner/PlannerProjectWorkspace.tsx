@@ -202,6 +202,22 @@ const toDateInputFormat = (dateStr: string): string => {
   return "";
 };
 
+/* Shared height for the PM Override reason field and its Override button, so
+   the two line up despite the theme's Button padding. */
+const OVERRIDE_ROW_HEIGHT = 40;
+/* One override card: 32 padding + 21 title + 4 + 18 meta + 12 + 40 reason row
+   + 2 border. Title and meta are clamped to one line so this stays exact. */
+const OVERRIDE_CARD_HEIGHT = 129;
+const OVERRIDE_LIST_GAP = 16;
+/* Show two cards, then scroll for the rest. */
+const OVERRIDE_LIST_MAX_HEIGHT = OVERRIDE_CARD_HEIGHT * 2 + OVERRIDE_LIST_GAP;
+
+/* An action can be force-closed only while it is still open. */
+const isOverridableAction = (action: { status: string }) =>
+  action.status !== "Completed" &&
+  action.status !== "Cancelled" &&
+  action.status !== "PM Override";
+
 interface ActionItem {
   id: string;
   title: string;
@@ -262,10 +278,15 @@ const PlannerProjectWorkspace = () => {
     overdueAcknowledged: false,
     blockedAcknowledged: false,
   });
-  const [showOverrideForm, setShowOverrideForm] = useState(false);
-  const [overrideReason, setOverrideReason] = useState("");
+  // Per-action PM Override (B4): one reason per action, never a bulk close.
+  const [overrideModalOpen, setOverrideModalOpen] = useState(false);
+  const [overrideReasons, setOverrideReasons] = useState<
+    Record<string, string>
+  >({});
+  const [overridingActionId, setOverridingActionId] = useState<string | null>(
+    null,
+  );
   const [isWeekClosed, setIsWeekClosed] = useState(false);
-  const [savedOverrideReason, setSavedOverrideReason] = useState("");
   const [lockedViewWeek, setLockedViewWeek] = useState<number | null>(null);
   const [weeksStatus, setWeeksStatus] = useState<{
     totalWeeks: number;
@@ -407,6 +428,7 @@ const PlannerProjectWorkspace = () => {
   const [noActionLoading, setNoActionLoading] = useState(false);
 
   const [reassignModalOpen, setReassignModalOpen] = useState(false);
+  const [markingCloseOut, setMarkingCloseOut] = useState(false);
   const [toastOpen, setToastOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
   const [toastSeverity, setToastSeverity] = useState<"success" | "warning">(
@@ -896,7 +918,9 @@ const PlannerProjectWorkspace = () => {
         uploadedProgramme._id,
         weekNumber,
         closeType,
-        closeType === "PM Override" ? overrideReason : undefined,
+        // Week-level force-close is gone: overrides are now per-action, so a
+        // week closes normally once each blocking action is done or overridden.
+        undefined,
       );
 
       const response2: {
@@ -1064,6 +1088,103 @@ const PlannerProjectWorkspace = () => {
     }
   };
 
+  /* Actions still open in this week — the candidates for a PM Override. */
+  const overridableActions = projectActions.filter(isOverridableAction);
+
+  /* Force-close ONE action, with its own mandatory reason. Replaces the old
+     bulk "Force Close Weeks" behaviour the MS-05 review rejected (B4). */
+  const handleOverrideSingleAction = async (actionId: string) => {
+    const reason = (overrideReasons[actionId] || "").trim();
+    if (reason.length < 10 || overridingActionId) return;
+
+    setOverridingActionId(actionId);
+    try {
+      const response = await actionAPI.override(actionId, reason);
+
+      if (response?.success) {
+        const actionsRes = await actionAPI.getAll({
+          programmeId: uploadedProgramme?._id,
+        });
+        if (actionsRes.success) {
+          const refreshed = actionsRes.actions || [];
+          setProjectActions(refreshed);
+          // That was the last one — close rather than show an empty list.
+          if (!refreshed.some(isOverridableAction)) {
+            setOverrideModalOpen(false);
+          }
+        }
+        if (uploadedProgramme?._id) {
+          await Promise.all([
+            refreshWeeksStatus(),
+            fetchWeeklyControlData(
+              uploadedProgramme._id,
+              weeklyControlData?.weekInfo?.weekNumber,
+            ),
+          ]);
+        }
+        setOverrideReasons((prev) => {
+          const next = { ...prev };
+          delete next[actionId];
+          return next;
+        });
+        setToastSeverity("success");
+        setToastMessage("Action closed via PM Override.");
+        setToastOpen(true);
+      }
+    } catch (error: unknown) {
+      const message =
+        (error as { response?: { data?: { message?: string } } })?.response
+          ?.data?.message || "Could not override this action. Please try again.";
+      setToastSeverity("warning");
+      setToastMessage(message);
+      setToastOpen(true);
+    } finally {
+      setOverridingActionId(null);
+    }
+  };
+
+  /* Stage 3 -> Stage 4. This is a deliberate governance decision by the PM,
+     so it gets its own control rather than riding on the Weekly Plan download. */
+  const handleMarkCloseOutEligible = async () => {
+    if (!uploadedProgramme?._id || markingCloseOut) return;
+
+    setMarkingCloseOut(true);
+    try {
+      const statusRes = await programmeAPI.updateCycleStatus(
+        uploadedProgramme._id,
+        "Close-Out Eligible",
+      );
+
+      if (statusRes?.success) {
+        setUploadedProgramme((prev) =>
+          prev ? { ...prev, cycleStatus: "Close-Out Eligible" } : prev,
+        );
+        setCurrentStep(4);
+        await Promise.all([
+          refreshWeeksStatus(),
+          fetchWeeklyControlData(
+            uploadedProgramme._id,
+            weeklyControlData?.weekInfo?.weekNumber,
+          ),
+        ]);
+        setToastSeverity("success");
+        setToastMessage("Week marked Close-Out Eligible.");
+        setToastOpen(true);
+      }
+    } catch (error: unknown) {
+      // The server re-checks eligibility and can refuse; surface its reason.
+      const message =
+        (error as { response?: { data?: { message?: string } } })?.response
+          ?.data?.message ||
+        "Could not mark the week Close-Out Eligible. Please try again.";
+      setToastSeverity("warning");
+      setToastMessage(message);
+      setToastOpen(true);
+    } finally {
+      setMarkingCloseOut(false);
+    }
+  };
+
   const handleFinalClose = async () => {
     if (!uploadedProgramme?._id) return;
     const weekToClose =
@@ -1072,97 +1193,6 @@ const PlannerProjectWorkspace = () => {
       weeksStatus?.currentWeekNumber ??
       1;
     await handleCloseSpecificWeek(weekToClose, "Normal Close");
-  };
-
-  const handleOverrideClose = async () => {
-    if (!uploadedProgramme?._id || overrideReason.length < 10) return;
-
-    const weekToClose = weeksStatus?.weeks.find((w) => !w.isClosed)?.weekNumber;
-    if (!weekToClose) {
-      console.error("No week available to close");
-      return;
-    }
-
-    try {
-      setSavedOverrideReason(overrideReason);
-      setShowOverrideForm(false);
-
-      await handleCloseSpecificWeek(weekToClose, "PM Override");
-
-      setOverrideReason("");
-    } catch (error) {
-      console.error("Failed to close weeks with override:", error);
-    }
-  };
-
-  const handleOverrideCloseForExport = async () => {
-    if (!uploadedProgramme?._id || overrideReason.length < 10) return;
-
-    const weekToClose = weeksStatus?.weeks.find((w) => !w.isClosed)?.weekNumber;
-    if (!weekToClose) {
-      console.error("No week available to close");
-      return;
-    }
-
-    setClosingWeek(weekToClose);
-    try {
-      setSavedOverrideReason(overrideReason);
-      setShowOverrideForm(false);
-
-      const response1 = await programmeAPI.closeWeek(
-        uploadedProgramme._id,
-        weekToClose,
-        "PM Override",
-        overrideReason,
-      );
-
-      if (response1.success) {
-        setLockedViewWeek(weekToClose);
-
-        const updatedWeeksStatus = await programmeAPI.getWeeksStatus(
-          uploadedProgramme._id,
-        );
-
-        if (updatedWeeksStatus.success) {
-          setWeeksStatus(updatedWeeksStatus);
-
-          await fetchWeeklyControlData(uploadedProgramme._id, weekToClose);
-
-          await refetchProgramme();
-
-          setExportGatingStatus({
-            isGated: false,
-            cycleStatus: "Close-Out Eligible",
-          });
-        }
-
-        if (response1.isFullyClosed) {
-          setIsWeekClosed(true);
-          setUploadedProgramme((prev) =>
-            prev ? { ...prev, cycleStatus: "Closed", isLocked: true } : null,
-          );
-        } else {
-          setUploadedProgramme((prev) =>
-            prev ? { ...prev, cycleStatus: "Close-Out Eligible" } : null,
-          );
-        }
-      }
-
-      setOverrideReason("");
-    } catch (error: unknown) {
-      console.error("Failed to close weeks with override:", error);
-      const err = error as {
-        response?: { data?: { message?: string; error?: string } };
-      };
-      const msg =
-        err?.response?.data?.message ||
-        err?.response?.data?.error ||
-        "Failed to force-close weeks. Please try again.";
-      setToastMessage(msg);
-      setToastOpen(true);
-    } finally {
-      setClosingWeek(null);
-    }
   };
 
   const getCycleButtonText = () => {
@@ -1728,14 +1758,18 @@ const PlannerProjectWorkspace = () => {
         pmOverrideActions,
       });
 
+      const cycleUnderway = [
+        "Meeting Open",
+        "Execution",
+        "Close-Out Eligible",
+        "Closed",
+      ].includes(cycleStatus);
+
       setClosureChecklist({
-        plannerReview: [
-          "Meeting Open",
-          "Execution",
-          "Close-Out Eligible",
-          "Closed",
-        ].includes(cycleStatus),
-        todoGenerated: outstandingActions > 0,
+        plannerReview: cycleUnderway,
+        // The To-Do is a formal output of the cycle, produced whether or not
+        // there are outstanding actions — an empty list still counts.
+        todoGenerated: cycleUnderway,
         overdueAcknowledged: overdueActions === 0,
         blockedAcknowledged: blockedActivities === 0,
       });
@@ -1768,25 +1802,6 @@ const PlannerProjectWorkspace = () => {
       window.URL.revokeObjectURL(url);
 
       setClosureChecklist((prev) => ({ ...prev, plannerReview: true }));
-
-      try {
-        const statusRes = await programmeAPI.updateCycleStatus(
-          uploadedProgramme._id,
-          "Close-Out Eligible",
-        );
-        if (statusRes?.success) {
-          setUploadedProgramme((prev) =>
-            prev ? { ...prev, cycleStatus: "Close-Out Eligible" } : prev,
-          );
-          setCurrentStep(4);
-          await Promise.all([
-            refreshWeeksStatus(),
-            fetchWeeklyControlData(uploadedProgramme._id, weekNumber),
-          ]);
-        }
-      } catch (e) {
-        console.error("Failed to advance cycle to Close-Out Eligible", e);
-      }
     } catch (error) {
       console.error("Error exporting weekly plan:", error);
     } finally {
@@ -3978,8 +3993,11 @@ const PlannerProjectWorkspace = () => {
                           {(() => {
                             const isFromClosedWeek =
                               isActionFromClosedWeek(action);
+                            // PM Override is terminal, so it can never be overdue.
                             const isOverdue =
                               action.status !== "Completed" &&
+                              action.status !== "Cancelled" &&
+                              action.status !== "PM Override" &&
                               !isFromClosedWeek &&
                               action.dueDate &&
                               new Date(action.dueDate) <
@@ -3989,7 +4007,10 @@ const PlannerProjectWorkspace = () => {
                             let bgColor = `${COLORS.blue}25`;
                             let textColor = COLORS.blue;
 
-                            if (
+                            if (action.status === "PM Override") {
+                              bgColor = `${COLORS.amber}25`;
+                              textColor = COLORS.amber;
+                            } else if (
                               isFromClosedWeek &&
                               action.status !== "Completed" &&
                               action.type !== "Optional"
@@ -5534,9 +5555,8 @@ const PlannerProjectWorkspace = () => {
                         </Box>
                       </Box>
 
-                      {/* The Weekly Plan export IS the close-out step: it
-                          advances the cycle to Close-Out Eligible. Until it has
-                          been downloaded the week cannot be closed. */}
+                      {/* Stage 3 -> Stage 4 is an explicit PM decision taken in
+                          Closure & Export; this just points there. */}
                       {!weeklyControlData?.isProjectEnded && (
                         <Box
                           sx={{
@@ -5557,7 +5577,7 @@ const PlannerProjectWorkspace = () => {
                               fontSize: "12px",
                             }}
                           >
-                            Download the Weekly Plan in{" "}
+                            Mark the week Close-Out Eligible in{" "}
                             <Box
                               component="span"
                               onClick={() => setActiveTab(5)}
@@ -5569,7 +5589,7 @@ const PlannerProjectWorkspace = () => {
                             >
                               Closure &amp; Export
                             </Box>{" "}
-                            to complete close-out and enable closing.
+                            to enable closing.
                           </Typography>
                         </Box>
                       )}
@@ -5730,7 +5750,7 @@ const PlannerProjectWorkspace = () => {
                               <span>
                                 <Button
                                   onClick={() =>
-                                    setShowOverrideForm(!showOverrideForm)
+                                    setOverrideModalOpen(true)
                                   }
                                   disabled={!canCloseByDate}
                                   sx={{
@@ -5759,90 +5779,6 @@ const PlannerProjectWorkspace = () => {
                           );
                         })()}
                       </Box>
-                      {showOverrideForm && (
-                        <Box
-                          sx={{
-                            mt: 2,
-                            bgcolor: "#2D2A24",
-                            border: `1px solid ${COLORS.amber}`,
-                            borderRadius: "8px",
-                            p: 2,
-                          }}
-                        >
-                          <Typography
-                            sx={{
-                              color: COLORS.amber,
-                              fontSize: "14px",
-                              fontWeight: 600,
-                              mb: 1,
-                            }}
-                          >
-                            PM Override — Force Close Weeks
-                          </Typography>
-                          <Typography
-                            sx={{
-                              color: COLORS.textSecondary,
-                              fontSize: "13px",
-                              mb: 2,
-                            }}
-                          >
-                            Enter a mandatory reason (min 10 characters) to
-                            close these weeks despite incomplete actions.
-                          </Typography>
-                          <TextField
-                            fullWidth
-                            multiline
-                            rows={2}
-                            placeholder="Enter justification for override..."
-                            value={overrideReason}
-                            onChange={(e) => setOverrideReason(e.target.value)}
-                            sx={{
-                              mb: 2,
-                              "& .MuiOutlinedInput-root": {
-                                bgcolor: COLORS.bgSecondary,
-                                borderRadius: "8px",
-                                "& fieldset": { borderColor: COLORS.border },
-                                "&:hover fieldset": {
-                                  borderColor: COLORS.amber,
-                                },
-                                "&.Mui-focused fieldset": {
-                                  borderColor: COLORS.amber,
-                                },
-                              },
-                              "& .MuiInputBase-input": {
-                                color: COLORS.textPrimary,
-                                fontSize: "14px",
-                              },
-                            }}
-                          />
-                          <Button
-                            onClick={handleOverrideClose}
-                            disabled={
-                              overrideReason.length < 10 ||
-                              weeklyControlData?.isProjectEnded
-                            }
-                            sx={{
-                              bgcolor: COLORS.amber,
-                              color: "#fff",
-                              textTransform: "none",
-                              px: 3,
-                              py: 1,
-                              borderRadius: "8px",
-                              fontSize: "13px",
-                              fontWeight: 500,
-                              "&:hover": { bgcolor: "#d97706" },
-                              "&.Mui-disabled": {
-                                bgcolor: COLORS.bgTertiary,
-                                color: COLORS.textMuted,
-                              },
-                            }}
-                          >
-                            {weeklyControlData?.isProjectEnded
-                              ? "Project Ended"
-                              : "Force Close Weeks"}
-                          </Button>
-                        </Box>
-                      )}
                     </>
                   )}
                 </Box>
@@ -6178,14 +6114,14 @@ const PlannerProjectWorkspace = () => {
                     color: COLORS.textSecondary,
                     fontSize: "14px",
                     mb:
-                      savedOverrideReason || uploadedProgramme?.overrideReason
+                      uploadedProgramme?.overrideReason
                         ? 1
                         : 0,
                   }}
                 >
                   This project has been closed. No further changes allowed.
                 </Typography>
-                {(savedOverrideReason || uploadedProgramme?.overrideReason) && (
+                {(uploadedProgramme?.overrideReason) && (
                   <Typography
                     sx={{
                       color: COLORS.amber,
@@ -6193,7 +6129,7 @@ const PlannerProjectWorkspace = () => {
                     }}
                   >
                     Override reason:{" "}
-                    {savedOverrideReason || uploadedProgramme?.overrideReason}
+                    {uploadedProgramme?.overrideReason}
                   </Typography>
                 )}
               </Box>
@@ -6297,6 +6233,107 @@ const PlannerProjectWorkspace = () => {
                       </Box>
                     ))}
                   </Box>
+                </Box>
+
+                {/* Stage 3 -> Stage 4. An explicit governance decision by the
+                    PM, no longer a side effect of the Weekly Plan download. */}
+                <Box
+                  sx={{
+                    bgcolor: COLORS.bgSecondary,
+                    border: `1px solid ${
+                      uploadedProgramme?.cycleStatus === "Close-Out Eligible"
+                        ? COLORS.blue
+                        : COLORS.border
+                    }`,
+                    borderRadius: "12px",
+                    p: 3,
+                    mb: 3,
+                  }}
+                >
+                  <Typography
+                    sx={{
+                      color: COLORS.textPrimary,
+                      fontSize: "16px",
+                      fontWeight: 600,
+                      mb: 0.5,
+                    }}
+                  >
+                    Close-Out
+                  </Typography>
+                  <Typography
+                    sx={{
+                      color: COLORS.textSecondary,
+                      fontSize: "13px",
+                      mb: 2,
+                    }}
+                  >
+                    {uploadedProgramme?.cycleStatus === "Close-Out Eligible"
+                      ? "This week is Close-Out Eligible. It can now be closed and locked from Weekly Control."
+                      : weeklyActionStats.openRequired > 0
+                        ? `${weeklyActionStats.openRequired} required action(s) still open. Complete them to mark this week Close-Out Eligible.`
+                        : "All required actions for this week are complete. Mark the week Close-Out Eligible to enable closing."}
+                  </Typography>
+
+                  {uploadedProgramme?.cycleStatus === "Close-Out Eligible" ? (
+                    <Box
+                      sx={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 1,
+                        bgcolor: "rgba(59, 130, 246, 0.1)",
+                        border: `1px solid ${COLORS.blue}`,
+                        borderRadius: "8px",
+                        px: 2,
+                        py: 1,
+                      }}
+                    >
+                      <Typography
+                        sx={{
+                          color: COLORS.blue,
+                          fontSize: "13px",
+                          fontWeight: 600,
+                        }}
+                      >
+                        ✓ Close-Out Eligible (Stage 4)
+                      </Typography>
+                    </Box>
+                  ) : (
+                    <Button
+                      onClick={handleMarkCloseOutEligible}
+                      disabled={
+                        markingCloseOut ||
+                        weeklyActionStats.openRequired > 0 ||
+                        weeklyControlData?.isProjectEnded
+                      }
+                      startIcon={
+                        markingCloseOut ? (
+                          <CircularProgress
+                            size={14}
+                            sx={{ color: "inherit" }}
+                          />
+                        ) : null
+                      }
+                      sx={{
+                        bgcolor: COLORS.blue,
+                        color: "#fff",
+                        textTransform: "none",
+                        px: 3,
+                        py: 1.25,
+                        borderRadius: "8px",
+                        fontSize: "13px",
+                        fontWeight: 500,
+                        "&:hover": { bgcolor: COLORS.blueHover },
+                        "&.Mui-disabled": {
+                          bgcolor: COLORS.disabledBlue,
+                          color: "#fff",
+                        },
+                      }}
+                    >
+                      {markingCloseOut
+                        ? "Marking..."
+                        : "Mark Close-Out Eligible"}
+                    </Button>
+                  )}
                 </Box>
 
                 <Box
@@ -6519,9 +6556,7 @@ const PlannerProjectWorkspace = () => {
                       title={
                         exportGatingStatus.isGated
                           ? `Exports are gated. The WeekCycle must be in Execution state. Current cycle is in ${exportGatingStatus.cycleStatus}.`
-                          : exportCounts.outstandingActions === 0
-                            ? "No outstanding items to download"
-                            : ""
+                          : ""
                       }
                       placement="top"
                       arrow
@@ -6545,7 +6580,6 @@ const PlannerProjectWorkspace = () => {
                           onClick={handleExportPlannerTodo}
                           disabled={
                             isExporting === "todo" ||
-                            exportCounts.outstandingActions === 0 ||
                             exportGatingStatus.isGated
                           }
                           startIcon={
@@ -6707,7 +6741,7 @@ const PlannerProjectWorkspace = () => {
                                   <span>
                                     <Button
                                       onClick={() =>
-                                        setShowOverrideForm(!showOverrideForm)
+                                        setOverrideModalOpen(true)
                                       }
                                       disabled={!canCloseByDate}
                                       sx={{
@@ -6736,102 +6770,6 @@ const PlannerProjectWorkspace = () => {
                               );
                             })()}
                           </Box>
-                          {showOverrideForm && (
-                            <Box
-                              sx={{
-                                mt: 2,
-                                bgcolor: COLORS.bgSecondary,
-                                border: `1px solid ${COLORS.amber}`,
-                                borderRadius: "8px",
-                                p: 2,
-                              }}
-                            >
-                              <Typography
-                                sx={{
-                                  color: COLORS.amber,
-                                  fontSize: "14px",
-                                  fontWeight: 600,
-                                  mb: 1,
-                                }}
-                              >
-                                PM Override — Force Close Week
-                              </Typography>
-                              <Typography
-                                sx={{
-                                  color: COLORS.textSecondary,
-                                  fontSize: "13px",
-                                  mb: 2,
-                                }}
-                              >
-                                Enter a mandatory reason (min 10 characters) to
-                                close the week despite incomplete actions.
-                              </Typography>
-                              <TextField
-                                fullWidth
-                                multiline
-                                rows={2}
-                                placeholder="Enter justification for override..."
-                                value={overrideReason}
-                                onChange={(e) =>
-                                  setOverrideReason(e.target.value)
-                                }
-                                sx={{
-                                  mb: 2,
-                                  "& .MuiOutlinedInput-root": {
-                                    bgcolor: COLORS.bgSecondary,
-                                    borderRadius: "8px",
-                                    "& fieldset": {
-                                      borderColor: COLORS.border,
-                                    },
-                                    "&:hover fieldset": {
-                                      borderColor: COLORS.amber,
-                                    },
-                                    "&.Mui-focused fieldset": {
-                                      borderColor: COLORS.amber,
-                                    },
-                                  },
-                                  "& .MuiInputBase-input": {
-                                    color: COLORS.textPrimary,
-                                    fontSize: "14px",
-                                  },
-                                }}
-                              />
-                              <Button
-                                onClick={handleOverrideCloseForExport}
-                                disabled={
-                                  overrideReason.length < 10 ||
-                                  weeklyControlData?.isProjectEnded ||
-                                  closingWeek !== null
-                                }
-                                sx={{
-                                  bgcolor: COLORS.amber,
-                                  color: "#fff",
-                                  textTransform: "none",
-                                  px: 3,
-                                  py: 1,
-                                  borderRadius: "8px",
-                                  fontSize: "13px",
-                                  fontWeight: 500,
-                                  "&:hover": { bgcolor: "#d97706" },
-                                  "&.Mui-disabled": {
-                                    bgcolor: COLORS.bgTertiary,
-                                    color: COLORS.textMuted,
-                                  },
-                                }}
-                              >
-                                {closingWeek !== null ? (
-                                  <CircularProgress
-                                    size={18}
-                                    sx={{ color: "#fff" }}
-                                  />
-                                ) : weeklyControlData?.isProjectEnded ? (
-                                  "Project Ended"
-                                ) : (
-                                  "Force Close Week"
-                                )}
-                              </Button>
-                            </Box>
-                          )}
                         </>
                       )}
                   </Box>
@@ -8826,6 +8764,229 @@ const PlannerProjectWorkspace = () => {
               )}
             </Button>
           </DialogActions>
+        </Dialog>
+
+        {/* PM Override — force-close individual actions, each with its own
+            mandatory reason. Never closes actions in bulk (MS-05 B4). */}
+        <Dialog
+          open={overrideModalOpen}
+          onClose={() => setOverrideModalOpen(false)}
+          maxWidth="md"
+          fullWidth
+          slotProps={{
+            paper: {
+              sx: {
+                bgcolor: COLORS.bgSecondary,
+                borderRadius: "12px",
+                border: `1px solid ${COLORS.border}`,
+                backgroundImage: "none",
+              },
+            },
+          }}
+        >
+          <Box sx={{ p: 3 }}>
+            <Typography
+              sx={{
+                color: COLORS.amber,
+                fontSize: "18px",
+                fontWeight: 600,
+                mb: 0.5,
+              }}
+            >
+              PM Override
+            </Typography>
+            <Typography
+              sx={{ color: COLORS.textSecondary, fontSize: "13px", mb: 3 }}
+            >
+              Force-close an individual action that cannot be completed. Each
+              override needs its own justification (min 10 characters) and is
+              recorded against your name in the audit log.
+            </Typography>
+
+            {overridableActions.length === 0 ? (
+              <Box
+                sx={{
+                  border: `1px solid ${COLORS.border}`,
+                  borderRadius: "8px",
+                  p: 3,
+                  textAlign: "center",
+                }}
+              >
+                <Typography
+                  sx={{ color: COLORS.textMuted, fontSize: "14px" }}
+                >
+                  No open actions to override.
+                </Typography>
+              </Box>
+            ) : (
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: `${OVERRIDE_LIST_GAP}px`,
+                  maxHeight: OVERRIDE_LIST_MAX_HEIGHT,
+                  overflowY: "auto",
+                }}
+              >
+                {overridableActions.map((action) => {
+                  const reason = overrideReasons[action._id] || "";
+                  const busy = overridingActionId === action._id;
+                  return (
+                    <Box
+                      key={action._id}
+                      sx={{
+                        border: `1px solid ${COLORS.border}`,
+                        borderRadius: "8px",
+                        bgcolor: COLORS.bgPrimary,
+                        p: 2,
+                        height: OVERRIDE_CARD_HEIGHT,
+                        boxSizing: "border-box",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          gap: 2,
+                          mb: 0.5,
+                        }}
+                      >
+                        <Typography
+                          title={action.title}
+                          sx={{
+                            color: COLORS.textPrimary,
+                            fontSize: "14px",
+                            fontWeight: 600,
+                            minWidth: 0,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {action.title}
+                        </Typography>
+                        <Box
+                          sx={{
+                            flexShrink: 0,
+                            bgcolor: COLORS.bgTertiary,
+                            color: COLORS.textSecondary,
+                            borderRadius: "12px",
+                            px: 1.5,
+                            py: 0.25,
+                            fontSize: "11px",
+                            fontWeight: 500,
+                            height: "fit-content",
+                          }}
+                        >
+                          {action.type} · {action.status}
+                        </Box>
+                      </Box>
+                      <Typography
+                        sx={{
+                          color: COLORS.textMuted,
+                          fontSize: "12px",
+                          mb: 1.5,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {action.linkedActivity?.activityName || "—"}
+                        {action.assignee?.name
+                          ? ` · ${action.assignee.name}`
+                          : ""}
+                        {action.dueDate
+                          ? ` · due ${new Date(
+                              action.dueDate,
+                            ).toLocaleDateString("en-GB")}`
+                          : ""}
+                      </Typography>
+
+                      <Box sx={{ display: "flex", gap: 1.5 }}>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          placeholder="Reason for overriding this action..."
+                          value={reason}
+                          onChange={(e) =>
+                            setOverrideReasons((prev) => ({
+                              ...prev,
+                              [action._id]: e.target.value,
+                            }))
+                          }
+                          disabled={busy}
+                          sx={{
+                            "& .MuiOutlinedInput-root": {
+                              bgcolor: COLORS.bgSecondary,
+                              borderRadius: "8px",
+                              height: OVERRIDE_ROW_HEIGHT,
+                              "& fieldset": { borderColor: COLORS.border },
+                              "&:hover fieldset": { borderColor: COLORS.amber },
+                              "&.Mui-focused fieldset": {
+                                borderColor: COLORS.amber,
+                              },
+                            },
+                            "& .MuiInputBase-input": {
+                              color: COLORS.textPrimary,
+                              fontSize: "13px",
+                            },
+                          }}
+                        />
+                        <Button
+                          onClick={() => handleOverrideSingleAction(action._id)}
+                          disabled={reason.trim().length < 10 || busy}
+                          sx={{
+                            flexShrink: 0,
+                            bgcolor: COLORS.amber,
+                            color: "#fff",
+                            textTransform: "none",
+                            // The theme forces 12px vertical padding on every
+                            // Button, which would overshoot the input.
+                            px: 2.5,
+                            py: 0,
+                            height: OVERRIDE_ROW_HEIGHT,
+                            borderRadius: "8px",
+                            fontSize: "13px",
+                            fontWeight: 500,
+                            "&:hover": { bgcolor: "#d97706" },
+                            "&.Mui-disabled": {
+                              bgcolor: COLORS.bgTertiary,
+                              color: COLORS.textMuted,
+                            },
+                          }}
+                        >
+                          {busy ? (
+                            <CircularProgress
+                              size={16}
+                              sx={{ color: "inherit" }}
+                            />
+                          ) : (
+                            "Override"
+                          )}
+                        </Button>
+                      </Box>
+                    </Box>
+                  );
+                })}
+              </Box>
+            )}
+
+            <Box
+              sx={{ display: "flex", justifyContent: "flex-end", mt: 3 }}
+            >
+              <Button
+                onClick={() => setOverrideModalOpen(false)}
+                sx={{
+                  color: COLORS.textSecondary,
+                  textTransform: "none",
+                  fontSize: "13px",
+                }}
+              >
+                Close
+              </Button>
+            </Box>
+          </Box>
         </Dialog>
 
         {/* Toast notification for execution not started */}

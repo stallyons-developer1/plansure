@@ -296,6 +296,7 @@ const AdminActions = () => {
     const isOverdue =
       action.status !== "Completed" &&
       action.status !== "Cancelled" &&
+      action.status !== "PM Override" &&
       new Date(action.dueDate) < startOfToday;
     const displayStatus = isOverdue ? "overdue" : action.status.toLowerCase();
 
@@ -317,16 +318,23 @@ const AdminActions = () => {
     return matchesStatus && matchesType && matchesSearch;
   });
 
+  // PM Override is terminal: it counts as closed, never as open or overdue,
+  // so Total still reconciles with Open + Closed + Overdue.
+  const isTerminal = (status: string) =>
+    status === "Completed" || status === "Cancelled" || status === "PM Override";
+
   const computedStats = {
     total: actions.length,
     open: actions.filter((a) => {
       const isOverdue =
-        a.status !== "Completed" && new Date(a.dueDate) < startOfToday;
+        !isTerminal(a.status) && new Date(a.dueDate) < startOfToday;
       return (a.status === "Open" || a.status === "In Progress") && !isOverdue;
     }).length,
-    closed: actions.filter((a) => a.status === "Completed").length,
+    closed: actions.filter(
+      (a) => a.status === "Completed" || a.status === "PM Override",
+    ).length,
     overdue: actions.filter((a) => {
-      return a.status !== "Completed" && new Date(a.dueDate) < startOfToday;
+      return !isTerminal(a.status) && new Date(a.dueDate) < startOfToday;
     }).length,
   };
 
@@ -1239,13 +1247,17 @@ const AdminActions = () => {
                 const isOverdue =
                   action.status !== "Completed" &&
                   action.status !== "Cancelled" &&
+                  // PM Override is terminal, so it can never be overdue.
+                  action.status !== "PM Override" &&
                   new Date(action.dueDate) < startOfToday;
                 const displayStatus = isOverdue ? "Overdue" : action.status;
                 const statusColor = isOverdue
                   ? COLORS.red
                   : action.status === "Completed"
                     ? COLORS.green
-                    : COLORS.blue;
+                    : action.status === "PM Override"
+                      ? COLORS.amber
+                      : COLORS.blue;
 
                 return (
                   <Box

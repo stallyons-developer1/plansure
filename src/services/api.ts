@@ -419,6 +419,12 @@ export const actionAPI = {
     return response.data;
   },
 
+  /** Force-close a single action. Reason is mandatory and is recorded for audit. */
+  override: async (id: string, reason: string) => {
+    const response = await api.patch(`/actions/${id}/override`, { reason });
+    return response.data;
+  },
+
   delete: async (id: string) => {
     const response = await api.delete(`/actions/${id}`);
     return response.data;

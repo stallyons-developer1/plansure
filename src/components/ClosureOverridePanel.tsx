@@ -12,7 +12,6 @@ interface ClosureOverridePanelProps {
   cycleStatus?: string;
   overdueActions?: number;
   blockedActivities?: number;
-  outstandingActions?: number;
   openRequiredActions?: number;
   weekNumber?: number;
   canClose?: boolean;
@@ -37,7 +36,6 @@ const ClosureOverridePanel = ({
   cycleStatus = "",
   overdueActions = 0,
   blockedActivities = 0,
-  outstandingActions = 0,
   openRequiredActions = 0,
   weekNumber = 1,
   canClose = false,
@@ -57,14 +55,18 @@ const ClosureOverridePanel = ({
   onConfirmOverride,
   onCancelOverride,
 }: ClosureOverridePanelProps) => {
+  const cycleUnderway = [
+    "Meeting Open",
+    "Execution",
+    "Close-Out Eligible",
+    "Closed",
+  ].includes(cycleStatus);
+
   const closureChecklist = {
-    plannerReview: [
-      "Meeting Open",
-      "Execution",
-      "Close-Out Eligible",
-      "Closed",
-    ].includes(cycleStatus),
-    todoGenerated: outstandingActions > 0,
+    plannerReview: cycleUnderway,
+    // The To-Do is a formal output of the cycle, produced whether or not there
+    // are outstanding actions — an empty list still counts as generated.
+    todoGenerated: cycleUnderway,
     overdueAcknowledged: overdueActions === 0,
     blockedAcknowledged: blockedActivities === 0,
   };
