@@ -89,7 +89,6 @@ const RAGDonutChart = ({
     return `M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2}`;
   };
 
-  // Arc order (only non-zero segments get an arc).
   const arcOrder: SegmentKey[] = ["red", "amber", "green", "blue", "grey"];
   let currentAngle = 0;
   const arcs = arcOrder
@@ -107,11 +106,8 @@ const RAGDonutChart = ({
       };
     });
 
-  // Legend order (Green, Amber, Blue, Red, then Grey if present).
   const legendOrder: SegmentKey[] = ["green", "amber", "blue", "red", "grey"];
-  const legend = legendOrder.filter(
-    (key) => key !== "grey" || values.grey > 0,
-  );
+  const legend = legendOrder.filter((key) => key !== "grey" || values.grey > 0);
 
   return (
     <Card

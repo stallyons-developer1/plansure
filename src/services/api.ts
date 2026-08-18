@@ -237,9 +237,12 @@ export const programmeAPI = {
   },
 
   linkToProject: async (programmeId: string, projectId: string) => {
-    const response = await api.patch(`/programmes/${programmeId}/link-project`, {
-      projectId,
-    });
+    const response = await api.patch(
+      `/programmes/${programmeId}/link-project`,
+      {
+        projectId,
+      },
+    );
     return response.data;
   },
 
@@ -274,17 +277,28 @@ export const programmeAPI = {
     return response.data;
   },
 
-  closeWeek: async (id: string, weekNumber: number, closeType?: string, notes?: string, isSecondOfPair?: boolean) => {
-    const response = await api.post(`/programmes/${id}/close-week/${weekNumber}`, {
-      closeType: closeType || "Normal Close",
-      notes,
-      isSecondOfPair,
-    });
+  closeWeek: async (
+    id: string,
+    weekNumber: number,
+    closeType?: string,
+    notes?: string,
+    isSecondOfPair?: boolean,
+  ) => {
+    const response = await api.post(
+      `/programmes/${id}/close-week/${weekNumber}`,
+      {
+        closeType: closeType || "Normal Close",
+        notes,
+        isSecondOfPair,
+      },
+    );
     return response.data;
   },
 
   reopenWeek: async (id: string, weekNumber: number) => {
-    const response = await api.post(`/programmes/${id}/reopen-week/${weekNumber}`);
+    const response = await api.post(
+      `/programmes/${id}/reopen-week/${weekNumber}`,
+    );
     return response.data;
   },
 };
@@ -442,7 +456,9 @@ export const dashboardAPI = {
     const params = new URLSearchParams();
     params.append("limit", limit.toString());
     if (projectId) params.append("projectId", projectId);
-    const response = await api.get(`/dashboard/recent-activity?${params.toString()}`);
+    const response = await api.get(
+      `/dashboard/recent-activity?${params.toString()}`,
+    );
     return response.data;
   },
 
@@ -582,16 +598,24 @@ export const exportAPI = {
   },
 
   generateWeeklyPlan: async (programmeId: string) => {
-    const response = await api.post("/exports/weekly-plan", { programmeId }, {
-      responseType: "blob",
-    });
+    const response = await api.post(
+      "/exports/weekly-plan",
+      { programmeId },
+      {
+        responseType: "blob",
+      },
+    );
     return response;
   },
 
   generatePlannerTodo: async (programmeId: string) => {
-    const response = await api.post("/exports/planner-todo", { programmeId }, {
-      responseType: "blob",
-    });
+    const response = await api.post(
+      "/exports/planner-todo",
+      { programmeId },
+      {
+        responseType: "blob",
+      },
+    );
     return response;
   },
 
@@ -602,7 +626,6 @@ export const exportAPI = {
     return response;
   },
 
-  // Keep old methods for backward compatibility
   getProjects: async () => {
     const response = await api.get("/exports/projects");
     return response.data;

@@ -289,7 +289,6 @@ const PlannerActions = () => {
     }
   };
 
-  // Start of today (midnight) - actions are only overdue after due date has fully passed
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
 
@@ -2175,7 +2174,6 @@ const PlannerActions = () => {
                   }
                   slotProps={{
                     htmlInput: {
-                      // Due date can be set from today onward.
                       min: new Date().toLocaleDateString("en-CA"),
                     },
                     input: {

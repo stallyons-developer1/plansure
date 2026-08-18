@@ -16,7 +16,6 @@ import {
 import { KeyboardArrowDown, KeyboardArrowRight } from "@mui/icons-material";
 import { COLORS, getStatusColor } from "../constants/colors";
 
-// Format date from various formats to YYYY-MM-DD
 const formatDate = (dateStr: string): string => {
   if (!dateStr) return "-";
 
@@ -35,10 +34,8 @@ const formatDate = (dateStr: string): string => {
     Dec: 11,
   };
 
-  // Clean suffix like " A" or " *" (indicates actual/completed)
   const cleanDate = dateStr.replace(/\s*[A*]$/, "").trim();
 
-  // Handle DD-MMM-YY format (e.g., "25-Oct-21")
   const match = cleanDate.match(/(\d{2})-([A-Za-z]{3})-(\d{2})/);
   if (match) {
     const day = parseInt(match[1]);
@@ -48,18 +45,15 @@ const formatDate = (dateStr: string): string => {
     return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
   }
 
-  // Already in YYYY-MM-DD format (exact match)
   if (/^\d{4}-\d{2}-\d{2}$/.test(cleanDate)) {
     return cleanDate;
   }
 
-  // Handle ISO datetime format (e.g., "2026-03-25T00:00:00.000Z")
   const isoMatch = cleanDate.match(/^(\d{4})-(\d{2})-(\d{2})T/);
   if (isoMatch) {
     return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
   }
 
-  // Fallback: try native Date parsing with UTC methods to avoid timezone shift
   const date = new Date(dateStr);
   if (!isNaN(date.getTime())) {
     const year = date.getUTCFullYear();
@@ -71,9 +65,6 @@ const formatDate = (dateStr: string): string => {
   return "-";
 };
 
-// Shared row height for the expanded LINKED ACTIONS / REASSIGN / ASSIGNEE
-// columns. Sized to the Reassign button (the tallest cell) so the three
-// columns stay aligned row-for-row.
 const ACTION_ROW_HEIGHT = "26px";
 
 export interface ActivityAction {
@@ -82,8 +73,6 @@ export interface ActivityAction {
   status: string;
   dueDate?: string;
   assignee?: { _id?: string; name?: string };
-  // True when this action belongs to a week that was already closed / PM
-  // Override'd — such actions are settled and must not read as Overdue.
   isFromClosedWeek?: boolean;
 }
 
@@ -98,8 +87,6 @@ export interface Activity {
   actions: number;
   status: string;
   statusType: string;
-  // Status was forced to Completed only because the open actions are all from
-  // a PM Override'd/closed week. Still allow assigning a fresh action.
   isPMOverrideComplete?: boolean;
   owner: { initials: string; name: string; color: string };
   linkedActions?: string[];
@@ -308,22 +295,15 @@ const ActivityRow = ({
             ? COLORS.textMuted
             : COLORS.red;
 
-  // In the assignment-driven model the Assign button is only offered while the
-  // activity is still Unassigned (Grey). Once "No Action" (Ready/Green) is
-  // chosen, or an action is assigned/completed, the button is hidden.
   const isUnassigned =
     !activity.status ||
     activity.status === "Unassigned" ||
     activity.status === "Not Ready";
-  const isNoAction = activity.statusType === "green"; // Ready via No Action
+  const isNoAction = activity.statusType === "green";
 
-  // Start of today (midnight) - actions are only overdue after due date has fully passed
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
 
-  // Activity status says an action exists, but the current user can't see it
-  // (e.g. a User role only receives actions assigned to them). Show a hint
-  // instead of a bare "-" so they know the activity is being handled.
   const hasHiddenAction =
     (!activity.linkedActionsData || activity.linkedActionsData.length === 0) &&
     (activity.status === "Action Open" || activity.status === "Action Overdue");
@@ -520,7 +500,6 @@ const ActivityRow = ({
           }}
         >
           {isUnassigned ? (
-            // Unassigned: show an empty grey placeholder pill (no label).
             <Box
               sx={{
                 bgcolor: COLORS.textMuted,
@@ -615,7 +594,6 @@ const ActivityRow = ({
             })()
           ) : onAssignClick && isUnassigned ? (
             (() => {
-              // Allow assignment for activities within 6 weeks (Weeks 1-2, 3-4, 5-6 or In Progress)
               const isWithin6Weeks =
                 activity.ragZone === "Weeks 1-2" ||
                 activity.ragZone === "Weeks 3-4" ||
@@ -782,8 +760,6 @@ const ActivityRow = ({
                             borderRadius: "50%",
                             bgcolor: COLORS.blue,
                             flexShrink: 0,
-                            // Match the chevron's footprint so the titles stay
-                            // on the same left edge as before.
                             mx: "5.5px",
                           }}
                         />

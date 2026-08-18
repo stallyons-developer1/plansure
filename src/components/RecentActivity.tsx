@@ -27,7 +27,10 @@ export interface ActivityItem {
 }
 
 const getIconForType = (type: string, color: string) => {
-  const colorMap: Record<string, { borderColor: string; iconColor: string; bgColor: string }> = {
+  const colorMap: Record<
+    string,
+    { borderColor: string; iconColor: string; bgColor: string }
+  > = {
     blue: {
       borderColor: COLORS.blue,
       iconColor: COLORS.blue,
@@ -76,6 +79,8 @@ const getIconForType = (type: string, color: string) => {
         return <WarningIcon sx={{ fontSize: 20 }} />;
       case "cycle_closed":
         return <CheckIcon sx={{ fontSize: 20 }} />;
+      case "cycle_override":
+        return <WarningIcon sx={{ fontSize: 20 }} />;
       case "report_exported":
         return <ExportMuiIcon sx={{ fontSize: 22 }} />;
       case "meeting_held":
@@ -197,7 +202,7 @@ const RecentActivity = ({
           activities.map((activity, index) => {
             const { icon, borderColor, iconColor, bgColor } = getIconForType(
               activity.type,
-              activity.color
+              activity.color,
             );
 
             return (

@@ -56,15 +56,17 @@ const formatAction = (action: string) => {
 
 const formatTimestamp = (dateStr: string) => {
   const date = new Date(dateStr);
-  return date.toLocaleString("en-GB", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  }).replace(",", "");
+  return date
+    .toLocaleString("en-GB", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    })
+    .replace(",", "");
 };
 
 const getEntityId = (log: AuditLog) => {
@@ -142,10 +144,9 @@ const AuditLogs = () => {
       if (response.success) {
         let filteredLogs = response.logs;
 
-        // Client-side filter for entity type since backend doesn't support it
         if (entityTypeFilter !== "All entity") {
           filteredLogs = filteredLogs.filter(
-            (log: AuditLog) => log.resourceType === entityTypeFilter
+            (log: AuditLog) => log.resourceType === entityTypeFilter,
           );
         }
 
@@ -176,7 +177,14 @@ const AuditLogs = () => {
 
   useEffect(() => {
     fetchLogs();
-  }, [pagination.page, categoryFilter, userFilter, entityTypeFilter, startDate, endDate]);
+  }, [
+    pagination.page,
+    categoryFilter,
+    userFilter,
+    entityTypeFilter,
+    startDate,
+    endDate,
+  ]);
 
   const handleClear = () => {
     setCategoryFilter("");
@@ -192,7 +200,14 @@ const AuditLogs = () => {
   };
 
   const handleExportCSV = () => {
-    const headers = ["Timestamp", "Event Type", "Actor", "Entity Type", "Entity ID", "Description"];
+    const headers = [
+      "Timestamp",
+      "Event Type",
+      "Actor",
+      "Entity Type",
+      "Entity ID",
+      "Description",
+    ];
     const rows = logs.map((log) => [
       formatTimestamp(log.createdAt),
       formatAction(log.action),
@@ -828,12 +843,20 @@ const AuditLogs = () => {
                       {formatAction(log.action)}
                     </Typography>
                     <Typography
-                      sx={{ color: COLORS.textSecondary, fontSize: "14px", textAlign: "center" }}
+                      sx={{
+                        color: COLORS.textSecondary,
+                        fontSize: "14px",
+                        textAlign: "center",
+                      }}
                     >
                       {log.performedByEmail || log.performedByName || "System"}
                     </Typography>
                     <Typography
-                      sx={{ color: COLORS.textSecondary, fontSize: "14px", textAlign: "center" }}
+                      sx={{
+                        color: COLORS.textSecondary,
+                        fontSize: "14px",
+                        textAlign: "center",
+                      }}
                     >
                       {log.resourceType || "-"}
                     </Typography>
@@ -848,7 +871,11 @@ const AuditLogs = () => {
                       {getEntityId(log)}
                     </Typography>
                     <Typography
-                      sx={{ color: COLORS.textSecondary, fontSize: "14px", textAlign: "center" }}
+                      sx={{
+                        color: COLORS.textSecondary,
+                        fontSize: "14px",
+                        textAlign: "center",
+                      }}
                     >
                       {log.description}
                     </Typography>

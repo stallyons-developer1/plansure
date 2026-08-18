@@ -89,6 +89,7 @@ interface WeeklyData {
     status: string;
     weekOpened: string;
     closeDeadline: string;
+    completedCount?: number;
     planner: string;
   } | null;
   stats: {
@@ -190,7 +191,6 @@ const CustomLegend = ({
   </Box>
 );
 
-// Custom tooltip for Activities by Week chart
 const CustomTooltip = ({
   active,
   payload,
@@ -240,7 +240,6 @@ const CustomTooltip = ({
   return null;
 };
 
-// Custom tooltip for Actions by Status chart
 const ActionsTooltip = ({
   active,
   payload,
@@ -278,7 +277,6 @@ const ActionsTooltip = ({
   return null;
 };
 
-// Custom tooltip for RAG Distribution pie chart
 const RAGTooltip = ({
   active,
   payload,
@@ -335,7 +333,6 @@ const AdminWeeklyDashboard = () => {
   const [showOverrideModal, setShowOverrideModal] = useState(false);
   const [overrideReason, setOverrideReason] = useState("");
 
-  // Assign action modal state
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [assigningActivity, setAssigningActivity] = useState<{
     activityId: string;
@@ -356,7 +353,6 @@ const AdminWeeklyDashboard = () => {
   const [teamMembers, setTeamMembers] = useState<
     Array<{ _id: string; name: string; email: string }>
   >([]);
-  // Reassign action modal state
   const [reassignModalOpen, setReassignModalOpen] = useState(false);
   const [reassigningAction, setReassigningAction] = useState<{
     _id?: string;
@@ -372,7 +368,6 @@ const AdminWeeklyDashboard = () => {
     Array<{ _id: string; name: string; email: string; role: string }>
   >([]);
 
-  // Fetch projects on mount
   useEffect(() => {
     const fetchProjects = async () => {
       try {
@@ -381,7 +376,6 @@ const AdminWeeklyDashboard = () => {
         if (res.success) {
           const projectsList = res.projects || [];
           setProjects(projectsList);
-          // Select first project by default
           if (projectsList.length > 0 && !selectedProjectId) {
             setSelectedProjectId(projectsList[0]._id);
           }
@@ -396,7 +390,6 @@ const AdminWeeklyDashboard = () => {
     fetchProjects();
   }, []);
 
-  // Fetch programme when project changes
   useEffect(() => {
     const fetchProgramme = async () => {
       if (!selectedProjectId) {
@@ -426,7 +419,6 @@ const AdminWeeklyDashboard = () => {
     fetchProgramme();
   }, [selectedProjectId]);
 
-  // Fetch weeks status when programmeId changes
   useEffect(() => {
     const fetchWeeksStatus = async () => {
       if (!programmeId) {
@@ -439,22 +431,24 @@ const AdminWeeklyDashboard = () => {
         const response = await programmeAPI.getWeeksStatus(programmeId);
         if (response.success && response.weeks) {
           setWeeksStatus(response.weeks);
-          // Find the first open week, or default to next week after last closed
           const weeks = response.weeks;
+          // Show the project's LAST COMPLETED week. Only if no week has been
+          // closed yet do we fall back to the current in-progress week.
+          const maxClosedWeek = Math.max(
+            ...weeks
+              .filter((w: WeekStatus) => w.status === "closed")
+              .map((w: WeekStatus) => w.weekNumber),
+            0,
+          );
           const firstOpenWeek = weeks.find(
             (w: WeekStatus) => w.status === "open",
           );
-          if (firstOpenWeek) {
+          if (maxClosedWeek > 0) {
+            setCurrentWeekNumber(maxClosedWeek);
+          } else if (firstOpenWeek) {
             setCurrentWeekNumber(firstOpenWeek.weekNumber);
           } else {
-            // All weeks are closed, show the last closed week + 1
-            const maxClosedWeek = Math.max(
-              ...weeks
-                .filter((w: WeekStatus) => w.status === "closed")
-                .map((w: WeekStatus) => w.weekNumber),
-              0,
-            );
-            setCurrentWeekNumber(maxClosedWeek + 1);
+            setCurrentWeekNumber(1);
           }
         }
       } catch (error) {
@@ -467,7 +461,6 @@ const AdminWeeklyDashboard = () => {
     fetchWeeksStatus();
   }, [programmeId]);
 
-  // Fetch weekly dashboard data when project and week number are set
   useEffect(() => {
     const fetchData = async () => {
       if (!selectedProjectId) {
@@ -484,12 +477,10 @@ const AdminWeeklyDashboard = () => {
         if (response.success) {
           setData(response.weekly);
 
-          // Set activities by week data if available
           if (response.weekly?.activitiesByWeek) {
             setActivitiesByWeekData(response.weekly.activitiesByWeek);
           }
 
-          // Set action ownership data if available
           if (response.weekly?.actionOwnership) {
             setActionOwnershipData(response.weekly.actionOwnership);
           }
@@ -505,7 +496,6 @@ const AdminWeeklyDashboard = () => {
     fetchData();
   }, [selectedProjectId, currentWeekNumber]);
 
-  // Fetch weekly control data for activities by week chart
   useEffect(() => {
     const fetchWeeklyControlData = async () => {
       if (!programmeId) {
@@ -522,12 +512,10 @@ const AdminWeeklyDashboard = () => {
         if (response.success && response.weeklyControl) {
           const wc = response.weeklyControl;
 
-          // Build activities by week data from the response
           if (wc.activitiesByWeek && Array.isArray(wc.activitiesByWeek)) {
             setActivitiesByWeekData(wc.activitiesByWeek);
           }
 
-          // Build action ownership data
           if (wc.actionOwnership && Array.isArray(wc.actionOwnership)) {
             setActionOwnershipData(wc.actionOwnership);
           }
@@ -540,11 +528,9 @@ const AdminWeeklyDashboard = () => {
     fetchWeeklyControlData();
   }, [programmeId, currentWeekNumber]);
 
-  // Extract discipline from activity name
   const extractDiscipline = (activityName: string): string => {
     const name = (activityName || "").toLowerCase().trim();
 
-    // Construction discipline patterns
     const disciplinePatterns: { [key: string]: string[] } = {
       Structural: [
         "steel",
@@ -629,7 +615,6 @@ const AdminWeeklyDashboard = () => {
       Design: ["design", "drawing", "approval", "permit", "submittal"],
     };
 
-    // Find matching discipline
     for (const [discipline, keywords] of Object.entries(disciplinePatterns)) {
       if (keywords.some((kw) => name.includes(kw))) {
         return discipline;
@@ -639,7 +624,6 @@ const AdminWeeklyDashboard = () => {
     return "General";
   };
 
-  // Fetch actions for ownership chart - grouped by DISCIPLINE (work area)
   useEffect(() => {
     const fetchActionsData = async () => {
       if (!programmeId) return;
@@ -647,7 +631,6 @@ const AdminWeeklyDashboard = () => {
       try {
         const response = await actionAPI.getByProgramme(programmeId);
         if (response.success && response.actions) {
-          // Group actions by DISCIPLINE (extracted from activity name)
           const ownershipMap: {
             [key: string]: {
               open: number;
@@ -671,7 +654,6 @@ const AdminWeeklyDashboard = () => {
               status?: string;
               dueDate?: string;
             }) => {
-              // Extract discipline from activity name
               const activityName = action.linkedActivity?.activityName || "";
               const discipline = extractDiscipline(activityName);
               const actionName = action.title || "";
@@ -717,8 +699,8 @@ const AdminWeeklyDashboard = () => {
             .sort(
               (a, b) =>
                 b.open + b.closed + b.overdue - (a.open + a.closed + a.overdue),
-            ) // Sort by total actions
-            .slice(0, 5); // Limit to top 5
+            )
+            .slice(0, 5);
 
           if (ownershipArray.length > 0) {
             setActionOwnershipData(ownershipArray);
@@ -732,13 +714,11 @@ const AdminWeeklyDashboard = () => {
     fetchActionsData();
   }, [programmeId]);
 
-  // Handler for Close Week - closes the current week and switches to next closable week
   const handleCloseWeek = async () => {
     if (!programmeId || isClosingWeek) return;
 
     setIsClosingWeek(true);
     try {
-      // Close first week
       const response1 = await programmeAPI.closeWeek(
         programmeId,
         currentWeekNumber,
@@ -746,12 +726,10 @@ const AdminWeeklyDashboard = () => {
       );
 
       if (response1.success) {
-        // Refresh weeks status
         const weeksResponse = await programmeAPI.getWeeksStatus(programmeId);
         if (weeksResponse.success && weeksResponse.weeks) {
           setWeeksStatus(weeksResponse.weeks);
 
-          // Find the next closable week or default to currentWeekNumber + 1
           const nextClosableWeek = weeksResponse.weeks.find(
             (w: WeekStatus) => w.canClose,
           );
@@ -759,7 +737,6 @@ const AdminWeeklyDashboard = () => {
             nextClosableWeek?.weekNumber || currentWeekNumber + 1;
           setCurrentWeekNumber(nextWeekNumber);
         } else {
-          // Fallback: single-week close
           setCurrentWeekNumber((prev) => prev + 1);
         }
       }
@@ -770,13 +747,11 @@ const AdminWeeklyDashboard = () => {
     }
   };
 
-  // Handler for PM Override - closes the current week with override reason and switches to next closable week
   const handlePMOverride = async () => {
     if (!programmeId || isClosingWeek || overrideReason.length < 10) return;
 
     setIsClosingWeek(true);
     try {
-      // Close first week with PM Override
       const response1 = await programmeAPI.closeWeek(
         programmeId,
         currentWeekNumber,
@@ -785,12 +760,10 @@ const AdminWeeklyDashboard = () => {
       );
 
       if (response1.success) {
-        // Refresh weeks status
         const weeksResponse = await programmeAPI.getWeeksStatus(programmeId);
         if (weeksResponse.success && weeksResponse.weeks) {
           setWeeksStatus(weeksResponse.weeks);
 
-          // Find the next closable week or default to currentWeekNumber + 1
           const nextClosableWeek = weeksResponse.weeks.find(
             (w: WeekStatus) => w.canClose,
           );
@@ -798,11 +771,9 @@ const AdminWeeklyDashboard = () => {
             nextClosableWeek?.weekNumber || currentWeekNumber + 1;
           setCurrentWeekNumber(nextWeekNumber);
         } else {
-          // Fallback: single-week close
           setCurrentWeekNumber((prev) => prev + 1);
         }
 
-        // Reset modal state
         setShowOverrideModal(false);
         setOverrideReason("");
       }
@@ -813,8 +784,13 @@ const AdminWeeklyDashboard = () => {
     }
   };
 
-  // Handler for Open Meeting
   const handleOpenMeeting = async () => {
+    if (selectedProjectId) {
+      localStorage.setItem(
+        `plansure_meeting_open_${selectedProjectId}`,
+        "true",
+      );
+    }
     if (!programmeId) return;
 
     try {
@@ -823,7 +799,6 @@ const AdminWeeklyDashboard = () => {
         "Meeting Open",
       );
       if (response.success) {
-        // Refresh dashboard data
         const dashResponse = await dashboardAPI.getWeeklyDashboard(
           selectedProjectId,
           currentWeekNumber,
@@ -837,7 +812,6 @@ const AdminWeeklyDashboard = () => {
     }
   };
 
-  // Handler for Start Execution
   const handleStartExecution = async () => {
     if (!programmeId) return;
 
@@ -847,7 +821,6 @@ const AdminWeeklyDashboard = () => {
         "Execution",
       );
       if (response.success) {
-        // Refresh dashboard data
         const dashResponse = await dashboardAPI.getWeeklyDashboard(
           selectedProjectId,
           currentWeekNumber,
@@ -861,7 +834,6 @@ const AdminWeeklyDashboard = () => {
     }
   };
 
-  // Fetch team members for assign modal (only active planners)
   useEffect(() => {
     const fetchTeamMembers = async () => {
       try {
@@ -881,7 +853,6 @@ const AdminWeeklyDashboard = () => {
     fetchTeamMembers();
   }, []);
 
-  // Fetch all users for reassign modal (only planners, exclude admins)
   useEffect(() => {
     const fetchUsers = async () => {
       try {
@@ -901,7 +872,6 @@ const AdminWeeklyDashboard = () => {
     fetchUsers();
   }, []);
 
-  // Assign modal handlers
   const handleAssignClose = () => {
     setAssignModalOpen(false);
     setAssigningActivity(null);
@@ -949,7 +919,6 @@ const AdminWeeklyDashboard = () => {
       });
 
       if (response.success) {
-        // Refresh dashboard data
         const dashResponse = await dashboardAPI.getWeeklyDashboard(
           selectedProjectId,
           currentWeekNumber,
@@ -980,14 +949,12 @@ const AdminWeeklyDashboard = () => {
     setAssignFormData({ ...assignFormData, [field]: value });
   };
 
-  // Reassign modal handlers
   const handleOpenReassign = (action: {
     _id?: string;
     actionId: string;
     title: string;
     currentAssignee?: string;
   }) => {
-    // Find the assignee name from users or teamMembers
     const assigneeUser =
       users.find((u) => u._id === action.currentAssignee) ||
       teamMembers.find((u) => u._id === action.currentAssignee);
@@ -1031,7 +998,6 @@ const AdminWeeklyDashboard = () => {
       });
 
       if (response.success) {
-        // Refresh dashboard data
         const dashResponse = await dashboardAPI.getWeeklyDashboard(
           selectedProjectId,
           currentWeekNumber,
@@ -1120,11 +1086,39 @@ const AdminWeeklyDashboard = () => {
     }
   };
 
-  const cycleStatus = data?.cycle?.status || "Draft";
+  const backendCycleStatus = data?.cycle?.status || "";
+  // A meeting opened from the project workspace sets this per-project flag;
+  // honour it so "meeting open" is consistent everywhere for that week.
+  const meetingOpenFlag =
+    !!selectedProjectId &&
+    localStorage.getItem(`plansure_meeting_open_${selectedProjectId}`) ===
+      "true";
+  // The dashboard shows the project's last COMPLETED week, so reflect it as
+  // "Closed" rather than the active programme's live (Draft) status.
+  const shownWeekClosed =
+    _weeksStatus.find((w) => w.weekNumber === currentWeekNumber)?.status ===
+      "closed" || backendCycleStatus === "Closed";
+  const cycleStatus = shownWeekClosed
+    ? "Closed"
+    : meetingOpenFlag &&
+        ["", "N/A", "Draft", "Uploaded"].includes(backendCycleStatus)
+      ? "Meeting Open"
+      : backendCycleStatus || "Draft";
   const cycleStatusColor = getCycleStatusColor(cycleStatus);
   const cycleStatusBg = `${cycleStatusColor}15`;
 
-  // Project dropdown component
+  // "Locked" is reserved for a week that has actually been closed. While the
+  // week is still open the card answers the question it asks: Yes / No.
+  const readyForCloseState = shownWeekClosed
+    ? {
+        label: "Locked",
+        caption: "Week closed",
+        color: COLORS.blue,
+      }
+    : data?.stats?.readyForClose
+      ? { label: "Yes", caption: "All clear", color: COLORS.green }
+      : { label: "No", caption: "Blockers remain", color: COLORS.red };
+
   const projectDropdown = (
     <FormControl size="small" sx={{ minWidth: 200 }}>
       <Select
@@ -1253,12 +1247,44 @@ const AdminWeeklyDashboard = () => {
             gap: 2,
           }}
         >
-          <Typography sx={{ color: COLORS.textMuted, fontSize: "16px" }}>
-            No programme uploaded for this project yet.
-          </Typography>
-          <Typography sx={{ color: COLORS.textSecondary, fontSize: "14px" }}>
-            Upload a programme PDF to see weekly dashboard data.
-          </Typography>
+          {meetingOpenFlag ? (
+            <>
+              <Typography sx={{ color: COLORS.green, fontSize: "16px" }}>
+                Meeting is open for this week.
+              </Typography>
+              <Typography
+                sx={{ color: COLORS.textSecondary, fontSize: "14px" }}
+              >
+                Upload a programme to continue the cycle.
+              </Typography>
+              <Button
+                variant="contained"
+                onClick={() =>
+                  navigate(`/admin/projects/${selectedProjectId}?tab=upload`)
+                }
+                sx={{
+                  mt: 1,
+                  bgcolor: COLORS.blue,
+                  textTransform: "none",
+                  fontWeight: 500,
+                  "&:hover": { bgcolor: COLORS.blue, opacity: 0.9 },
+                }}
+              >
+                Upload a program
+              </Button>
+            </>
+          ) : (
+            <>
+              <Typography sx={{ color: COLORS.textMuted, fontSize: "16px" }}>
+                No programme uploaded for this project yet.
+              </Typography>
+              <Typography
+                sx={{ color: COLORS.textSecondary, fontSize: "14px" }}
+              >
+                Upload a programme PDF to see weekly dashboard data.
+              </Typography>
+            </>
+          )}
         </Box>
       ) : (
         <>
@@ -1278,7 +1304,10 @@ const AdminWeeklyDashboard = () => {
                   md: "1fr 1.5fr 1fr 1fr 1fr 1fr 1fr",
                 },
                 gap: 3,
-                alignItems: "center",
+                // Top-aligned so the labels line up: the pill columns are
+                // taller than the text-only ones, and centering pushed the
+                // short columns' labels down.
+                alignItems: "start",
               }}
             >
               <Box>
@@ -1298,6 +1327,9 @@ const AdminWeeklyDashboard = () => {
                     color: COLORS.textPrimary,
                     fontSize: "14px",
                     fontWeight: 500,
+                    // Matches the pill height in the status columns so every
+                    // value sits on the same line.
+                    lineHeight: "32px",
                   }}
                 >
                   {data?.project?.name || "No Project"}
@@ -1314,13 +1346,16 @@ const AdminWeeklyDashboard = () => {
                     mb: 0.75,
                   }}
                 >
-                  ACTIVE 2-WEEK PERIOD
+                  ACTIVE 1-WEEK PERIOD
                 </Typography>
                 <Typography
                   sx={{
                     color: COLORS.textPrimary,
                     fontSize: "14px",
                     fontWeight: 500,
+                    // Matches the pill height in the status columns so every
+                    // value sits on the same line.
+                    lineHeight: "32px",
                   }}
                 >
                   {data?.cycle?.weekNumber || "N/A"}{" "}
@@ -1353,6 +1388,7 @@ const AdminWeeklyDashboard = () => {
                     borderRadius: "20px",
                     px: 2,
                     py: 0.75,
+                    height: "32px",
                     width: "fit-content",
                     bgcolor: cycleStatusBg,
                   }}
@@ -1387,7 +1423,7 @@ const AdminWeeklyDashboard = () => {
                     mb: 0.75,
                   }}
                 >
-                  2-WEEK RAG
+                  WEEK RAG
                 </Typography>
                 <Box
                   sx={{
@@ -1397,6 +1433,7 @@ const AdminWeeklyDashboard = () => {
                     borderRadius: "20px",
                     px: 2,
                     py: 0.75,
+                    height: "32px",
                     width: "fit-content",
                     bgcolor: weeklyRag.bgcolor,
                   }}
@@ -1438,6 +1475,9 @@ const AdminWeeklyDashboard = () => {
                     color: COLORS.textPrimary,
                     fontSize: "14px",
                     fontWeight: 500,
+                    // Matches the pill height in the status columns so every
+                    // value sits on the same line.
+                    lineHeight: "32px",
                   }}
                 >
                   {data?.cycle?.weekOpened || "-"}
@@ -1454,13 +1494,16 @@ const AdminWeeklyDashboard = () => {
                     mb: 0.75,
                   }}
                 >
-                  Close Deadline
+                  CLOSE DEADLINE
                 </Typography>
                 <Typography
                   sx={{
                     color: COLORS.textPrimary,
                     fontSize: "14px",
                     fontWeight: 500,
+                    // Matches the pill height in the status columns so every
+                    // value sits on the same line.
+                    lineHeight: "32px",
                   }}
                 >
                   {data?.cycle?.closeDeadline || "-"}
@@ -1484,6 +1527,9 @@ const AdminWeeklyDashboard = () => {
                     color: COLORS.textPrimary,
                     fontSize: "14px",
                     fontWeight: 500,
+                    // Matches the pill height in the status columns so every
+                    // value sits on the same line.
+                    lineHeight: "32px",
                   }}
                 >
                   {data?.cycle?.planner || "-"}
@@ -1817,13 +1863,13 @@ const AdminWeeklyDashboard = () => {
               </Typography>
               <Typography
                 sx={{
-                  color: data?.stats?.readyForClose ? COLORS.green : COLORS.red,
+                  color: readyForCloseState.color,
                   fontSize: "32px",
                   fontWeight: 700,
                   mb: 0.5,
                 }}
               >
-                {data?.stats?.readyForClose ? "Yes" : "No"}
+                {readyForCloseState.label}
               </Typography>
               <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
                 <Box
@@ -1831,20 +1877,16 @@ const AdminWeeklyDashboard = () => {
                     width: 8,
                     height: 8,
                     borderRadius: "50%",
-                    bgcolor: data?.stats?.readyForClose
-                      ? COLORS.green
-                      : COLORS.red,
+                    bgcolor: readyForCloseState.color,
                   }}
                 />
                 <Typography
                   sx={{
-                    color: data?.stats?.readyForClose
-                      ? COLORS.green
-                      : COLORS.red,
+                    color: readyForCloseState.color,
                     fontSize: "12px",
                   }}
                 >
-                  {data?.stats?.readyForClose ? "All clear" : "Blockers remain"}
+                  {readyForCloseState.caption}
                 </Typography>
               </Box>
             </Box>
@@ -1950,7 +1992,6 @@ const AdminWeeklyDashboard = () => {
                               ),
                               1,
                             );
-                            // Round up to next even number + 2
                             return Math.ceil((maxTotal + 2) / 2) * 2;
                           },
                         ]}
@@ -2383,7 +2424,6 @@ const AdminWeeklyDashboard = () => {
                     isBlocked: false,
                     activityStatus: "Ready",
                   });
-                  // Refresh dashboard data
                   const dashResponse = await dashboardAPI.getWeeklyDashboard(
                     selectedProjectId,
                     currentWeekNumber,
@@ -2406,14 +2446,13 @@ const AdminWeeklyDashboard = () => {
 
           <Box sx={{ mt: { xs: 2, sm: 3 } }}>
             <ClosureOverridePanel
-              cycleStatus={data?.cycle?.status || ""}
+              cycleStatus={cycleStatus}
               overdueActions={data?.stats?.overdueActions || 0}
               blockedActivities={data?.stats?.blockedByActions || 0}
               outstandingActions={data?.stats?.openActions || 0}
               openRequiredActions={data?.stats?.openRequiredActions || 0}
-              weekNumber={currentWeekNumber}
+              weekNumber={data?.cycle?.completedCount || currentWeekNumber}
               canClose={
-                // Check both readyForClose (no blockers) and date-based canClose from weeks status
                 (data?.stats?.readyForClose || false) &&
                 (_weeksStatus.find((w) => w.weekNumber === currentWeekNumber)
                   ?.canClose ??
@@ -2436,6 +2475,9 @@ const AdminWeeklyDashboard = () => {
               }}
               onOpenMeeting={handleOpenMeeting}
               onStartExecution={handleStartExecution}
+              onUploadProgram={() =>
+                navigate(`/admin/projects/${selectedProjectId}?tab=upload`)
+              }
               showOverrideModal={showOverrideModal}
               overrideReason={overrideReason}
               onOverrideReasonChange={setOverrideReason}
@@ -2853,8 +2895,6 @@ const AdminWeeklyDashboard = () => {
                       }
                       slotProps={{
                         htmlInput: {
-                          // Due date can be set from today; activity start date
-                          // is no longer the floor.
                           min: new Date().toLocaleDateString("en-CA"),
                           max: assigningActivity?.finishDate,
                         },

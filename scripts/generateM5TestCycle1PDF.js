@@ -7,136 +7,142 @@ const LIGHT_GRAY = "#E5E5E5";
 const WHITE = "#FFFFFF";
 const HEADER_BG = "#F0F0F0";
 
+// Programme window: 29-Jul-2026 .. 16-Sep-2026 (upload with device date = 29 Jul 2026)
+// Zones relative to the 6-week lookahead anchored on 29-Jul-2026:
+//   Weeks 1-2 : 29-Jul .. 11-Aug
+//   Weeks 3-4 : 12-Aug .. 25-Aug
+//   Weeks 5-6 : 26-Aug .. 08-Sep
+//   Excluded  : 09-Sep and later
 const activities = [
   {
-    id: "SEP-001",
+    id: "ACT-001",
     name: "Site Mobilisation",
     duration: "3d",
-    start: "15-Jul-26",
-    finish: "17-Jul-26",
-    zone: "Week 1-2",
+    start: "29-Jul-26",
+    finish: "31-Jul-26",
+    zone: "Weeks 1-2",
   },
   {
-    id: "SEP-002",
+    id: "ACT-002",
     name: "Temporary Works & Site Setup",
     duration: "4d",
-    start: "20-Jul-26",
-    finish: "23-Jul-26",
-    zone: "Week 1-2",
+    start: "31-Jul-26",
+    finish: "05-Aug-26",
+    zone: "Weeks 1-2",
   },
   {
-    id: "SEP-003",
+    id: "ACT-003",
     name: "Earthworks Cut and Fill",
     duration: "6d",
-    start: "22-Jul-26",
-    finish: "27-Jul-26",
-    zone: "Week 1-2",
+    start: "04-Aug-26",
+    finish: "11-Aug-26",
+    zone: "Weeks 1-2",
   },
   {
-    id: "SEP-004",
+    id: "ACT-004",
     name: "Drainage Connections",
-    duration: "2d",
-    start: "27-Jul-26",
-    finish: "28-Jul-26",
-    zone: "Week 1-2",
-  },
-
-  {
-    id: "SEP-005",
-    name: "Foundation Piling",
-    duration: "7d",
-    start: "29-Jul-26",
-    finish: "04-Aug-26",
-    zone: "Week 3-4",
-  },
-  {
-    id: "SEP-006",
-    name: "Pile Cap Construction",
-    duration: "4d",
-    start: "03-Aug-26",
-    finish: "06-Aug-26",
-    zone: "Week 3-4",
-  },
-  {
-    id: "SEP-007",
-    name: "Ground Floor Slab Pour",
-    duration: "5d",
-    start: "06-Aug-26",
-    finish: "10-Aug-26",
-    zone: "Week 3-4",
-  },
-  {
-    id: "SEP-008",
-    name: "Steel Column Erection",
     duration: "2d",
     start: "10-Aug-26",
     finish: "11-Aug-26",
-    zone: "Week 3-4",
+    zone: "Weeks 1-2",
   },
 
   {
-    id: "SEP-009",
-    name: "Structural Steel Frame",
+    id: "ACT-005",
+    name: "Foundation Piling",
     duration: "7d",
     start: "12-Aug-26",
-    finish: "18-Aug-26",
-    zone: "Week 5-6",
+    finish: "20-Aug-26",
+    zone: "Weeks 3-4",
   },
   {
-    id: "SEP-010",
-    name: "Metal Deck Installation",
-    duration: "3d",
-    start: "17-Aug-26",
-    finish: "19-Aug-26",
-    zone: "Week 5-6",
+    id: "ACT-006",
+    name: "Pile Cap Construction",
+    duration: "4d",
+    start: "18-Aug-26",
+    finish: "21-Aug-26",
+    zone: "Weeks 3-4",
   },
   {
-    id: "SEP-011",
-    name: "Roof Structure & Covering",
-    duration: "6d",
+    id: "ACT-007",
+    name: "Ground Floor Slab Pour",
+    duration: "5d",
     start: "19-Aug-26",
-    finish: "24-Aug-26",
-    zone: "Week 5-6",
+    finish: "25-Aug-26",
+    zone: "Weeks 3-4",
   },
   {
-    id: "SEP-012",
-    name: "External Wall Framing",
+    id: "ACT-008",
+    name: "Steel Column Erection",
     duration: "2d",
     start: "24-Aug-26",
     finish: "25-Aug-26",
-    zone: "Week 5-6",
+    zone: "Weeks 3-4",
   },
 
   {
-    id: "SEP-013",
-    name: "Cladding Installation",
+    id: "ACT-009",
+    name: "Structural Steel Frame",
     duration: "7d",
     start: "26-Aug-26",
-    finish: "01-Sep-26",
-    zone: "Excluded",
+    finish: "03-Sep-26",
+    zone: "Weeks 5-6",
   },
   {
-    id: "SEP-014",
-    name: "Window and Glazing",
+    id: "ACT-010",
+    name: "Metal Deck Installation",
+    duration: "3d",
+    start: "01-Sep-26",
+    finish: "03-Sep-26",
+    zone: "Weeks 5-6",
+  },
+  {
+    id: "ACT-011",
+    name: "Roof Structure & Covering",
     duration: "6d",
-    start: "02-Sep-26",
-    finish: "07-Sep-26",
+    start: "01-Sep-26",
+    finish: "08-Sep-26",
+    zone: "Weeks 5-6",
+  },
+  {
+    id: "ACT-012",
+    name: "External Wall Framing",
+    duration: "2d",
+    start: "07-Sep-26",
+    finish: "08-Sep-26",
+    zone: "Weeks 5-6",
+  },
+
+  {
+    id: "ACT-013",
+    name: "Cladding Installation",
+    duration: "5d",
+    start: "09-Sep-26",
+    finish: "15-Sep-26",
     zone: "Excluded",
   },
   {
-    id: "SEP-015",
+    id: "ACT-014",
+    name: "Window and Glazing",
+    duration: "4d",
+    start: "10-Sep-26",
+    finish: "15-Sep-26",
+    zone: "Excluded",
+  },
+  {
+    id: "ACT-015",
     name: "M&E First Fix",
-    duration: "7d",
-    start: "08-Sep-26",
-    finish: "14-Sep-26",
+    duration: "5d",
+    start: "10-Sep-26",
+    finish: "16-Sep-26",
     zone: "Excluded",
   },
   {
-    id: "SEP-016",
+    id: "ACT-016",
     name: "Internal Partitions",
     duration: "2d",
-    start: "14-Sep-26",
-    finish: "15-Sep-26",
+    start: "15-Sep-26",
+    finish: "16-Sep-26",
     zone: "Excluded",
   },
 ];
@@ -147,7 +153,7 @@ const doc = new PDFDocument({
   margins: { top: 15, bottom: 15, left: 15, right: 15 },
 });
 
-const outputPath = "/Users/apple/Downloads/test_programme_jul_sept_2026.pdf";
+const outputPath = "/Users/apple/Downloads/m5_test_cycle_1.pdf";
 doc.pipe(fs.createWriteStream(outputPath));
 
 const pageWidth = doc.page.width - 30;
@@ -167,9 +173,9 @@ const TABLE_END_X = 630;
 let y = 15;
 
 doc.fontSize(12).fillColor(BLACK);
-doc.text("July-September Construction Programme / 2026", 15, y);
+doc.text("M5 Test Cycle 1 Construction Programme / 2026", 15, y);
 doc.fontSize(8).fillColor(GRAY);
-doc.text("15/07/2026", pageWidth - 60, y);
+doc.text("29/07/2026", pageWidth - 60, y);
 
 y += 35;
 
@@ -235,17 +241,10 @@ activities.forEach((activity, index) => {
 
 const footerY = y + activities.length * rowHeight + 20;
 doc.fontSize(6).fillColor(GRAY);
-doc.text("Generated by PlanSure | " + new Date().toLocaleString(), 15, footerY);
+doc.text(
+  "Generated by PlanSure | programme window 29 Jul 2026 - 16 Sep 2026 | upload with device date = 29 Jul 2026",
+  15,
+  footerY,
+);
 
 doc.end();
-
-const zones = ["Week 1-2", "Week 3-4", "Week 5-6", "Excluded"];
-const ranges = {
-  "Week 1-2": "15-Jul .. 28-Jul",
-  "Week 3-4": "29-Jul .. 11-Aug",
-  "Week 5-6": "12-Aug .. 25-Aug",
-  Excluded: "26-Aug and later",
-};
-zones.forEach((z) => {
-  const inZone = activities.filter((a) => a.zone === z);
-});

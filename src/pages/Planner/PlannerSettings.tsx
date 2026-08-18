@@ -29,7 +29,6 @@ interface FormErrors {
 const PlannerSettings = () => {
   const { user, updateUser } = useAuth();
 
-  // Profile form state
   const [profileForm, setProfileForm] = useState({
     name: user?.name || "",
     email: user?.email || "",
@@ -38,7 +37,6 @@ const PlannerSettings = () => {
   const [profileSuccess, setProfileSuccess] = useState("");
   const [profileErrors, setProfileErrors] = useState<FormErrors>({});
 
-  // Password form state
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: "",
     newPassword: "",
@@ -83,12 +81,18 @@ const PlannerSettings = () => {
         }
       }
     } catch (error: unknown) {
-      const err = error as { response?: { data?: { errors?: Array<{ field: string; message: string }> } } };
+      const err = error as {
+        response?: {
+          data?: { errors?: Array<{ field: string; message: string }> };
+        };
+      };
       if (err.response?.data?.errors) {
         const errors: FormErrors = {};
-        err.response.data.errors.forEach((e: { field: string; message: string }) => {
-          errors[e.field] = e.message;
-        });
+        err.response.data.errors.forEach(
+          (e: { field: string; message: string }) => {
+            errors[e.field] = e.message;
+          },
+        );
         setProfileErrors(errors);
       } else {
         setProfileErrors({ general: "Failed to update profile" });
@@ -120,12 +124,18 @@ const PlannerSettings = () => {
         });
       }
     } catch (error: unknown) {
-      const err = error as { response?: { data?: { errors?: Array<{ field: string; message: string }> } } };
+      const err = error as {
+        response?: {
+          data?: { errors?: Array<{ field: string; message: string }> };
+        };
+      };
       if (err.response?.data?.errors) {
         const errors: FormErrors = {};
-        err.response.data.errors.forEach((e: { field: string; message: string }) => {
-          errors[e.field] = e.message;
-        });
+        err.response.data.errors.forEach(
+          (e: { field: string; message: string }) => {
+            errors[e.field] = e.message;
+          },
+        );
         setPasswordErrors(errors);
       } else {
         setPasswordErrors({ general: "Failed to change password" });
@@ -177,11 +187,17 @@ const PlannerSettings = () => {
             </Box>
             <Box>
               <Typography
-                sx={{ color: COLORS.textPrimary, fontWeight: 600, fontSize: "16px" }}
+                sx={{
+                  color: COLORS.textPrimary,
+                  fontWeight: 600,
+                  fontSize: "16px",
+                }}
               >
                 Profile Information
               </Typography>
-              <Typography sx={{ color: COLORS.textSecondary, fontSize: "13px" }}>
+              <Typography
+                sx={{ color: COLORS.textSecondary, fontSize: "13px" }}
+              >
                 Update your personal details
               </Typography>
             </Box>
@@ -277,11 +293,17 @@ const PlannerSettings = () => {
             </Box>
             <Box>
               <Typography
-                sx={{ color: COLORS.textPrimary, fontWeight: 600, fontSize: "16px" }}
+                sx={{
+                  color: COLORS.textPrimary,
+                  fontWeight: 600,
+                  fontSize: "16px",
+                }}
               >
                 Change Password
               </Typography>
-              <Typography sx={{ color: COLORS.textSecondary, fontSize: "13px" }}>
+              <Typography
+                sx={{ color: COLORS.textSecondary, fontSize: "13px" }}
+              >
                 Update your password to keep your account secure
               </Typography>
             </Box>
@@ -304,7 +326,9 @@ const PlannerSettings = () => {
                 label="Current Password"
                 type={showPasswords.current ? "text" : "password"}
                 value={passwordForm.currentPassword}
-                onChange={(e) => handlePasswordChange("currentPassword", e.target.value)}
+                onChange={(e) =>
+                  handlePasswordChange("currentPassword", e.target.value)
+                }
                 error={!!passwordErrors.currentPassword}
                 helperText={passwordErrors.currentPassword}
                 fullWidth
@@ -323,7 +347,11 @@ const PlannerSettings = () => {
                           edge="end"
                           sx={{ color: COLORS.textMuted }}
                         >
-                          {showPasswords.current ? <VisibilityOff /> : <Visibility />}
+                          {showPasswords.current ? (
+                            <VisibilityOff />
+                          ) : (
+                            <Visibility />
+                          )}
                         </IconButton>
                       </InputAdornment>
                     ),
@@ -337,9 +365,13 @@ const PlannerSettings = () => {
                 label="New Password"
                 type={showPasswords.new ? "text" : "password"}
                 value={passwordForm.newPassword}
-                onChange={(e) => handlePasswordChange("newPassword", e.target.value)}
+                onChange={(e) =>
+                  handlePasswordChange("newPassword", e.target.value)
+                }
                 error={!!passwordErrors.newPassword}
-                helperText={passwordErrors.newPassword || "Must be at least 6 characters"}
+                helperText={
+                  passwordErrors.newPassword || "Must be at least 6 characters"
+                }
                 fullWidth
                 sx={inputStyles}
                 slotProps={{
@@ -356,7 +388,11 @@ const PlannerSettings = () => {
                           edge="end"
                           sx={{ color: COLORS.textMuted }}
                         >
-                          {showPasswords.new ? <VisibilityOff /> : <Visibility />}
+                          {showPasswords.new ? (
+                            <VisibilityOff />
+                          ) : (
+                            <Visibility />
+                          )}
                         </IconButton>
                       </InputAdornment>
                     ),
@@ -367,7 +403,9 @@ const PlannerSettings = () => {
                 label="Confirm New Password"
                 type={showPasswords.confirm ? "text" : "password"}
                 value={passwordForm.confirmPassword}
-                onChange={(e) => handlePasswordChange("confirmPassword", e.target.value)}
+                onChange={(e) =>
+                  handlePasswordChange("confirmPassword", e.target.value)
+                }
                 error={!!passwordErrors.confirmPassword}
                 helperText={passwordErrors.confirmPassword}
                 fullWidth
@@ -386,7 +424,11 @@ const PlannerSettings = () => {
                           edge="end"
                           sx={{ color: COLORS.textMuted }}
                         >
-                          {showPasswords.confirm ? <VisibilityOff /> : <Visibility />}
+                          {showPasswords.confirm ? (
+                            <VisibilityOff />
+                          ) : (
+                            <Visibility />
+                          )}
                         </IconButton>
                       </InputAdornment>
                     ),

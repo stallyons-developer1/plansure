@@ -55,7 +55,6 @@ const AdminProgramsUpload = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { user } = useAuth();
 
-  // Create Project Modal State
   const [createProjectModalOpen, setCreateProjectModalOpen] = useState(false);
   const [uploadedProgrammeId, setUploadedProgrammeId] = useState<string | null>(
     null,
@@ -77,7 +76,6 @@ const AdminProgramsUpload = () => {
     return "Unknown";
   };
 
-  // Fetch upload history on mount
   useEffect(() => {
     const fetchUploadHistory = async () => {
       try {
@@ -159,10 +157,8 @@ const AdminProgramsUpload = () => {
     setIsUploading(true);
 
     try {
-      // Use the file name without extension as the programme name
       const programmeName = file.name.replace(/\.pdf$/i, "");
 
-      // Upload the programme without linking to a project
       const response = await programmeAPI.upload(file, programmeName);
 
       if (response.success && response.programme) {
@@ -175,8 +171,9 @@ const AdminProgramsUpload = () => {
           year: "numeric",
         });
 
-        // Construct the API URL for PDF viewing (stored in MongoDB)
-        const baseUrl = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:4000';
+        const baseUrl =
+          import.meta.env.VITE_API_URL?.replace("/api", "") ||
+          "http://localhost:4000";
         const pdfUrl = `${baseUrl}/api/programmes/${programme._id}/pdf`;
 
         const newUpload: UploadedFile = {
@@ -192,7 +189,6 @@ const AdminProgramsUpload = () => {
 
         setUploadHistory((prev) => [newUpload, ...prev]);
 
-        // Store the uploaded programme info and show the Create Project modal
         setUploadedProgrammeId(programme._id);
         setUploadedProgrammeName(programmeName);
         setCreateProjectModalOpen(true);
@@ -239,7 +235,6 @@ const AdminProgramsUpload = () => {
     setIsCreatingProject(true);
 
     try {
-      // Create the project
       const response = await projectAPI.create({
         name: projectName,
         phase,
@@ -248,7 +243,6 @@ const AdminProgramsUpload = () => {
       });
 
       if (response.success && response.project) {
-        // Link the programme to the newly created project
         if (uploadedProgrammeId) {
           await programmeAPI.linkToProject(
             uploadedProgrammeId,

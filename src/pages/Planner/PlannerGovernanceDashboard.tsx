@@ -1,6 +1,14 @@
 import { useState, useEffect } from "react";
-import { Box, Typography, CircularProgress } from "@mui/material";
-import { dashboardAPI } from "../../services/api";
+import {
+  Box,
+  Typography,
+  CircularProgress,
+  FormControl,
+  Select,
+  MenuItem,
+} from "@mui/material";
+import type { SelectChangeEvent } from "@mui/material/Select";
+import { dashboardAPI, projectAPI } from "../../services/api";
 import {
   Line,
   BarChart,
@@ -221,13 +229,12 @@ interface StatsCardProps {
 }
 
 const StatsCard = ({ label, value, suffix }: StatsCardProps) => {
-  // Determine color based on label and value
   const getValueColor = () => {
     if (label === "Total Weeks") return COLORS.white;
     if (label === "Overdue Trend") {
-      if (value === "Up") return COLORS.red; // Bad - overdue increasing
-      if (value === "Down") return COLORS.green; // Good - overdue decreasing
-      return COLORS.amber; // Stable
+      if (value === "Up") return COLORS.red;
+      if (value === "Down") return COLORS.green;
+      return COLORS.amber;
     }
     return COLORS.green;
   };
@@ -280,6 +287,36 @@ const StatsCard = ({ label, value, suffix }: StatsCardProps) => {
   );
 };
 
+interface HistoricalWeek {
+  week: number;
+  date: string;
+  status: string;
+  icon: string;
+  score?: number;
+  stats?: {
+    totalActivities: number;
+    green: number;
+    amber: number;
+    red: number;
+    actionsCompleted: number;
+    actionsTotal: number;
+  };
+  closeType?: string;
+  notes?: string;
+  activities?: {
+    activityId: string;
+    activityName: string;
+    startDate: string;
+    finishDate: string;
+    duration: string;
+    ragStatus: string;
+    activityStatus: string;
+    ownerName: string;
+    isCompleted: boolean;
+    projectName: string;
+  }[];
+}
+
 interface GovernanceData {
   hasData?: boolean;
   message?: string;
@@ -309,35 +346,7 @@ interface GovernanceData {
     trend: string;
     lastSeen: string;
   }[];
-  historicalWeeks: {
-    week: number;
-    date: string;
-    status: string;
-    icon: string;
-    score?: number;
-    stats?: {
-      totalActivities: number;
-      green: number;
-      amber: number;
-      red: number;
-      actionsCompleted: number;
-      actionsTotal: number;
-    };
-    closeType?: string;
-    notes?: string;
-    activities?: {
-      activityId: string;
-      activityName: string;
-      startDate: string;
-      finishDate: string;
-      duration: string;
-      ragStatus: string;
-      activityStatus: string;
-      ownerName: string;
-      isCompleted: boolean;
-      projectName: string;
-    }[];
-  }[];
+  historicalWeeks: HistoricalWeek[];
 }
 
 const CustomLegend = ({
@@ -419,6 +428,10 @@ const PlannerGovernanceDashboard = () => {
   const [governanceData, setGovernanceData] = useState<GovernanceData | null>(
     null,
   );
+  const [projects, setProjects] = useState<{ _id: string; name: string }[]>([]);
+  const [explorerProjectId, setExplorerProjectId] = useState<string>("");
+  const [explorerWeeks, setExplorerWeeks] = useState<HistoricalWeek[]>([]);
+  const [explorerLoading, setExplorerLoading] = useState(false);
 
   useEffect(() => {
     const fetchGovernanceData = async () => {
@@ -427,7 +440,6 @@ const PlannerGovernanceDashboard = () => {
         const response = await dashboardAPI.getGovernance();
         if (response.governance) {
           setGovernanceData(response.governance);
-          // Set the first historical week as selected if available
           if (response.governance.historicalWeeks?.length > 0) {
             setSelectedWeek(response.governance.historicalWeeks[0].week);
           }
@@ -441,6 +453,56 @@ const PlannerGovernanceDashboard = () => {
 
     fetchGovernanceData();
   }, []);
+
+  useEffect(() => {
+    const fetchProjects = async () => {
+      try {
+        const res = await projectAPI.getAll();
+        if (res.success) setProjects(res.projects || []);
+      } catch (error) {
+        console.error("Error fetching projects:", error);
+      }
+    };
+
+    fetchProjects();
+  }, []);
+
+  // The explorer scopes itself to one project without re-scoping the whole
+  // dashboard, so it re-requests governance with a projectId and keeps only
+  // the historicalWeeks slice. "" means portfolio-wide (use the main payload).
+  useEffect(() => {
+    if (!explorerProjectId) {
+      setExplorerWeeks([]);
+      return;
+    }
+
+    let cancelled = false;
+    const fetchExplorerWeeks = async () => {
+      try {
+        setExplorerLoading(true);
+        const response = await dashboardAPI.getGovernance(explorerProjectId);
+        if (cancelled) return;
+        setExplorerWeeks(response.governance?.historicalWeeks || []);
+      } catch (error) {
+        if (!cancelled) {
+          console.error("Error fetching project governance data:", error);
+          setExplorerWeeks([]);
+        }
+      } finally {
+        if (!cancelled) setExplorerLoading(false);
+      }
+    };
+
+    fetchExplorerWeeks();
+    return () => {
+      cancelled = true;
+    };
+  }, [explorerProjectId]);
+
+  const handleExplorerProjectChange = (event: SelectChangeEvent<string>) => {
+    setExplorerProjectId(event.target.value);
+    setSelectedWeek(null);
+  };
 
   const getMetricColor = (color: string) => {
     switch (color) {
@@ -507,7 +569,33 @@ const PlannerGovernanceDashboard = () => {
   const constraintData = governanceData?.constraintData || [];
   const historicalWeeks = governanceData?.historicalWeeks || [];
 
-  const selectedWeekData = historicalWeeks.find((w) => w.week === selectedWeek);
+  const explorerWeeksList = explorerProjectId ? explorerWeeks : historicalWeeks;
+
+  const selectedWeekData = explorerWeeksList.find(
+    (w) => w.week === selectedWeek,
+  );
+
+  const selectedProjectName = explorerProjectId
+    ? projects.find((p) => p._id === explorerProjectId)?.name
+    : undefined;
+
+  // Scoped to one project the backend still labels each row "Combined total ·
+  // 1 project", so show the project name instead.
+  const weekSubtitle = (week: HistoricalWeek) =>
+    selectedProjectName || week.date;
+
+  // Keep the selection valid: the filtered project may not have the week that
+  // was selected under the previous scope.
+  useEffect(() => {
+    if (explorerLoading) return;
+    if (explorerWeeksList.length === 0) {
+      if (selectedWeek !== null) setSelectedWeek(null);
+      return;
+    }
+    if (!explorerWeeksList.some((w) => w.week === selectedWeek)) {
+      setSelectedWeek(explorerWeeksList[0].week);
+    }
+  }, [explorerWeeksList, explorerLoading, selectedWeek]);
 
   if (loading) {
     return (
@@ -529,7 +617,6 @@ const PlannerGovernanceDashboard = () => {
     );
   }
 
-  // Show "No Data" state when there's no governance data
   if (!governanceData || governanceData.hasData === false) {
     return (
       <PlannerLayout
@@ -1202,20 +1289,88 @@ const PlannerGovernanceDashboard = () => {
           mt: 3,
         }}
       >
-        <Typography
+        <Box
           sx={{
-            color: COLORS.textSecondary,
-            fontSize: "14px",
-            fontWeight: 600,
-            letterSpacing: "0.5px",
+            display: "flex",
+            flexDirection: { xs: "column", sm: "row" },
+            alignItems: { xs: "stretch", sm: "center" },
+            justifyContent: "space-between",
+            gap: 2,
             pb: 2,
             mx: -3,
             px: 3,
             borderBottom: `1px solid ${COLORS.border}`,
           }}
         >
-          HISTORICAL WEEK EXPLORER
-        </Typography>
+          <Typography
+            sx={{
+              color: COLORS.textSecondary,
+              fontSize: "14px",
+              fontWeight: 600,
+              letterSpacing: "0.5px",
+            }}
+          >
+            HISTORICAL WEEK EXPLORER
+          </Typography>
+
+          <FormControl size="small" sx={{ minWidth: 200 }}>
+            <Select
+              value={explorerProjectId}
+              onChange={handleExplorerProjectChange}
+              displayEmpty
+              IconComponent={ArrowDownIcon}
+              sx={{
+                bgcolor: COLORS.bgPrimary,
+                color: COLORS.textPrimary,
+                borderRadius: "8px",
+                border: `1px solid ${COLORS.border}`,
+                fontSize: "14px",
+                fontWeight: 500,
+                "& .MuiOutlinedInput-notchedOutline": {
+                  border: "none",
+                },
+                "& .MuiSelect-icon": {
+                  color: COLORS.textSecondary,
+                },
+                "&:hover": {
+                  bgcolor: COLORS.bgTertiary,
+                },
+              }}
+              MenuProps={{
+                slotProps: {
+                  paper: {
+                    sx: {
+                      bgcolor: COLORS.bgSecondary,
+                      border: `1px solid ${COLORS.border}`,
+                      borderRadius: "8px",
+                      mt: 1,
+                      "& .MuiMenuItem-root": {
+                        color: COLORS.textPrimary,
+                        fontSize: "14px",
+                        "&:hover": {
+                          bgcolor: COLORS.bgTertiary,
+                        },
+                        "&.Mui-selected": {
+                          bgcolor: COLORS.blueBgMedium,
+                          "&:hover": {
+                            bgcolor: COLORS.blueBgMedium,
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              }}
+            >
+              <MenuItem value="">All Projects</MenuItem>
+              {projects.map((project) => (
+                <MenuItem key={project._id} value={project._id}>
+                  {project.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Box>
 
         <Box
           sx={{
@@ -1250,172 +1405,201 @@ const PlannerGovernanceDashboard = () => {
               },
             }}
           >
-            {historicalWeeks.map((week) => {
-              const getStatusColors = (status: string) => {
-                switch (status) {
-                  case "Green":
-                    return {
-                      bg: "rgba(34, 197, 94, 0.15)",
-                      color: COLORS.green,
-                    };
-                  case "Amber":
-                    return {
-                      bg: "rgba(245, 158, 11, 0.15)",
-                      color: COLORS.amber,
-                    };
-                  case "Current":
-                    return {
-                      bg: "rgba(59, 130, 246, 0.15)",
-                      color: COLORS.blue,
-                    };
-                  case "Upcoming":
-                    return {
-                      bg: "rgba(107, 114, 128, 0.15)",
-                      color: COLORS.textMuted,
-                    };
-                  default:
-                    return {
-                      bg: "rgba(107, 114, 128, 0.15)",
-                      color: COLORS.textMuted,
-                    };
-                }
-              };
+            {explorerLoading && (
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  py: 6,
+                }}
+              >
+                <CircularProgress size={24} sx={{ color: COLORS.blue }} />
+              </Box>
+            )}
 
-              const statusColors = getStatusColors(week.status);
+            {!explorerLoading && explorerWeeksList.length === 0 && (
+              <Typography
+                sx={{
+                  color: COLORS.textMuted,
+                  fontSize: "13px",
+                  px: 3,
+                  py: 4,
+                }}
+              >
+                {selectedProjectName
+                  ? `No closed weeks yet for ${selectedProjectName}.`
+                  : "No closed weeks yet."}
+              </Typography>
+            )}
 
-              return (
-                <Box
-                  key={week.week}
-                  onClick={() => setSelectedWeek(week.week)}
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 2,
-                    py: 2,
-                    pl: 3,
-                    pr: 2,
-                    borderBottom: `1px solid ${COLORS.border}`,
-                    borderLeft:
-                      selectedWeek === week.week
-                        ? `3px solid ${COLORS.blue}`
-                        : "3px solid transparent",
-                    cursor: "pointer",
-                    bgcolor: "transparent",
-                    "&:hover": {
-                      bgcolor: COLORS.bgTertiary,
-                    },
-                  }}
-                >
-                  {week.icon === "check" ? (
-                    <Box
-                      sx={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: "50%",
-                        bgcolor: "rgba(34, 197, 94, 0.15)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <Box
-                        component="img"
-                        src={checkIcon}
-                        sx={{ width: 15, height: 15 }}
-                      />
-                    </Box>
-                  ) : week.icon === "current" ? (
-                    <Box
-                      sx={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: "50%",
-                        bgcolor: "rgba(59, 130, 246, 0.15)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <Box
-                        sx={{
-                          width: 12,
-                          height: 12,
-                          borderRadius: "50%",
-                          bgcolor: COLORS.blue,
-                        }}
-                      />
-                    </Box>
-                  ) : week.icon === "upcoming" ? (
-                    <Box
-                      sx={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: "50%",
-                        bgcolor: "rgba(107, 114, 128, 0.15)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <Box
-                        sx={{
-                          width: 8,
-                          height: 8,
-                          borderRadius: "50%",
-                          bgcolor: COLORS.textMuted,
-                        }}
-                      />
-                    </Box>
-                  ) : (
-                    <Box
-                      sx={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: "50%",
-                        bgcolor: "rgba(245, 158, 11, 0.15)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <WarningAmberOutlinedIcon
-                        sx={{ color: COLORS.amber, fontSize: 20 }}
-                      />
-                    </Box>
-                  )}
-                  <Box sx={{ flex: 1 }}>
-                    <Typography
-                      sx={{
-                        color: COLORS.textPrimary,
-                        fontSize: "14px",
-                        fontWeight: 600,
-                      }}
-                    >
-                      Week {week.week}
-                    </Typography>
-                    <Typography
-                      sx={{ color: COLORS.textMuted, fontSize: "12px" }}
-                    >
-                      {week.date}
-                    </Typography>
-                  </Box>
+            {!explorerLoading &&
+              explorerWeeksList.map((week) => {
+                const getStatusColors = (status: string) => {
+                  switch (status) {
+                    case "Green":
+                      return {
+                        bg: "rgba(34, 197, 94, 0.15)",
+                        color: COLORS.green,
+                      };
+                    case "Amber":
+                      return {
+                        bg: "rgba(245, 158, 11, 0.15)",
+                        color: COLORS.amber,
+                      };
+                    case "Current":
+                      return {
+                        bg: "rgba(59, 130, 246, 0.15)",
+                        color: COLORS.blue,
+                      };
+                    case "Upcoming":
+                      return {
+                        bg: "rgba(107, 114, 128, 0.15)",
+                        color: COLORS.textMuted,
+                      };
+                    default:
+                      return {
+                        bg: "rgba(107, 114, 128, 0.15)",
+                        color: COLORS.textMuted,
+                      };
+                  }
+                };
+
+                const statusColors = getStatusColors(week.status);
+
+                return (
                   <Box
+                    key={week.week}
+                    onClick={() => setSelectedWeek(week.week)}
                     sx={{
-                      bgcolor: statusColors.bg,
-                      color: statusColors.color,
-                      px: 1.5,
-                      py: 0.5,
-                      mr: 2,
-                      borderRadius: "6px",
-                      fontSize: "13px",
-                      fontWeight: 500,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 2,
+                      py: 2,
+                      pl: 3,
+                      pr: 2,
+                      borderBottom: `1px solid ${COLORS.border}`,
+                      borderLeft:
+                        selectedWeek === week.week
+                          ? `3px solid ${COLORS.blue}`
+                          : "3px solid transparent",
+                      cursor: "pointer",
+                      bgcolor: "transparent",
+                      "&:hover": {
+                        bgcolor: COLORS.bgTertiary,
+                      },
                     }}
                   >
-                    {week.status}
+                    {week.icon === "check" ? (
+                      <Box
+                        sx={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: "50%",
+                          bgcolor: "rgba(34, 197, 94, 0.15)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Box
+                          component="img"
+                          src={checkIcon}
+                          sx={{ width: 15, height: 15 }}
+                        />
+                      </Box>
+                    ) : week.icon === "current" ? (
+                      <Box
+                        sx={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: "50%",
+                          bgcolor: "rgba(59, 130, 246, 0.15)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Box
+                          sx={{
+                            width: 12,
+                            height: 12,
+                            borderRadius: "50%",
+                            bgcolor: COLORS.blue,
+                          }}
+                        />
+                      </Box>
+                    ) : week.icon === "upcoming" ? (
+                      <Box
+                        sx={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: "50%",
+                          bgcolor: "rgba(107, 114, 128, 0.15)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Box
+                          sx={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: "50%",
+                            bgcolor: COLORS.textMuted,
+                          }}
+                        />
+                      </Box>
+                    ) : (
+                      <Box
+                        sx={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: "50%",
+                          bgcolor: "rgba(245, 158, 11, 0.15)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <WarningAmberOutlinedIcon
+                          sx={{ color: COLORS.amber, fontSize: 20 }}
+                        />
+                      </Box>
+                    )}
+                    <Box sx={{ flex: 1 }}>
+                      <Typography
+                        sx={{
+                          color: COLORS.textPrimary,
+                          fontSize: "14px",
+                          fontWeight: 600,
+                        }}
+                      >
+                        Week {week.week}
+                      </Typography>
+                      <Typography
+                        sx={{ color: COLORS.textMuted, fontSize: "12px" }}
+                      >
+                        {weekSubtitle(week)}
+                      </Typography>
+                    </Box>
+                    <Box
+                      sx={{
+                        bgcolor: statusColors.bg,
+                        color: statusColors.color,
+                        px: 1.5,
+                        py: 0.5,
+                        mr: 2,
+                        borderRadius: "6px",
+                        fontSize: "13px",
+                        fontWeight: 500,
+                      }}
+                    >
+                      {week.status}
+                    </Box>
                   </Box>
-                </Box>
-              );
-            })}
+                );
+              })}
           </Box>
 
           <Box sx={{ flex: 1, p: 3 }}>
@@ -1441,7 +1625,7 @@ const PlannerGovernanceDashboard = () => {
                   <Typography
                     sx={{ color: COLORS.textMuted, fontSize: "14px" }}
                   >
-                    {selectedWeekData.date}
+                    {weekSubtitle(selectedWeekData)}
                   </Typography>
                 </Box>
 
@@ -1518,7 +1702,7 @@ const PlannerGovernanceDashboard = () => {
                   ))}
                 </Box>
 
-                <Box sx={{ mb: 3 }}>
+                {/* <Box sx={{ mb: 3 }}>
                   <Typography
                     sx={{
                       color: COLORS.textMuted,
@@ -1614,7 +1798,7 @@ const PlannerGovernanceDashboard = () => {
                       </Box>
                     );
                   })()}
-                </Box>
+                </Box> */}
 
                 <Box
                   sx={{
@@ -1913,9 +2097,13 @@ const PlannerGovernanceDashboard = () => {
                 }}
               >
                 <Typography sx={{ color: COLORS.textMuted }}>
-                  {historicalWeeks.length === 0
-                    ? "No historical data available. Close a week cycle to see data here."
-                    : "Select a week to view details"}
+                  {explorerLoading
+                    ? "Loading…"
+                    : explorerWeeksList.length === 0
+                      ? selectedProjectName
+                        ? `No historical data for ${selectedProjectName}. Close a week cycle to see data here.`
+                        : "No historical data available. Close a week cycle to see data here."
+                      : "Select a week to view details"}
                 </Typography>
               </Box>
             )}

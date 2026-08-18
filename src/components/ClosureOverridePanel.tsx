@@ -1,8 +1,11 @@
-import { Box, Typography, CircularProgress, TextField, Button } from "@mui/material";
 import {
-  AccessTime as ClockIcon,
-  Lock as LockIcon,
-} from "@mui/icons-material";
+  Box,
+  Typography,
+  CircularProgress,
+  TextField,
+  Button,
+} from "@mui/material";
+import { AccessTime as ClockIcon, Lock as LockIcon } from "@mui/icons-material";
 import { COLORS } from "../constants/colors";
 
 interface ClosureOverridePanelProps {
@@ -20,10 +23,9 @@ interface ClosureOverridePanelProps {
   onCloseWeek?: () => void;
   onPMOverride?: () => void;
   onGoToActions?: () => void;
-  // Cycle action handlers
   onOpenMeeting?: () => void;
   onStartExecution?: () => void;
-  // PM Override modal props
+  onUploadProgram?: () => void;
   showOverrideModal?: boolean;
   overrideReason?: string;
   onOverrideReasonChange?: (reason: string) => void;
@@ -48,21 +50,22 @@ const ClosureOverridePanel = ({
   onGoToActions,
   onOpenMeeting,
   onStartExecution,
+  onUploadProgram,
   showOverrideModal = false,
   overrideReason = "",
   onOverrideReasonChange,
   onConfirmOverride,
   onCancelOverride,
 }: ClosureOverridePanelProps) => {
-  // Same logic as Closure & Export tab
   const closureChecklist = {
-    // Planner review complete: checked at Meeting Open and remains checked in subsequent stages
-    plannerReview: ["Meeting Open", "Execution", "Close-Out Eligible", "Closed"].includes(cycleStatus),
-    // To-do list generated: checked when there are pending actions
+    plannerReview: [
+      "Meeting Open",
+      "Execution",
+      "Close-Out Eligible",
+      "Closed",
+    ].includes(cycleStatus),
     todoGenerated: outstandingActions > 0,
-    // Overdue acknowledged: checked when no overdue actions
     overdueAcknowledged: overdueActions === 0,
-    // Blocked acknowledged: checked when no blocked activities
     blockedAcknowledged: blockedActivities === 0,
   };
 
@@ -93,16 +96,14 @@ const ClosureOverridePanel = ({
     },
   ];
 
-  // Determine if we're in execution mode (same logic as Weekly Control)
   const isExecution = cycleStatus === "Execution";
   const isCloseOutEligible = cycleStatus === "Close-Out Eligible";
   const isClosed = cycleStatus === "Closed" || isWeekClosed;
   const hasOpenRequiredActions = openRequiredActions > 0;
 
-  // Show close button: in execution mode with no open required actions, or close-out eligible
-  const showCloseButton = (isExecution && !hasOpenRequiredActions) || isCloseOutEligible;
+  const showCloseButton =
+    (isExecution && !hasOpenRequiredActions) || isCloseOutEligible;
 
-  // Show PM Override: in execution mode with open required actions
   const showPMOverride = isExecution && hasOpenRequiredActions;
 
   return (
@@ -160,10 +161,14 @@ const ClosureOverridePanel = ({
                     width: 22,
                     height: 22,
                     borderRadius: "50%",
-                    border: closureChecklist[item.key as keyof typeof closureChecklist]
+                    border: closureChecklist[
+                      item.key as keyof typeof closureChecklist
+                    ]
                       ? "2px solid #fff"
                       : "2px solid #94A3B8",
-                    bgcolor: closureChecklist[item.key as keyof typeof closureChecklist]
+                    bgcolor: closureChecklist[
+                      item.key as keyof typeof closureChecklist
+                    ]
                       ? COLORS.blue
                       : "transparent",
                     flexShrink: 0,
@@ -264,7 +269,8 @@ const ClosureOverridePanel = ({
                       px: 3,
                       py: 1.25,
                       borderRadius: "8px",
-                      cursor: canClose && !isClosing ? "pointer" : "not-allowed",
+                      cursor:
+                        canClose && !isClosing ? "pointer" : "not-allowed",
                       opacity: canClose && !isClosing ? 1 : 0.6,
                       transition: "all 0.2s ease",
                       "&:hover": {
@@ -284,7 +290,9 @@ const ClosureOverridePanel = ({
 
                 {/* Open required actions warning and buttons */}
                 {showPMOverride && (
-                  <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                  <Box
+                    sx={{ display: "flex", flexDirection: "column", gap: 2 }}
+                  >
                     {/* Warning box with clock icon */}
                     <Box
                       sx={{
@@ -299,8 +307,11 @@ const ClosureOverridePanel = ({
                       }}
                     >
                       <ClockIcon sx={{ color: COLORS.amber, fontSize: 20 }} />
-                      <Typography sx={{ color: COLORS.amber, fontSize: "14px" }}>
-                        {openRequiredActions} open required action(s) need to be completed before closing.
+                      <Typography
+                        sx={{ color: COLORS.amber, fontSize: "14px" }}
+                      >
+                        {openRequiredActions} open required action(s) need to be
+                        completed before closing.
                       </Typography>
                     </Box>
                     {/* Buttons row */}
@@ -377,10 +388,15 @@ const ClosureOverridePanel = ({
                   </Box>
                 )}
 
-                {/* Start Execution button - shown when in Meeting Open status */}
+                {/* Upload a program button - shown when meeting is open; sends
+                    the user to the selected project's Programme Upload tab. */}
                 {cycleStatus === "Meeting Open" && (
                   <Box
-                    onClick={() => onStartExecution?.()}
+                    onClick={() =>
+                      onUploadProgram
+                        ? onUploadProgram()
+                        : onStartExecution?.()
+                    }
                     sx={{
                       display: "flex",
                       alignItems: "center",
@@ -397,7 +413,7 @@ const ClosureOverridePanel = ({
                     }}
                   >
                     <Typography sx={{ fontSize: "14px", fontWeight: 500 }}>
-                      Start Execution
+                      Upload a program
                     </Typography>
                   </Box>
                 )}
@@ -406,19 +422,22 @@ const ClosureOverridePanel = ({
           </Box>
 
           {/* Show reason why close is not available */}
-          {!isClosed && !isProjectEnded && canCloseReason && !canClose && isExecution && (
-            <Typography
-              sx={{
-                color: COLORS.red,
-                fontSize: "11px",
-                mt: 1.5,
-              }}
-            >
-              {canCloseReason}
-            </Typography>
-          )}
-
-                  </Box>
+          {!isClosed &&
+            !isProjectEnded &&
+            canCloseReason &&
+            !canClose &&
+            isExecution && (
+              <Typography
+                sx={{
+                  color: COLORS.red,
+                  fontSize: "11px",
+                  mt: 1.5,
+                }}
+              >
+                {canCloseReason}
+              </Typography>
+            )}
+        </Box>
       </Box>
 
       {/* PM Override Form - shown when showOverrideModal is true */}
@@ -449,7 +468,8 @@ const ClosureOverridePanel = ({
               mb: 2,
             }}
           >
-            Enter a mandatory reason (min 10 characters) to close this week despite incomplete actions.
+            Enter a mandatory reason (min 10 characters) to close this week
+            despite incomplete actions.
           </Typography>
           <TextField
             fullWidth

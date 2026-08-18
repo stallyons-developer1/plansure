@@ -58,13 +58,11 @@ interface WeeklyActionStats {
 }
 
 const PlannerExports = () => {
-  // Project selection state
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [programmeId, setProgrammeId] = useState<string>("");
   const [loadingProjects, setLoadingProjects] = useState(true);
 
-  // Gating and export state
   const [gatingStatus, setGatingStatus] = useState<GatingStatus>({
     isGated: true,
     cycleStatus: "",
@@ -74,7 +72,6 @@ const PlannerExports = () => {
   const [loadingData, setLoadingData] = useState(false);
   const [exporting, setExporting] = useState<"weekly" | "todo" | null>(null);
 
-  // Export counts and action stats (like Closure & Export tab)
   const [exportCounts, setExportCounts] = useState<ExportCounts>({
     weeklyPlanTotal: 0,
     outstandingActions: 0,
@@ -82,22 +79,27 @@ const PlannerExports = () => {
     blockedActivities: 0,
     greenActivities: 0,
   });
-  const [weeklyActionStats, setWeeklyActionStats] = useState<WeeklyActionStats>({
-    openRequired: 0,
-    total: 0,
-  });
+  const [weeklyActionStats, setWeeklyActionStats] = useState<WeeklyActionStats>(
+    {
+      openRequired: 0,
+      total: 0,
+    },
+  );
 
   const amberColor = "#F59E0B";
   const amberBg = "rgba(245, 158, 11, 0.15)";
   const greenColor = COLORS.green;
   const greenBg = "rgba(34, 197, 94, 0.15)";
 
-  // Unlock exports when cycle reaches "Execution" or "Close-Out Eligible"
-  const isExportAllowed = ["Execution", "Close-Out Eligible", "Approved", "Closed"].includes(gatingStatus.cycleStatus);
+  const isExportAllowed = [
+    "Execution",
+    "Close-Out Eligible",
+    "Approved",
+    "Closed",
+  ].includes(gatingStatus.cycleStatus);
   const statusColor = isExportAllowed ? greenColor : amberColor;
   const statusBg = isExportAllowed ? greenBg : amberBg;
 
-  // Fetch projects on mount
   useEffect(() => {
     const fetchProjects = async () => {
       try {
@@ -106,7 +108,6 @@ const PlannerExports = () => {
         if (res.success) {
           const projectsList = res.projects || [];
           setProjects(projectsList);
-          // Select first project by default
           if (projectsList.length > 0 && !selectedProjectId) {
             setSelectedProjectId(projectsList[0]._id);
           }
@@ -121,7 +122,6 @@ const PlannerExports = () => {
     fetchProjects();
   }, []);
 
-  // Fetch programme when project changes
   useEffect(() => {
     const fetchProgramme = async () => {
       if (!selectedProjectId) {
@@ -141,15 +141,18 @@ const PlannerExports = () => {
         if (response.success && response.programme) {
           setProgrammeId(response.programme._id);
 
-          // Get cycle status from programme
           const cycleStatus = response.programme.cycleStatus || "Draft";
 
-          // Get current week from weeks status
           let currentWeek = "W1";
           try {
-            const weeksRes = await programmeAPI.getWeeksStatus(response.programme._id);
+            const weeksRes = await programmeAPI.getWeeksStatus(
+              response.programme._id,
+            );
             if (weeksRes.success && weeksRes.weeks) {
-              const firstOpenWeek = weeksRes.weeks.find((w: { status: string; weekNumber: number }) => w.status === "open");
+              const firstOpenWeek = weeksRes.weeks.find(
+                (w: { status: string; weekNumber: number }) =>
+                  w.status === "open",
+              );
               if (firstOpenWeek) {
                 currentWeek = `W${firstOpenWeek.weekNumber}`;
               } else {
@@ -157,7 +160,7 @@ const PlannerExports = () => {
                   ...weeksRes.weeks
                     .filter((w: { status: string }) => w.status === "closed")
                     .map((w: { weekNumber: number }) => w.weekNumber),
-                  0
+                  0,
                 );
                 currentWeek = `W${maxClosedWeek + 1}`;
               }
@@ -167,28 +170,32 @@ const PlannerExports = () => {
           }
 
           setGatingStatus({
-            isGated: !["Execution", "Close-Out Eligible", "Approved", "Closed"].includes(cycleStatus),
+            isGated: ![
+              "Execution",
+              "Close-Out Eligible",
+              "Approved",
+              "Closed",
+            ].includes(cycleStatus),
             cycleStatus,
             currentWeek,
           });
 
-          // Fetch weekly control data for export counts
           try {
-            const wcRes = await programmeAPI.getWeeklyControl(response.programme._id);
+            const wcRes = await programmeAPI.getWeeklyControl(
+              response.programme._id,
+            );
 
-            // Calculate export counts - access response directly (not through .weeklyControl)
             const greenActivities = wcRes.ragDistribution?.green || 0;
             const blockedActivities = wcRes.ragDistribution?.red || 0;
 
-            // Outstanding actions for Planner To-Do = open + inProgress + overdue (from CURRENT 2 WEEKS only)
-            // Use weeklyActionsByStatus which is filtered to current week's actions
             const outstandingActions =
               (wcRes.weeklyActionsByStatus?.open || 0) +
               (wcRes.weeklyActionsByStatus?.inProgress || 0) +
               (wcRes.weeklyActionsByStatus?.overdue || 0);
 
             const overdueActions = wcRes.actionsByStatus?.overdue || 0;
-            const weeklyPlanTotal = greenActivities + (wcRes.weeklyPlanPreview?.length || 0);
+            const weeklyPlanTotal =
+              greenActivities + (wcRes.weeklyPlanPreview?.length || 0);
 
             setExportCounts({
               weeklyPlanTotal,
@@ -198,8 +205,9 @@ const PlannerExports = () => {
               greenActivities,
             });
 
-            // Calculate weekly action stats
-            const openRequired = (wcRes.requiredActionsByStatus?.open || 0) + (wcRes.requiredActionsByStatus?.inProgress || 0);
+            const openRequired =
+              (wcRes.requiredActionsByStatus?.open || 0) +
+              (wcRes.requiredActionsByStatus?.inProgress || 0);
             setWeeklyActionStats({
               openRequired,
               total: outstandingActions,
@@ -208,7 +216,6 @@ const PlannerExports = () => {
             console.error("Error fetching weekly control data:", e);
           }
 
-          // Fetch export history for this programme/project
           await fetchExportHistory(response.programme._id);
         } else {
           setProgrammeId("");
@@ -248,7 +255,7 @@ const PlannerExports = () => {
               month: "short",
               year: "numeric",
             }),
-          }))
+          })),
         );
       }
     } catch (error) {
@@ -278,7 +285,6 @@ const PlannerExports = () => {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-      // Refresh history after export
       await fetchExportHistory(programmeId);
     } catch (error) {
       console.error("Error exporting weekly plan:", error);
@@ -304,7 +310,6 @@ const PlannerExports = () => {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-      // Refresh history after export
       await fetchExportHistory(programmeId);
     } catch (error) {
       console.error("Error exporting planner todo:", error);
@@ -332,7 +337,6 @@ const PlannerExports = () => {
     }
   };
 
-  // Project dropdown component
   const projectDropdown = (
     <FormControl size="small" sx={{ minWidth: 200 }}>
       <Select
@@ -400,8 +404,18 @@ const PlannerExports = () => {
 
   if (loadingProjects) {
     return (
-      <PlannerLayout title="Exports" subtitle="Weekly Plan and Planner To-Do exports">
-        <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", height: "50vh" }}>
+      <PlannerLayout
+        title="Exports"
+        subtitle="Weekly Plan and Planner To-Do exports"
+      >
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            height: "50vh",
+          }}
+        >
           <CircularProgress sx={{ color: COLORS.blue }} />
         </Box>
       </PlannerLayout>
@@ -415,7 +429,14 @@ const PlannerExports = () => {
       headerAction={projectDropdown}
     >
       {loadingData ? (
-        <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", height: "50vh" }}>
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            height: "50vh",
+          }}
+        >
           <CircularProgress sx={{ color: COLORS.blue }} />
         </Box>
       ) : projects.length === 0 ? (
@@ -485,7 +506,12 @@ const PlannerExports = () => {
             </Box>
             <Box sx={{ flex: 1 }}>
               <Box
-                sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 0.5 }}
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1.5,
+                  mb: 0.5,
+                }}
               >
                 <Typography
                   sx={{
@@ -521,7 +547,9 @@ const PlannerExports = () => {
                   {isExportAllowed ? "Unlocked" : "Gated"}
                 </Box>
               </Box>
-              <Typography sx={{ color: COLORS.textSecondary, fontSize: "14px" }}>
+              <Typography
+                sx={{ color: COLORS.textSecondary, fontSize: "14px" }}
+              >
                 {isExportAllowed ? (
                   <>
                     Exports are unlocked — Cycle is in{" "}
@@ -577,7 +605,12 @@ const PlannerExports = () => {
               }}
             >
               <Box
-                sx={{ display: "flex", alignItems: "flex-start", gap: 2, mb: 3 }}
+                sx={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 2,
+                  mb: 3,
+                }}
               >
                 <Box
                   sx={{
@@ -654,7 +687,11 @@ const PlannerExports = () => {
                               : greenColor,
                         }}
                       />
-                      {!isExportAllowed ? "Gated" : weeklyActionStats.openRequired > 0 ? "Pending" : "Ready"}
+                      {!isExportAllowed
+                        ? "Gated"
+                        : weeklyActionStats.openRequired > 0
+                          ? "Pending"
+                          : "Ready"}
                     </Box>
                   </Box>
                   <Typography
@@ -665,7 +702,9 @@ const PlannerExports = () => {
                   <Typography
                     sx={{ color: COLORS.textMuted, fontSize: "12px", mt: 0.5 }}
                   >
-                    {exportCounts.weeklyPlanTotal} {exportCounts.weeklyPlanTotal === 1 ? "item" : "items"} to export
+                    {exportCounts.weeklyPlanTotal}{" "}
+                    {exportCounts.weeklyPlanTotal === 1 ? "item" : "items"} to
+                    export
                   </Typography>
                 </Box>
               </Box>
@@ -712,7 +751,11 @@ const PlannerExports = () => {
 
               <Button
                 onClick={handleExportWeeklyPlan}
-                disabled={!isExportAllowed || weeklyActionStats.openRequired > 0 || exporting === "weekly"}
+                disabled={
+                  !isExportAllowed ||
+                  weeklyActionStats.openRequired > 0 ||
+                  exporting === "weekly"
+                }
                 startIcon={
                   exporting === "weekly" ? (
                     <CircularProgress size={14} sx={{ color: "inherit" }} />
@@ -725,15 +768,24 @@ const PlannerExports = () => {
                   )
                 }
                 sx={{
-                  bgcolor: isExportAllowed && weeklyActionStats.openRequired === 0 ? COLORS.green : COLORS.bgTertiary,
-                  color: isExportAllowed && weeklyActionStats.openRequired === 0 ? COLORS.white : COLORS.textPrimary,
+                  bgcolor:
+                    isExportAllowed && weeklyActionStats.openRequired === 0
+                      ? COLORS.green
+                      : COLORS.bgTertiary,
+                  color:
+                    isExportAllowed && weeklyActionStats.openRequired === 0
+                      ? COLORS.white
+                      : COLORS.textPrimary,
                   textTransform: "none",
                   py: 1.5,
                   borderRadius: "8px",
                   fontSize: "14px",
                   fontWeight: 500,
                   "&:hover": {
-                    bgcolor: isExportAllowed && weeklyActionStats.openRequired === 0 ? "#16a34a" : COLORS.border,
+                    bgcolor:
+                      isExportAllowed && weeklyActionStats.openRequired === 0
+                        ? "#16a34a"
+                        : COLORS.border,
                   },
                   "&:disabled": {
                     bgcolor: COLORS.bgTertiary,
@@ -763,7 +815,12 @@ const PlannerExports = () => {
               }}
             >
               <Box
-                sx={{ display: "flex", alignItems: "flex-start", gap: 2, mb: 3 }}
+                sx={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 2,
+                  mb: 3,
+                }}
               >
                 <Box
                   sx={{
@@ -840,19 +897,24 @@ const PlannerExports = () => {
                               : greenColor,
                         }}
                       />
-                      {!isExportAllowed ? "Gated" : exportCounts.outstandingActions === 0 ? "Empty" : "Ready"}
+                      {!isExportAllowed
+                        ? "Gated"
+                        : exportCounts.outstandingActions === 0
+                          ? "Empty"
+                          : "Ready"}
                     </Box>
                   </Box>
                   <Typography
                     sx={{ color: COLORS.textSecondary, fontSize: "13px" }}
                   >
-                    Outstanding actions and planner follow-on items. A prioritised
-                    task list for the planning team.
+                    Outstanding actions and planner follow-on items. A
+                    prioritised task list for the planning team.
                   </Typography>
                   <Typography
                     sx={{ color: COLORS.textMuted, fontSize: "12px", mt: 0.5 }}
                   >
-                    {exportCounts.outstandingActions} outstanding {exportCounts.outstandingActions === 1 ? "item" : "items"}
+                    {exportCounts.outstandingActions} outstanding{" "}
+                    {exportCounts.outstandingActions === 1 ? "item" : "items"}
                   </Typography>
                 </Box>
               </Box>
@@ -907,7 +969,11 @@ const PlannerExports = () => {
 
               <Button
                 onClick={handleExportPlannerTodo}
-                disabled={!isExportAllowed || exportCounts.outstandingActions === 0 || exporting === "todo"}
+                disabled={
+                  !isExportAllowed ||
+                  exportCounts.outstandingActions === 0 ||
+                  exporting === "todo"
+                }
                 startIcon={
                   exporting === "todo" ? (
                     <CircularProgress size={14} sx={{ color: "inherit" }} />
@@ -920,15 +986,24 @@ const PlannerExports = () => {
                   )
                 }
                 sx={{
-                  bgcolor: isExportAllowed && exportCounts.outstandingActions > 0 ? COLORS.blue : COLORS.bgTertiary,
-                  color: isExportAllowed && exportCounts.outstandingActions > 0 ? COLORS.white : COLORS.textMuted,
+                  bgcolor:
+                    isExportAllowed && exportCounts.outstandingActions > 0
+                      ? COLORS.blue
+                      : COLORS.bgTertiary,
+                  color:
+                    isExportAllowed && exportCounts.outstandingActions > 0
+                      ? COLORS.white
+                      : COLORS.textMuted,
                   textTransform: "none",
                   py: 1.5,
                   borderRadius: "8px",
                   fontSize: "14px",
                   fontWeight: 500,
                   "&:hover": {
-                    bgcolor: isExportAllowed && exportCounts.outstandingActions > 0 ? "#2563eb" : COLORS.bgTertiary,
+                    bgcolor:
+                      isExportAllowed && exportCounts.outstandingActions > 0
+                        ? "#2563eb"
+                        : COLORS.bgTertiary,
                   },
                   "&:disabled": {
                     bgcolor: COLORS.bgTertiary,
@@ -956,7 +1031,9 @@ const PlannerExports = () => {
               overflow: "hidden",
             }}
           >
-            <Box sx={{ px: 3, py: 1, borderBottom: `1px solid ${COLORS.border}` }}>
+            <Box
+              sx={{ px: 3, py: 1, borderBottom: `1px solid ${COLORS.border}` }}
+            >
               <Typography
                 sx={{
                   color: COLORS.blue,
@@ -967,7 +1044,9 @@ const PlannerExports = () => {
               >
                 Export History
               </Typography>
-              <Typography sx={{ color: COLORS.textSecondary, fontSize: "14px" }}>
+              <Typography
+                sx={{ color: COLORS.textSecondary, fontSize: "14px" }}
+              >
                 Previously generated exports for this project
               </Typography>
             </Box>
@@ -1009,7 +1088,9 @@ const PlannerExports = () => {
 
                 {exportHistory.length === 0 ? (
                   <Box sx={{ p: 3, textAlign: "center" }}>
-                    <Typography sx={{ color: COLORS.textSecondary, fontSize: "14px" }}>
+                    <Typography
+                      sx={{ color: COLORS.textSecondary, fontSize: "14px" }}
+                    >
                       No exports yet. Generate your first export above.
                     </Typography>
                   </Box>
@@ -1044,7 +1125,9 @@ const PlannerExports = () => {
                         sx={{
                           border: `1px solid ${item.type === "Weekly Plan" ? COLORS.green : COLORS.blue}`,
                           color:
-                            item.type === "Weekly Plan" ? COLORS.green : COLORS.blue,
+                            item.type === "Weekly Plan"
+                              ? COLORS.green
+                              : COLORS.blue,
                           px: 2,
                           py: 0.75,
                           borderRadius: "20px",
@@ -1087,12 +1170,22 @@ const PlannerExports = () => {
                             width: 8,
                             height: 8,
                             borderRadius: "50%",
-                            bgcolor: item.status === "Complete" ? COLORS.green : item.status === "Failed" ? COLORS.red : amberColor,
+                            bgcolor:
+                              item.status === "Complete"
+                                ? COLORS.green
+                                : item.status === "Failed"
+                                  ? COLORS.red
+                                  : amberColor,
                           }}
                         />
                         <Typography
                           sx={{
-                            color: item.status === "Complete" ? COLORS.green : item.status === "Failed" ? COLORS.red : amberColor,
+                            color:
+                              item.status === "Complete"
+                                ? COLORS.green
+                                : item.status === "Failed"
+                                  ? COLORS.red
+                                  : amberColor,
                             fontSize: "13px",
                             fontWeight: 500,
                           }}

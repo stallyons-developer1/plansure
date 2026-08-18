@@ -211,7 +211,6 @@ const AdminLayout = ({
       path: "/admin/programs-upload",
       isCustomIcon: true,
       iconSize: { width: 24, height: 24 },
-      // Hidden for now — lives as a tab inside the Project Workspace.
       hidden: true,
     },
     {

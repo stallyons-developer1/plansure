@@ -47,7 +47,10 @@
       "Bash(echo \"=== tsc exit: $?\")",
       "Bash(echo \"EXIT: $?\")",
       "Bash(awk 'NR>=740 && NR<=870 && /weekZone|generateWeekZones|getWeekZone|router.get|extractedData.activities|\\\\.map\\\\\\(/' routes/programmeUploadRoutes.js)",
-      "Bash(echo \"FRONTEND EXIT: $?\")"
+      "Bash(echo \"FRONTEND EXIT: $?\")",
+      "Bash(node --check routes/dashboardRoutes.js)",
+      "Bash(node scripts/generateM5TestCycle4PDF.js)",
+      "Bash(sips -s format png --out m5c4.png /Users/apple/Downloads/m5_test_cycle_4.pdf)"
     ]
   }
 }

@@ -12,9 +12,14 @@ interface RagData {
 interface DonutChartProps {
   data: RagData[];
   onTrackPercentage: number;
+  greyCount?: number;
 }
 
-const DonutChart = ({ data, onTrackPercentage }: DonutChartProps) => {
+const DonutChart = ({
+  data,
+  onTrackPercentage,
+  greyCount = 0,
+}: DonutChartProps) => {
   const radius = 40;
   const strokeWidth = 12;
   const gapAngle = 1.5;
@@ -31,7 +36,7 @@ const DonutChart = ({ data, onTrackPercentage }: DonutChartProps) => {
   };
 
   let currentAngle = 0;
-  const arcs: Array<typeof data[0] & { path: string }> = [];
+  const arcs: Array<(typeof data)[0] & { path: string }> = [];
 
   for (const item of data) {
     if (item.percentage > 0) {
@@ -43,10 +48,54 @@ const DonutChart = ({ data, onTrackPercentage }: DonutChartProps) => {
     currentAngle += (item.percentage / 100) * 360;
   }
 
+  // With nothing assessed every arc is 0-length and the ring renders blank, so
+  // fall back to a full grey circle the same way the Weekly Control RAG
+  // distribution does.
+  const isEmpty = arcs.length === 0;
+  const emptyTooltip =
+    greyCount > 0
+      ? `Unassigned — ${greyCount} activit${greyCount === 1 ? "y" : "ies"} awaiting triage (no action assigned yet)`
+      : "No activities assessed yet";
+
   return (
     <Box>
       <Box sx={{ position: "relative", width: 240, height: 240, mx: "auto" }}>
         <svg viewBox="0 0 100 100">
+          {isEmpty && (
+            <Tooltip
+              title={emptyTooltip}
+              placement="top"
+              arrow
+              slotProps={{
+                tooltip: {
+                  sx: {
+                    bgcolor: COLORS.bgSecondary,
+                    color: COLORS.textPrimary,
+                    border: `1px solid ${COLORS.border}`,
+                    fontSize: "12px",
+                    px: 1.5,
+                    py: 1,
+                    maxWidth: 220,
+                  },
+                },
+                arrow: {
+                  sx: {
+                    color: COLORS.bgSecondary,
+                  },
+                },
+              }}
+            >
+              <circle
+                cx={50}
+                cy={50}
+                r={radius}
+                fill="none"
+                stroke={COLORS.textMuted}
+                strokeWidth={strokeWidth}
+                style={{ cursor: "pointer" }}
+              />
+            </Tooltip>
+          )}
           {arcs.map((item, index) => (
             <Tooltip
               key={index}
@@ -199,6 +248,7 @@ interface WeeklyReadinessSnapshotProps {
     green: { count: number; percentage: number };
     amber: { count: number; percentage: number };
     red: { count: number; percentage: number };
+    grey?: { count: number };
   };
 }
 
@@ -214,27 +264,51 @@ const WeeklyReadinessSnapshot = ({
           value: distribution.green.count,
           percentage: distribution.green.percentage,
           color: COLORS.green,
-          tooltip: "Green activities are progressing as planned with no issues or delays expected.",
+          tooltip:
+            "Green activities are progressing as planned with no issues or delays expected.",
         },
         {
           label: "Amber — At Risk",
           value: distribution.amber.count,
           percentage: distribution.amber.percentage,
           color: COLORS.amber,
-          tooltip: "Amber activities have potential risks or minor delays that require monitoring.",
+          tooltip:
+            "Amber activities have potential risks or minor delays that require monitoring.",
         },
         {
           label: "Red — Critical",
           value: distribution.red.count,
           percentage: distribution.red.percentage,
           color: COLORS.red,
-          tooltip: "Red activities are behind schedule or have critical issues requiring immediate attention.",
+          tooltip:
+            "Red activities are behind schedule or have critical issues requiring immediate attention.",
         },
       ]
     : [
-        { label: "Green — On Track", value: 0, percentage: 0, color: COLORS.green, tooltip: "Green activities are progressing as planned with no issues or delays expected." },
-        { label: "Amber — At Risk", value: 0, percentage: 0, color: COLORS.amber, tooltip: "Amber activities have potential risks or minor delays that require monitoring." },
-        { label: "Red — Critical", value: 0, percentage: 0, color: COLORS.red, tooltip: "Red activities are behind schedule or have critical issues requiring immediate attention." },
+        {
+          label: "Green — On Track",
+          value: 0,
+          percentage: 0,
+          color: COLORS.green,
+          tooltip:
+            "Green activities are progressing as planned with no issues or delays expected.",
+        },
+        {
+          label: "Amber — At Risk",
+          value: 0,
+          percentage: 0,
+          color: COLORS.amber,
+          tooltip:
+            "Amber activities have potential risks or minor delays that require monitoring.",
+        },
+        {
+          label: "Red — Critical",
+          value: 0,
+          percentage: 0,
+          color: COLORS.red,
+          tooltip:
+            "Red activities are behind schedule or have critical issues requiring immediate attention.",
+        },
       ];
 
   const onTrackPercentage = distribution?.green.percentage || 0;
@@ -291,7 +365,11 @@ const WeeklyReadinessSnapshot = ({
           }}
         />
       </Box>
-      <DonutChart data={data} onTrackPercentage={onTrackPercentage} />
+      <DonutChart
+        data={data}
+        onTrackPercentage={onTrackPercentage}
+        greyCount={distribution?.grey?.count || 0}
+      />
     </Card>
   );
 };

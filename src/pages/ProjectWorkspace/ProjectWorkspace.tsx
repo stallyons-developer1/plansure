@@ -152,12 +152,21 @@ const StatCard = ({
   </Card>
 );
 
-// Parse a programme date string (DD-MMM-YY or ISO) to a Date (matches Admin/Planner)
 const wkParseDate = (dateStr: string): Date | null => {
   if (!dateStr) return null;
   const months: { [key: string]: number } = {
-    Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
-    Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11,
+    Jan: 0,
+    Feb: 1,
+    Mar: 2,
+    Apr: 3,
+    May: 4,
+    Jun: 5,
+    Jul: 6,
+    Aug: 7,
+    Sep: 8,
+    Oct: 9,
+    Nov: 10,
+    Dec: 11,
   };
   const cleanDate = dateStr.replace(/\s*[A*]$/, "").trim();
   const match = cleanDate.match(/(\d{2})-([A-Za-z]{3})-(\d{2})/);
@@ -172,7 +181,6 @@ const wkParseDate = (dateStr: string): Date | null => {
   return isNaN(date.getTime()) ? null : date;
 };
 
-// RAG zone sort priority (Completed first, then nearer weeks) — matches Admin/Planner
 const getRAGZonePriority = (zone: string): number => {
   switch (zone) {
     case "Completed":
@@ -217,13 +225,16 @@ const ProjectWorkspace = () => {
   const [weeklyControl, setWeeklyControl] = useState<{
     stats?: { inLookahead?: number; cycleStatus?: string };
     actionsByStatus?: { open?: number; overdue?: number };
-    weekInfo?: { currentWeekNumber?: number; totalWeeks?: number; closedWeeksCount?: number };
+    weekInfo?: {
+      currentWeekNumber?: number;
+      totalWeeks?: number;
+      closedWeeksCount?: number;
+    };
   } | null>(null);
   const [weeksStatus, setWeeksStatus] = useState<{
     weeks?: Array<{ isClosed?: boolean; closedAt?: string }>;
   } | null>(null);
 
-  // An open action whose week was PM-override-closed shouldn't count as "open"
   const isActionFromClosedWeek = (action: {
     createdAt?: string;
     status?: string;
@@ -257,7 +268,6 @@ const ProjectWorkspace = () => {
     "Closed",
   ];
 
-  // Map backend cycleStatus -> stepper index (1..5), same as Planner/Admin
   const stepFromCycleStatus = (cycleStatus?: string): number => {
     switch (cycleStatus) {
       case "Meeting Open":
@@ -303,11 +313,9 @@ const ProjectWorkspace = () => {
           const activitiesData = programme.extractedData?.activities || [];
 
           setActivities(activitiesData);
-          // Owner column shows whoever uploaded the programme PDF
           setUploaderName(programme.uploadedBy?.name || "");
           setProgrammeName(programme.name || programme.originalFileName || "");
 
-          // Derive cycle stepper from the programme's real cycle status
           setCurrentStep(stepFromCycleStatus(programme.cycleStatus));
 
           try {
@@ -319,7 +327,6 @@ const ProjectWorkspace = () => {
             console.error("Failed to fetch actions:", err);
           }
 
-          // Weekly control feeds the real Open/Overdue action counts + week info
           try {
             const wcRes = await programmeAPI.getWeeklyControl(programme._id);
             setWeeklyControl(wcRes || null);
@@ -327,7 +334,6 @@ const ProjectWorkspace = () => {
             console.error("Failed to fetch weekly control:", err);
           }
 
-          // Weeks status (used to exclude PM-override'd actions)
           try {
             const wsRes = await programmeAPI.getWeeksStatus(programme._id);
             setWeeksStatus(wsRes || null);
@@ -505,8 +511,8 @@ const ProjectWorkspace = () => {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  Week {weeklyControl?.weekInfo?.currentWeekNumber ?? 1} (Current
-                  Week)
+                  Week {weeklyControl?.weekInfo?.currentWeekNumber ?? 1}{" "}
+                  (Current Week)
                 </Typography>
               </Box>
               <Box
@@ -617,8 +623,6 @@ const ProjectWorkspace = () => {
 
         {activeTab === 0 &&
           (() => {
-            // Overview KPIs over the 6-week lookahead (matches the table),
-            // excluding PM-override'd actions — same as Admin/Planner.
             const ovToday = new Date();
             ovToday.setHours(0, 0, 0, 0);
             const ovSixWeekEnd = new Date(ovToday);
@@ -895,12 +899,42 @@ const ProjectWorkspace = () => {
                 </Typography>
               </Box>
               {[
-                { week: "Week 1", label: "Committed", color: COLORS.green, weekNum: 1 },
-                { week: "Week 2", label: "Committed", color: COLORS.green, weekNum: 2 },
-                { week: "Week 3", label: "Readiness", color: COLORS.amber, weekNum: 3 },
-                { week: "Week 4", label: "Readiness", color: COLORS.amber, weekNum: 4 },
-                { week: "Week 5", label: "Strategic", color: COLORS.red, weekNum: 5 },
-                { week: "Week 6", label: "Strategic", color: COLORS.red, weekNum: 6 },
+                {
+                  week: "Week 1",
+                  label: "Committed",
+                  color: COLORS.green,
+                  weekNum: 1,
+                },
+                {
+                  week: "Week 2",
+                  label: "Committed",
+                  color: COLORS.green,
+                  weekNum: 2,
+                },
+                {
+                  week: "Week 3",
+                  label: "Readiness",
+                  color: COLORS.amber,
+                  weekNum: 3,
+                },
+                {
+                  week: "Week 4",
+                  label: "Readiness",
+                  color: COLORS.amber,
+                  weekNum: 4,
+                },
+                {
+                  week: "Week 5",
+                  label: "Strategic",
+                  color: COLORS.red,
+                  weekNum: 5,
+                },
+                {
+                  week: "Week 6",
+                  label: "Strategic",
+                  color: COLORS.red,
+                  weekNum: 6,
+                },
               ].map((item) => (
                 <Box
                   key={item.weekNum}
@@ -1088,7 +1122,11 @@ const ProjectWorkspace = () => {
                 if (weekNum <= 2) return { zone: "Weeks 1-2", color: "green" };
                 if (weekNum <= 4) return { zone: "Weeks 3-4", color: "amber" };
                 if (weekNum <= 6) return { zone: "Weeks 5-6", color: "red" };
-                return { zone: `Week ${weekNum}`, color: "muted", beyond: true };
+                return {
+                  zone: `Week ${weekNum}`,
+                  color: "muted",
+                  beyond: true,
+                };
               };
 
               const statusTypeFor = (status: string): string => {
@@ -1120,43 +1158,45 @@ const ProjectWorkspace = () => {
                   ).beyond,
               );
 
-              const mapped: TableActivity[] = withinLookahead.map((activity) => {
-                const rag = ragZoneFor(
-                  activity.startDate,
-                  activity.finishDate,
-                  activity.activityStatus,
-                );
-                const linked = getActionsForActivity(activity.activityId);
-                const displayStatus =
-                  activity.activityStatus === "Complete"
-                    ? "Completed"
-                    : activity.activityStatus || "Ready";
-                return {
-                  id: activity.activityId,
-                  name: activity.activityName,
-                  startDate: activity.startDate,
-                  endDate: activity.finishDate,
-                  duration: activity.duration || "",
-                  ragZone: rag.zone,
-                  ragColor: rag.color,
-                  actions: linked.length,
-                  status: displayStatus,
-                  statusType: statusTypeFor(displayStatus),
-                  owner: {
-                    initials: ownerInitials,
-                    name: ownerName,
-                    color: COLORS.blue,
-                  },
-                  notes: "",
-                  linkedActionsData: linked.map((a) => ({
-                    _id: a._id,
-                    title: a.title,
-                    status: a.status,
-                    dueDate: a.dueDate,
-                    assignee: a.assignee,
-                  })),
-                };
-              });
+              const mapped: TableActivity[] = withinLookahead.map(
+                (activity) => {
+                  const rag = ragZoneFor(
+                    activity.startDate,
+                    activity.finishDate,
+                    activity.activityStatus,
+                  );
+                  const linked = getActionsForActivity(activity.activityId);
+                  const displayStatus =
+                    activity.activityStatus === "Complete"
+                      ? "Completed"
+                      : activity.activityStatus || "Ready";
+                  return {
+                    id: activity.activityId,
+                    name: activity.activityName,
+                    startDate: activity.startDate,
+                    endDate: activity.finishDate,
+                    duration: activity.duration || "",
+                    ragZone: rag.zone,
+                    ragColor: rag.color,
+                    actions: linked.length,
+                    status: displayStatus,
+                    statusType: statusTypeFor(displayStatus),
+                    owner: {
+                      initials: ownerInitials,
+                      name: ownerName,
+                      color: COLORS.blue,
+                    },
+                    notes: "",
+                    linkedActionsData: linked.map((a) => ({
+                      _id: a._id,
+                      title: a.title,
+                      status: a.status,
+                      dueDate: a.dueDate,
+                      assignee: a.assignee,
+                    })),
+                  };
+                },
+              );
 
               const totalPages = Math.ceil(mapped.length / activitiesPerPage);
               const startIndex = (activitiesPage - 1) * activitiesPerPage;
@@ -1184,8 +1224,6 @@ const ProjectWorkspace = () => {
                   case "Completed":
                     completeCount++;
                     break;
-                  // Unassigned (untriaged) is deliberately uncounted — it is
-                  // not Ready. Chips will not sum to the total.
                 }
               });
               const now = new Date();

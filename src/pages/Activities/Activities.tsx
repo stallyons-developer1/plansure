@@ -54,14 +54,21 @@ interface Action {
   linkedActivity?: { activityId?: string; activityName?: string };
 }
 
-// Helper to generate owner avatar color based on name
 const getOwnerColor = (name: string): string => {
-  const colors = ["#22C55E", "#F59E0B", "#3B82F6", "#EF4444", "#8B5CF6", "#EC4899"];
-  const hash = name.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  const colors = [
+    "#22C55E",
+    "#F59E0B",
+    "#3B82F6",
+    "#EF4444",
+    "#8B5CF6",
+    "#EC4899",
+  ];
+  const hash = name
+    .split("")
+    .reduce((acc, char) => acc + char.charCodeAt(0), 0);
   return colors[hash % colors.length];
 };
 
-// Helper to get initials from name
 const getInitials = (name: string): string => {
   if (!name) return "??";
   const parts = name.split(" ");
@@ -71,13 +78,22 @@ const getInitials = (name: string): string => {
   return name.substring(0, 2).toUpperCase();
 };
 
-// Helper to format date for display (handles DD-MMM-YY and ISO formats)
 const formatDateForDisplay = (dateStr: string): string => {
   if (!dateStr) return "";
 
   const months: { [key: string]: number } = {
-    Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
-    Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11,
+    Jan: 0,
+    Feb: 1,
+    Mar: 2,
+    Apr: 3,
+    May: 4,
+    Jun: 5,
+    Jul: 6,
+    Aug: 7,
+    Sep: 8,
+    Oct: 9,
+    Nov: 10,
+    Dec: 11,
   };
 
   const cleanDate = dateStr.replace(/\s*[A*]$/, "").trim();
@@ -108,14 +124,11 @@ const formatDateForDisplay = (dateStr: string): string => {
       const day = String(date.getUTCDate()).padStart(2, "0");
       return `${year}-${month}-${day}`;
     }
-  } catch {
-    // Fall through to return original string
-  }
+  } catch {}
 
   return dateStr;
 };
 
-// Helper to determine status badge color based on activity status
 const getStatusType = (activityStatus: string): string => {
   switch (activityStatus?.toLowerCase()) {
     case "complete":
@@ -135,9 +148,9 @@ const getStatusType = (activityStatus: string): string => {
   }
 };
 
-// Helper to get display status
 const getDisplayStatus = (activityStatus: string): string => {
-  if (activityStatus === "Complete" || activityStatus === "Completed") return "Completed";
+  if (activityStatus === "Complete" || activityStatus === "Completed")
+    return "Completed";
   if (activityStatus === "Blocked") return "Blocked";
   if (activityStatus === "At Risk") return "At Risk";
   if (activityStatus === "Action Open") return "Action Open";
@@ -145,13 +158,22 @@ const getDisplayStatus = (activityStatus: string): string => {
   return "Ready";
 };
 
-// Helper to parse date strings
 const parseDate = (dateStr: string): Date | null => {
   if (!dateStr) return null;
 
   const months: { [key: string]: number } = {
-    Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
-    Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11,
+    Jan: 0,
+    Feb: 1,
+    Mar: 2,
+    Apr: 3,
+    May: 4,
+    Jun: 5,
+    Jul: 6,
+    Aug: 7,
+    Sep: 8,
+    Oct: 9,
+    Nov: 10,
+    Dec: 11,
   };
 
   const cleanDate = dateStr.replace(/\s*[A*]$/, "").trim();
@@ -169,11 +191,10 @@ const parseDate = (dateStr: string): Date | null => {
   return isNaN(date.getTime()) ? null : date;
 };
 
-// Helper to calculate RAG zone based on dates (calculated from today)
 const calculateRagZone = (
   startDate: string,
   finishDate: string,
-  activityStatus?: string
+  activityStatus?: string,
 ): { zone: string; color: "green" | "amber" | "red" | "muted" | "blue" } => {
   const isCompleted =
     activityStatus === "Complete" ||
@@ -194,7 +215,9 @@ const calculateRagZone = (
   if (!start) return { zone: "N/A", color: "muted" };
 
   const msPerDay = 1000 * 60 * 60 * 24;
-  const daysFromToday = Math.floor((start.getTime() - today.getTime()) / msPerDay);
+  const daysFromToday = Math.floor(
+    (start.getTime() - today.getTime()) / msPerDay,
+  );
   const weeksUntilStart = Math.floor(daysFromToday / 7) + 1;
   if (weeksUntilStart <= 2) {
     return { zone: "Weeks 1-2", color: "green" };
@@ -218,7 +241,6 @@ const Activities = () => {
   const [programmeId, setProgrammeId] = useState<string>("");
   const [programmeActions, setProgrammeActions] = useState<Action[]>([]);
 
-  // Fetch projects on mount
   useEffect(() => {
     const fetchProjects = async () => {
       try {
@@ -241,7 +263,6 @@ const Activities = () => {
     fetchProjects();
   }, []);
 
-  // Fetch actions when programmeId changes (read-only display)
   useEffect(() => {
     const fetchActions = async () => {
       if (!programmeId) {
@@ -263,7 +284,6 @@ const Activities = () => {
     fetchActions();
   }, [programmeId]);
 
-  // Attach linked actions to activities for display
   useEffect(() => {
     if (activities.length > 0 && programmeActions.length > 0) {
       setActivities((prevActivities) =>
@@ -278,12 +298,11 @@ const Activities = () => {
               dueDate: a.dueDate,
               assignee: a.assignee,
             })),
-        }))
+        })),
       );
     }
   }, [programmeActions]);
 
-  // Fetch programme data when project changes
   useEffect(() => {
     const fetchProgrammeData = async () => {
       if (!selectedProjectId) {
@@ -310,7 +329,7 @@ const Activities = () => {
               const ragZoneData = calculateRagZone(
                 a.startDate || "",
                 a.finishDate || "",
-                a.activityStatus
+                a.activityStatus,
               );
 
               return {
@@ -330,12 +349,11 @@ const Activities = () => {
                   color: getOwnerColor(uploaderName),
                 },
               };
-            }
+            },
           );
 
           setActivities(transformedActivities);
 
-          // Generate week zones from today (6-week lookahead)
           if (programmeActivities.length > 0) {
             const todayForWeeks = new Date();
             todayForWeeks.setHours(0, 0, 0, 0);
@@ -371,7 +389,7 @@ const Activities = () => {
               now.toLocaleTimeString("en-GB", {
                 hour: "2-digit",
                 minute: "2-digit",
-              })
+              }),
           );
         } else {
           setActivities([]);
@@ -456,7 +474,6 @@ const Activities = () => {
       subtitle="View project activities and lookahead planning"
       headerAction={projectDropdown}
     >
-
       {isLoading || isLoadingActivities ? (
         <Box
           sx={{

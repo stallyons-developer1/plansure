@@ -58,13 +58,11 @@ interface WeeklyActionStats {
 }
 
 const AdminExports = () => {
-  // Project selection state
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [programmeId, setProgrammeId] = useState<string>("");
   const [loadingProjects, setLoadingProjects] = useState(true);
 
-  // Gating and export state
   const [gatingStatus, setGatingStatus] = useState<GatingStatus>({
     isGated: true,
     cycleStatus: "",
@@ -74,7 +72,6 @@ const AdminExports = () => {
   const [loadingData, setLoadingData] = useState(false);
   const [exporting, setExporting] = useState<"weekly" | "todo" | null>(null);
 
-  // Export counts and action stats (like Closure & Export tab)
   const [exportCounts, setExportCounts] = useState<ExportCounts>({
     weeklyPlanTotal: 0,
     outstandingActions: 0,
@@ -94,7 +91,6 @@ const AdminExports = () => {
   const greenColor = COLORS.green;
   const greenBg = "rgba(34, 197, 94, 0.15)";
 
-  // Unlock exports when cycle reaches "Execution" or "Close-Out Eligible"
   const isExportAllowed = [
     "Execution",
     "Close-Out Eligible",
@@ -104,7 +100,6 @@ const AdminExports = () => {
   const statusColor = isExportAllowed ? greenColor : amberColor;
   const statusBg = isExportAllowed ? greenBg : amberBg;
 
-  // Fetch projects on mount
   useEffect(() => {
     const fetchProjects = async () => {
       try {
@@ -113,7 +108,6 @@ const AdminExports = () => {
         if (res.success) {
           const projectsList = res.projects || [];
           setProjects(projectsList);
-          // Select first project by default
           if (projectsList.length > 0 && !selectedProjectId) {
             setSelectedProjectId(projectsList[0]._id);
           }
@@ -128,7 +122,6 @@ const AdminExports = () => {
     fetchProjects();
   }, []);
 
-  // Fetch programme when project changes
   useEffect(() => {
     const fetchProgramme = async () => {
       if (!selectedProjectId) {
@@ -148,10 +141,8 @@ const AdminExports = () => {
         if (response.success && response.programme) {
           setProgrammeId(response.programme._id);
 
-          // Get cycle status from programme
           const cycleStatus = response.programme.cycleStatus || "Draft";
 
-          // Get current week from weeks status
           let currentWeek = "W1";
           try {
             const weeksRes = await programmeAPI.getWeeksStatus(
@@ -189,18 +180,14 @@ const AdminExports = () => {
             currentWeek,
           });
 
-          // Fetch weekly control data for export counts
           try {
             const wcRes = await programmeAPI.getWeeklyControl(
               response.programme._id,
             );
 
-            // Calculate export counts - access response directly (not through .weeklyControl)
             const greenActivities = wcRes.ragDistribution?.green || 0;
             const blockedActivities = wcRes.ragDistribution?.red || 0;
 
-            // Outstanding actions for Planner To-Do = open + inProgress + overdue (from CURRENT 2 WEEKS only)
-            // Use weeklyActionsByStatus which is filtered to current week's actions
             const outstandingActions =
               (wcRes.weeklyActionsByStatus?.open || 0) +
               (wcRes.weeklyActionsByStatus?.inProgress || 0) +
@@ -218,7 +205,6 @@ const AdminExports = () => {
               greenActivities,
             });
 
-            // Calculate weekly action stats
             const openRequired =
               (wcRes.requiredActionsByStatus?.open || 0) +
               (wcRes.requiredActionsByStatus?.inProgress || 0);
@@ -230,7 +216,6 @@ const AdminExports = () => {
             console.error("Error fetching weekly control data:", e);
           }
 
-          // Fetch export history for this programme/project
           await fetchExportHistory(response.programme._id);
         } else {
           setProgrammeId("");
@@ -300,7 +285,6 @@ const AdminExports = () => {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-      // Refresh history after export
       await fetchExportHistory(programmeId);
     } catch (error) {
       console.error("Error exporting weekly plan:", error);
@@ -326,7 +310,6 @@ const AdminExports = () => {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-      // Refresh history after export
       await fetchExportHistory(programmeId);
     } catch (error) {
       console.error("Error exporting planner todo:", error);
@@ -354,7 +337,6 @@ const AdminExports = () => {
     }
   };
 
-  // Project dropdown component
   const projectDropdown = (
     <FormControl size="small" sx={{ minWidth: 200 }}>
       <Select

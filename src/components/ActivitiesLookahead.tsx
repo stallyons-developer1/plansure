@@ -26,7 +26,11 @@ interface ActivitiesLookaheadProps {
   lastUpdated: string;
   onAssignClick?: (activity: Activity) => void;
   onActionClick?: () => void;
-  onReassignClick?: (action: { _id: string; title: string; currentAssignee?: string }) => void;
+  onReassignClick?: (action: {
+    _id: string;
+    title: string;
+    currentAssignee?: string;
+  }) => void;
   isProjectEnded?: boolean;
 }
 
@@ -42,68 +46,61 @@ const ActivitiesLookahead = ({
   const [ragFilter, setRagFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [weekFilter, setWeekFilter] = useState<number | null>(null); // null = all weeks, 1-6 = specific week
+  const [weekFilter, setWeekFilter] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const activitiesPerPage = 20;
 
-  // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [ragFilter, statusFilter, searchQuery, weekFilter]);
 
-  // Helper to parse date string (handles YYYY-MM-DD format)
   const parseDate = (dateStr: string): Date | null => {
     if (!dateStr) return null;
     const date = new Date(dateStr);
     return isNaN(date.getTime()) ? null : date;
   };
 
-  // Use TODAY as the starting point for 6-week lookahead (not Monday)
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  // End of 6th week (6 weeks from today = 42 days)
   const sixWeekEnd = new Date(today);
   sixWeekEnd.setDate(today.getDate() + 42);
 
-  // Helper to get which week an activity falls into (1-6) based on today
   const getActivityWeek = (startDate: string): number | null => {
     const activityStart = parseDate(startDate);
     if (!activityStart) return null;
     const msPerDay = 1000 * 60 * 60 * 24;
-    const daysFromToday = Math.floor((activityStart.getTime() - today.getTime()) / msPerDay);
-    if (daysFromToday < 0) return null; // Before today = don't assign to any week filter
+    const daysFromToday = Math.floor(
+      (activityStart.getTime() - today.getTime()) / msPerDay,
+    );
+    if (daysFromToday < 0) return null;
     const weekNum = Math.floor(daysFromToday / 7) + 1;
-    if (weekNum > 6) return null; // Beyond 6 weeks
+    if (weekNum > 6) return null;
     return weekNum;
   };
 
-  // Check if activity matches the selected week filter
-  // Activities before today or beyond 6 weeks won't match any specific week
-  const activityMatchesWeek = (activity: Activity, weekNum: number): boolean => {
+  const activityMatchesWeek = (
+    activity: Activity,
+    weekNum: number,
+  ): boolean => {
     const activityWeek = getActivityWeek(activity.startDate);
-    if (activityWeek === null) return false; // Activity is before today or beyond 6 weeks
+    if (activityWeek === null) return false;
     return activityWeek === weekNum;
   };
 
   const filteredActivities = activities.filter((activity) => {
     const matchesRag = ragFilter === "all" || activity.ragColor === ragFilter;
-
-    // Status filter logic:
-    // - "on track" = Ready activities (respects week filter - All weeks or specific week)
-    // - "completed" = Complete/Completed activities
-    // - "at risk" = At Risk activities
-    // - "blocked" = Blocked activities
     let matchesStatus = false;
     const activityStatus = activity.status.toLowerCase();
 
     if (statusFilter === "all") {
       matchesStatus = true;
     } else if (statusFilter === "on track") {
-      // On Track = Ready activities (week filter is applied separately below)
-      matchesStatus = activityStatus === "ready" || activityStatus === "on track";
+      matchesStatus =
+        activityStatus === "ready" || activityStatus === "on track";
     } else if (statusFilter === "completed") {
-      matchesStatus = activityStatus === "complete" || activityStatus === "completed";
+      matchesStatus =
+        activityStatus === "complete" || activityStatus === "completed";
     } else if (statusFilter === "at risk") {
       matchesStatus = activityStatus === "at risk";
     } else if (statusFilter === "blocked") {
@@ -115,22 +112,26 @@ const ActivitiesLookahead = ({
       activity.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       activity.id.toLowerCase().includes(searchQuery.toLowerCase());
 
-    // Apply 6-week lookahead filter: only show activities from TODAY to 6 weeks ahead
     const activityStart = parseDate(activity.startDate);
-    // Must be >= today AND < sixWeekEnd
-    const withinLookahead = !activityStart || (activityStart >= today && activityStart < sixWeekEnd);
+    const withinLookahead =
+      !activityStart || (activityStart >= today && activityStart < sixWeekEnd);
 
-    // Week filter - if a specific week is selected, filter by that week
-    const matchesWeek = weekFilter === null || activityMatchesWeek(activity, weekFilter);
+    const matchesWeek =
+      weekFilter === null || activityMatchesWeek(activity, weekFilter);
 
-    return matchesRag && matchesStatus && matchesSearch && withinLookahead && matchesWeek;
+    return (
+      matchesRag &&
+      matchesStatus &&
+      matchesSearch &&
+      withinLookahead &&
+      matchesWeek
+    );
   });
 
-  // Sort activities by RAG zone order: Weeks 1-2, Weeks 3-4, Weeks 5-6, In Progress, then others
   const getRagZoneSortOrder = (ragZone: string): number => {
     switch (ragZone) {
       case "Completed":
-        return 0; // Show completed activities at the top
+        return 0;
       case "Weeks 1-2":
         return 1;
       case "Weeks 3-4":
@@ -140,7 +141,7 @@ const ActivitiesLookahead = ({
       case "In Progress":
         return 4;
       default:
-        return 6; // Any other zone goes last
+        return 6;
     }
   };
 
@@ -150,7 +151,6 @@ const ActivitiesLookahead = ({
     if (orderA !== orderB) {
       return orderA - orderB;
     }
-    // Secondary sort by start date within the same RAG zone
     const dateA = parseDate(a.startDate);
     const dateB = parseDate(b.startDate);
     if (dateA && dateB) {
@@ -159,7 +159,6 @@ const ActivitiesLookahead = ({
     return 0;
   });
 
-  // Calculate counts from sorted activities (dynamic based on filters)
   let readyCount = 0;
   let atRiskCount = 0;
   let blockedCount = 0;
@@ -179,8 +178,6 @@ const ActivitiesLookahead = ({
       case "Completed":
         completeCount++;
         break;
-      // Unassigned (untriaged) is deliberately uncounted — it is
-      // not Ready. Chips will not sum to the total.
     }
   });
 
@@ -414,7 +411,8 @@ const ActivitiesLookahead = ({
             sx={{
               minWidth: 70,
               height: 87,
-              bgcolor: weekFilter === null ? COLORS.blueBgMedium : COLORS.bgPrimary,
+              bgcolor:
+                weekFilter === null ? COLORS.blueBgMedium : COLORS.bgPrimary,
               border: `2px solid ${weekFilter === null ? COLORS.blue : COLORS.border}`,
               borderRadius: "8px",
               display: "flex",
@@ -477,7 +475,11 @@ const ActivitiesLookahead = ({
               >
                 <Typography
                   sx={{
-                    color: isSelected ? weekColor : week.isCurrent ? COLORS.blue : COLORS.textPrimary,
+                    color: isSelected
+                      ? weekColor
+                      : week.isCurrent
+                        ? COLORS.blue
+                        : COLORS.textPrimary,
                     fontSize: "12px",
                     fontWeight: isSelected ? 700 : 600,
                   }}
@@ -486,7 +488,11 @@ const ActivitiesLookahead = ({
                 </Typography>
                 <Typography
                   sx={{
-                    color: isSelected ? weekColor : week.isCurrent ? COLORS.blue : COLORS.textSecondary,
+                    color: isSelected
+                      ? weekColor
+                      : week.isCurrent
+                        ? COLORS.blue
+                        : COLORS.textSecondary,
                     fontSize: "12px",
                     fontWeight: 400,
                   }}
@@ -550,10 +556,12 @@ const ActivitiesLookahead = ({
         </Box>
       ) : (
         (() => {
-          const totalPages = Math.ceil(sortedActivities.length / activitiesPerPage);
+          const totalPages = Math.ceil(
+            sortedActivities.length / activitiesPerPage,
+          );
           const paginatedActivities = sortedActivities.slice(
             (currentPage - 1) * activitiesPerPage,
-            currentPage * activitiesPerPage
+            currentPage * activitiesPerPage,
           );
 
           return (

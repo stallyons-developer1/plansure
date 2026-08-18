@@ -74,6 +74,7 @@ interface RagDistribution {
   green: { count: number; percentage: number };
   amber: { count: number; percentage: number };
   red: { count: number; percentage: number };
+  grey?: { count: number };
 }
 
 const AdminDashboard = () => {
@@ -98,7 +99,6 @@ const AdminDashboard = () => {
         if (res.success) {
           const projectsList = res.projects || [];
           setProjects(projectsList);
-          // Select first project by default
           if (projectsList.length > 0 && !selectedProjectId) {
             setSelectedProjectId(projectsList[0]._id);
           }
@@ -116,7 +116,6 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     const fetchDashboardData = async () => {
-      // Only fetch when a project is selected
       if (!selectedProjectId) {
         return;
       }
@@ -157,21 +156,6 @@ const AdminDashboard = () => {
     return project?.name || "Select Project";
   };
 
-  const getCycleStatusColor = (status: string) => {
-    switch (status) {
-      case "Draft":
-        return COLORS.textSecondary;
-      case "In Review":
-        return COLORS.amber;
-      case "Approved":
-        return COLORS.green;
-      case "Closed":
-        return COLORS.blue;
-      default:
-        return COLORS.textSecondary;
-    }
-  };
-
   const getPhaseBreakdown = () => {
     if (!stats?.projects.byPhase) return "No active projects";
     const phases = Object.entries(stats.projects.byPhase);
@@ -201,7 +185,6 @@ const AdminDashboard = () => {
     );
   }
 
-  // Show empty state when no projects exist
   if (projects.length === 0) {
     return (
       <AdminLayout
@@ -396,37 +379,8 @@ const AdminDashboard = () => {
                       fontSize: "14px",
                     }}
                   >
-                    — {stats.cycle.current} cycle is currently
+                    — {stats.cycle.current} cycle
                   </Typography>
-                  <Box
-                    sx={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 0.75,
-                      bgcolor: COLORS.bgTertiary,
-                      px: 1.5,
-                      py: 0.5,
-                      borderRadius: "20px",
-                    }}
-                  >
-                    <Box
-                      sx={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: "50%",
-                        bgcolor: getCycleStatusColor(stats.cycle.status),
-                      }}
-                    />
-                    <Typography
-                      sx={{
-                        color: getCycleStatusColor(stats.cycle.status),
-                        fontWeight: 600,
-                        fontSize: "12px",
-                      }}
-                    >
-                      {stats.cycle.status}
-                    </Typography>
-                  </Box>
                 </>
               )}
               {!stats?.cycle.programmeName && (
@@ -628,7 +582,7 @@ const AdminDashboard = () => {
                   mb: 0.5,
                 }}
               >
-                Current 2-Week Cycle
+                Current Week
               </Typography>
               <Typography
                 sx={{
@@ -745,7 +699,7 @@ const AdminDashboard = () => {
                   component="span"
                   sx={{ color: COLORS.red, fontSize: "12px", fontWeight: 400 }}
                 >
-                  {stats?.activities.red || 0} critical
+                  {stats?.activities.red || 0} overdue
                 </Typography>
               </Box>
             </Box>

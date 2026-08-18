@@ -61,6 +61,7 @@ interface RagDistribution {
   green: { count: number; percentage: number };
   amber: { count: number; percentage: number };
   red: { count: number; percentage: number };
+  grey?: { count: number };
 }
 
 interface Project {
@@ -143,20 +144,6 @@ const Dashboard = () => {
     return project?.name || "All Projects";
   };
 
-  const getCycleStatusColor = (status: string) => {
-    switch (status) {
-      case "In Review":
-        return COLORS.amber;
-      case "Approved":
-      case "Uploaded":
-        return COLORS.green;
-      case "Closed":
-        return COLORS.blue;
-      default:
-        return COLORS.textSecondary;
-    }
-  };
-
   const projectDropdown = (
     <FormControl size="small" sx={{ minWidth: 200 }}>
       <Select
@@ -214,10 +201,7 @@ const Dashboard = () => {
 
   if (projectsLoading) {
     return (
-      <DashboardLayout
-        title="Dashboard"
-        subtitle="Project overview and status"
-      >
+      <DashboardLayout title="Dashboard" subtitle="Project overview and status">
         <Box
           sx={{
             display: "flex",
@@ -234,10 +218,7 @@ const Dashboard = () => {
 
   if (projects.length === 0) {
     return (
-      <DashboardLayout
-        title="Dashboard"
-        subtitle="Project overview and status"
-      >
+      <DashboardLayout title="Dashboard" subtitle="Project overview and status">
         <Box
           sx={{
             display: "flex",
@@ -333,37 +314,8 @@ const Dashboard = () => {
                   fontSize: "14px",
                 }}
               >
-                — {stats.cycle.current} cycle is currently
+                — {stats.cycle.current} cycle
               </Typography>
-              <Box
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 0.75,
-                  bgcolor: COLORS.bgTertiary,
-                  px: 1.5,
-                  py: 0.5,
-                  borderRadius: "20px",
-                }}
-              >
-                <Box
-                  sx={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: "50%",
-                    bgcolor: getCycleStatusColor(stats.cycle.status),
-                  }}
-                />
-                <Typography
-                  sx={{
-                    color: getCycleStatusColor(stats.cycle.status),
-                    fontWeight: 600,
-                    fontSize: "12px",
-                  }}
-                >
-                  {stats.cycle.status}
-                </Typography>
-              </Box>
             </>
           ) : (
             <Typography
@@ -430,7 +382,7 @@ const Dashboard = () => {
                   mb: 0.5,
                 }}
               >
-                Current 2-Week Cycle
+                Current Week
               </Typography>
               <Typography
                 sx={{
@@ -539,7 +491,7 @@ const Dashboard = () => {
                   component="span"
                   sx={{ color: COLORS.red, fontSize: "12px" }}
                 >
-                  {stats?.activities.red || 0} critical
+                  {stats?.activities.red || 0} overdue
                 </Typography>
               </Box>
             </Box>

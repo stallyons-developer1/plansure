@@ -125,7 +125,6 @@ const AdminActions = () => {
   const [actionToComplete, setActionToComplete] = useState<Action | null>(null);
   const [completeLoading, setCompleteLoading] = useState(false);
 
-  // Toast state
   const [toastOpen, setToastOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
 
@@ -180,29 +179,30 @@ const AdminActions = () => {
     return programme?._id || null;
   };
 
-  // Check if the current project's cycle is in execution mode
   const isExecutionMode = (): boolean => {
     if (!selectedProjectId) return false;
     const programme = programmes.find((p) => p.project === selectedProjectId);
     if (!programme?.cycleStatus) return false;
-    return programme.cycleStatus === "Execution" || programme.cycleStatus === "Close-Out Eligible" || programme.cycleStatus === "Closed";
+    return (
+      programme.cycleStatus === "Execution" ||
+      programme.cycleStatus === "Close-Out Eligible" ||
+      programme.cycleStatus === "Closed"
+    );
   };
 
   useEffect(() => {
     const fetchData = async () => {
       setActionsLoading(true);
       try {
-        const [projectsRes, usersRes, , programmesRes] =
-          await Promise.all([
-            projectAPI.getAll(),
-            userAPI.getAll({ status: "active" }),
-            actionAPI.getAll(),
-            programmeAPI.getAll(),
-          ]);
+        const [projectsRes, usersRes, , programmesRes] = await Promise.all([
+          projectAPI.getAll(),
+          userAPI.getAll({ status: "active" }),
+          actionAPI.getAll(),
+          programmeAPI.getAll(),
+        ]);
 
         if (projectsRes.success && projectsRes.projects) {
           setProjects(projectsRes.projects);
-          // Select first project by default
           if (projectsRes.projects.length > 0) {
             setSelectedProjectId(projectsRes.projects[0]._id);
           }
@@ -227,7 +227,6 @@ const AdminActions = () => {
     fetchData();
   }, []);
 
-  // Fetch actions when selected project changes
   useEffect(() => {
     if (programmes.length > 0) {
       fetchActions(selectedProjectId);
@@ -290,7 +289,6 @@ const AdminActions = () => {
     }
   };
 
-  // Start of today (midnight) - actions are only overdue after due date has fully passed
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
 
@@ -319,11 +317,11 @@ const AdminActions = () => {
     return matchesStatus && matchesType && matchesSearch;
   });
 
-  // Compute stats from the actions array (for the selected project)
   const computedStats = {
     total: actions.length,
     open: actions.filter((a) => {
-      const isOverdue = a.status !== "Completed" && new Date(a.dueDate) < startOfToday;
+      const isOverdue =
+        a.status !== "Completed" && new Date(a.dueDate) < startOfToday;
       return (a.status === "Open" || a.status === "In Progress") && !isOverdue;
     }).length,
     closed: actions.filter((a) => a.status === "Completed").length,
@@ -482,7 +480,7 @@ const AdminActions = () => {
       const response = await actionAPI.complete(actionToComplete._id);
       if (response.success) {
         await fetchActions();
-                handleCloseCompleteConfirm();
+        handleCloseCompleteConfirm();
       }
     } catch (error) {
       console.error("Failed to complete action:", error);
@@ -550,7 +548,7 @@ const AdminActions = () => {
 
         if (response.success) {
           await fetchActions();
-                    handleCloseModal();
+          handleCloseModal();
         }
       } else {
         const programmeId = getProgrammeIdForProject(formData.selectedProject);
@@ -591,7 +589,7 @@ const AdminActions = () => {
 
         if (response.success) {
           await fetchActions();
-                    handleCloseModal();
+          handleCloseModal();
         }
       }
     } catch (error: unknown) {
@@ -721,7 +719,10 @@ const AdminActions = () => {
               },
             }}
           >
-            <Box component="span" sx={{ display: { xs: "none", sm: "inline" } }}>
+            <Box
+              component="span"
+              sx={{ display: { xs: "none", sm: "inline" } }}
+            >
               Create Action
             </Box>
           </Button>
@@ -1264,7 +1265,13 @@ const AdminActions = () => {
                       "&:last-child": { borderBottom: "none" },
                     }}
                   >
-                    <Typography sx={{ color: COLORS.blue, fontSize: "13px", textAlign: "center" }}>
+                    <Typography
+                      sx={{
+                        color: COLORS.blue,
+                        fontSize: "13px",
+                        textAlign: "center",
+                      }}
+                    >
                       {action._id.slice(-6).toUpperCase()}
                     </Typography>
 
@@ -1281,7 +1288,13 @@ const AdminActions = () => {
                       {action.title}
                     </Typography>
 
-                    <Typography sx={{ color: COLORS.blue, fontSize: "13px", textAlign: "center" }}>
+                    <Typography
+                      sx={{
+                        color: COLORS.blue,
+                        fontSize: "13px",
+                        textAlign: "center",
+                      }}
+                    >
                       {action.linkedActivity?.activityId || "-"}
                     </Typography>
 
@@ -1309,7 +1322,14 @@ const AdminActions = () => {
                       </Box>
                     </Box>
 
-                    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 1 }}>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 1,
+                      }}
+                    >
                       <Box
                         sx={{
                           width: 28,
@@ -1341,7 +1361,11 @@ const AdminActions = () => {
                     </Box>
 
                     <Typography
-                      sx={{ color: COLORS.textSecondary, fontSize: "13px", textAlign: "center" }}
+                      sx={{
+                        color: COLORS.textSecondary,
+                        fontSize: "13px",
+                        textAlign: "center",
+                      }}
                     >
                       {action.dueDate
                         ? new Date(action.dueDate).toLocaleDateString()
@@ -1384,13 +1408,22 @@ const AdminActions = () => {
                       </Box>
                     </Box>
 
-                    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 1 }}>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 1,
+                      }}
+                    >
                       <Box
                         component="img"
                         src={editIcon}
                         onClick={() => {
                           if (!isExecutionMode()) {
-                            setToastMessage("Execution has not started yet. Please start execution first.");
+                            setToastMessage(
+                              "Execution has not started yet. Please start execution first.",
+                            );
                             setToastOpen(true);
                             return;
                           }
@@ -1411,9 +1444,16 @@ const AdminActions = () => {
                             !isExecutionMode() || action.status === "Completed"
                               ? "not-allowed"
                               : "pointer",
-                          opacity: !isExecutionMode() || action.status === "Completed" ? 0.3 : 0.6,
+                          opacity:
+                            !isExecutionMode() || action.status === "Completed"
+                              ? 0.3
+                              : 0.6,
                           "&:hover": {
-                            opacity: !isExecutionMode() || action.status === "Completed" ? 0.3 : 1,
+                            opacity:
+                              !isExecutionMode() ||
+                              action.status === "Completed"
+                                ? 0.3
+                                : 1,
                           },
                         }}
                       />
@@ -1422,7 +1462,9 @@ const AdminActions = () => {
                         src={frameIcon}
                         onClick={() => {
                           if (!isExecutionMode()) {
-                            setToastMessage("Execution has not started yet. Please start execution first.");
+                            setToastMessage(
+                              "Execution has not started yet. Please start execution first.",
+                            );
                             setToastOpen(true);
                             return;
                           }
@@ -1459,16 +1501,15 @@ const AdminActions = () => {
                               user?.role !== "admin")
                               ? "not-allowed"
                               : "pointer",
-                          opacity:
-                            !isExecutionMode()
-                              ? 0.3
-                              : action.status === "Completed"
-                                ? 1
-                                : String(action.assignee?._id || "") !==
-                                      String(user?.id || "") &&
-                                    user?.role !== "admin"
-                                  ? 0.3
-                                  : 0.6,
+                          opacity: !isExecutionMode()
+                            ? 0.3
+                            : action.status === "Completed"
+                              ? 1
+                              : String(action.assignee?._id || "") !==
+                                    String(user?.id || "") &&
+                                  user?.role !== "admin"
+                                ? 0.3
+                                : 0.6,
                           filter:
                             action.status === "Completed"
                               ? "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(5323%) hue-rotate(107deg) brightness(92%) contrast(88%)"
@@ -2315,7 +2356,6 @@ const AdminActions = () => {
                   }
                   slotProps={{
                     htmlInput: {
-                      // Due date can be set from today onward.
                       min: new Date().toLocaleDateString("en-CA"),
                     },
                     input: {

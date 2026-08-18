@@ -144,10 +144,17 @@ const ProjectCard = ({
   project: Project;
   onViewDashboard: () => void;
 }) => {
-  const statusColor = project.status.toLowerCase() === "active" ? COLORS.green : COLORS.amber;
+  const statusColor =
+    project.status.toLowerCase() === "active" ? COLORS.green : COLORS.amber;
   const governanceScore = project.governanceScore || 0;
-  const governanceColor = governanceScore >= 70 ? COLORS.green : governanceScore >= 50 ? COLORS.amber : COLORS.red;
-  const governanceStatus = governanceScore >= 70 ? "green" : governanceScore >= 50 ? "amber" : "red";
+  const governanceColor =
+    governanceScore >= 70
+      ? COLORS.green
+      : governanceScore >= 50
+        ? COLORS.amber
+        : COLORS.red;
+  const governanceStatus =
+    governanceScore >= 70 ? "green" : governanceScore >= 50 ? "amber" : "red";
   const totalActivities = project.totalActivities || 0;
   const openActions = project.openActions || 0;
   const progress = project.progress || 0;
@@ -444,11 +451,9 @@ const AdminProjects = () => {
     fetchProjects();
   }, []);
 
-  // Check if navigated with openCreateModal state
   useEffect(() => {
     if (location.state?.openCreateModal) {
       setNewProjectModalOpen(true);
-      // Clear the state to prevent modal reopening on refresh
       window.history.replaceState({}, document.title);
     }
   }, [location.state]);
@@ -499,9 +504,8 @@ const AdminProjects = () => {
   const handleCreateProject = async () => {
     setFieldErrors({});
 
-    // Check if project name already exists (case-insensitive)
     const duplicateProject = projects.find(
-      (p) => p.name.toLowerCase().trim() === projectName.toLowerCase().trim()
+      (p) => p.name.toLowerCase().trim() === projectName.toLowerCase().trim(),
     );
     if (duplicateProject) {
       setFieldErrors({ name: "A project with this name already exists" });

@@ -79,7 +79,6 @@ interface Action {
   linkedActivity?: { activityId?: string; activityName?: string };
 }
 
-// Helper to generate owner avatar color based on name
 const getOwnerColor = (name: string): string => {
   const colors = [
     "#22C55E",
@@ -95,7 +94,6 @@ const getOwnerColor = (name: string): string => {
   return colors[hash % colors.length];
 };
 
-// Helper to get initials from name
 const getInitials = (name: string): string => {
   if (!name) return "??";
   const parts = name.split(" ");
@@ -105,7 +103,6 @@ const getInitials = (name: string): string => {
   return name.substring(0, 2).toUpperCase();
 };
 
-// Helper to format date for display (handles DD-MMM-YY and ISO formats)
 const formatDateForDisplay = (dateStr: string): string => {
   if (!dateStr) return "";
 
@@ -124,10 +121,8 @@ const formatDateForDisplay = (dateStr: string): string => {
     Dec: 11,
   };
 
-  // Clean suffix like " A" or " *" (indicates actual/completed)
   const cleanDate = dateStr.replace(/\s*[A*]$/, "").trim();
 
-  // Handle DD-MMM-YY format (e.g., "10-May-26")
   const ddMmmYyMatch = cleanDate.match(/(\d{2})-([A-Za-z]{3})-(\d{2})/);
   if (ddMmmYyMatch) {
     const day = parseInt(ddMmmYyMatch[1]);
@@ -137,18 +132,15 @@ const formatDateForDisplay = (dateStr: string): string => {
     return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
   }
 
-  // Already in YYYY-MM-DD format
   if (/^\d{4}-\d{2}-\d{2}$/.test(cleanDate)) {
     return cleanDate;
   }
 
-  // Handle ISO datetime format (e.g., "2026-05-10T00:00:00.000Z")
   const isoMatch = cleanDate.match(/^(\d{4})-(\d{2})-(\d{2})T/);
   if (isoMatch) {
     return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
   }
 
-  // Fallback: try native Date parsing with UTC methods to avoid timezone shift
   try {
     const date = new Date(dateStr);
     if (!isNaN(date.getTime())) {
@@ -157,14 +149,11 @@ const formatDateForDisplay = (dateStr: string): string => {
       const day = String(date.getUTCDate()).padStart(2, "0");
       return `${year}-${month}-${day}`;
     }
-  } catch {
-    // Fall through to return original string
-  }
+  } catch {}
 
   return dateStr;
 };
 
-// Helper to determine status badge color based on activity status
 const getStatusType = (activityStatus: string): string => {
   switch (activityStatus?.toLowerCase()) {
     case "complete":
@@ -184,7 +173,6 @@ const getStatusType = (activityStatus: string): string => {
   }
 };
 
-// Helper to get display status
 const getDisplayStatus = (activityStatus: string): string => {
   if (activityStatus === "Complete" || activityStatus === "Completed")
     return "Completed";
@@ -195,7 +183,6 @@ const getDisplayStatus = (activityStatus: string): string => {
   return "Ready";
 };
 
-// Helper to parse date strings
 const parseDate = (dateStr: string): Date | null => {
   if (!dateStr) return null;
 
@@ -229,13 +216,11 @@ const parseDate = (dateStr: string): Date | null => {
   return isNaN(date.getTime()) ? null : date;
 };
 
-// Helper to calculate RAG zone based on dates (calculated from Monday of current week)
 const calculateRagZone = (
   startDate: string,
   finishDate: string,
   activityStatus?: string,
 ): { zone: string; color: "green" | "amber" | "red" | "muted" | "blue" } => {
-  // Check if completed
   const isCompleted =
     activityStatus === "Complete" ||
     activityStatus === "Completed" ||
@@ -256,7 +241,6 @@ const calculateRagZone = (
 
   const msPerDay = 1000 * 60 * 60 * 24;
 
-  // Calculate which week from today (not Monday)
   const daysFromToday = Math.floor(
     (start.getTime() - today.getTime()) / msPerDay,
   );
@@ -285,7 +269,6 @@ const AdminActivities = () => {
   const [programmeActions, setProgrammeActions] = useState<Action[]>([]);
   const [isProjectEnded, setIsProjectEnded] = useState(false);
 
-  // Assign modal state
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [assigningActivity, setAssigningActivity] = useState<Activity | null>(
     null,
@@ -301,7 +284,6 @@ const AdminActivities = () => {
   const [assignSaveLoading, setAssignSaveLoading] = useState(false);
   const [assignError, setAssignError] = useState("");
 
-  // Reassign modal state
   const [reassignModalOpen, setReassignModalOpen] = useState(false);
   const [reassigningAction, setReassigningAction] = useState<{
     _id: string;
@@ -313,7 +295,6 @@ const AdminActivities = () => {
   const [reassignLoading, setReassignLoading] = useState(false);
   const [reassignError, setReassignError] = useState("");
 
-  // Fetch projects on mount
   useEffect(() => {
     const fetchProjects = async () => {
       try {
@@ -322,7 +303,6 @@ const AdminActivities = () => {
         if (res.success) {
           const projectsList = res.projects || [];
           setProjects(projectsList);
-          // Select first project by default
           if (projectsList.length > 0 && !selectedProjectId) {
             setSelectedProjectId(projectsList[0]._id);
           }
@@ -337,13 +317,11 @@ const AdminActivities = () => {
     fetchProjects();
   }, []);
 
-  // Fetch users for assign dropdown (only active planners)
   useEffect(() => {
     const fetchUsers = async () => {
       try {
         const res = await userAPI.getAll({ status: "active" });
         if (res.success) {
-          // Filter to active planners and users (assignable members)
           const activePlanners = (res.users || []).filter(
             (user: User) =>
               (user.role === "planner" || user.role === "user") &&
@@ -359,7 +337,6 @@ const AdminActivities = () => {
     fetchUsers();
   }, []);
 
-  // Fetch actions when programmeId changes
   useEffect(() => {
     const fetchActions = async () => {
       if (!programmeId) {
@@ -381,7 +358,6 @@ const AdminActivities = () => {
     fetchActions();
   }, [programmeId]);
 
-  // Fetch isProjectEnded status when programmeId changes
   useEffect(() => {
     const fetchProjectStatus = async () => {
       if (!programmeId) {
@@ -403,7 +379,6 @@ const AdminActivities = () => {
     fetchProjectStatus();
   }, [programmeId]);
 
-  // Helper to get actions for a specific activity
   const getActionsForActivity = (activityId: string): Action[] => {
     return programmeActions.filter(
       (action) => action.linkedActivity?.activityId === activityId,
@@ -412,7 +387,6 @@ const AdminActivities = () => {
 
   const assignableUsers = users.filter((u) => u.status === "active");
 
-  // Update activities with linked actions when programmeActions changes
   useEffect(() => {
     if (activities.length > 0 && programmeActions.length > 0) {
       setActivities((prevActivities) =>
@@ -430,7 +404,6 @@ const AdminActivities = () => {
     }
   }, [programmeActions]);
 
-  // Fetch programme data when project changes
   useEffect(() => {
     const fetchProgrammeData = async () => {
       if (!selectedProjectId) {
@@ -450,10 +423,8 @@ const AdminActivities = () => {
           const programmeActivities: ProgrammeActivity[] =
             programme.extractedData?.activities || [];
 
-          // Get the uploader name from the programme
           const uploaderName = programme.uploadedBy?.name || "Admin";
 
-          // Use today's date for weekStart calculation
           const today = new Date();
           today.setHours(0, 0, 0, 0);
           const dayOfWeek = today.getDay();
@@ -461,10 +432,8 @@ const AdminActivities = () => {
           const weekStart = new Date(today);
           weekStart.setDate(today.getDate() - daysToMonday);
 
-          // Transform activities to match the Activity interface
           const transformedActivities: Activity[] = programmeActivities.map(
             (a, index) => {
-              // Calculate RAG zone based on dates (from today)
               const ragZoneData = calculateRagZone(
                 a.startDate || "",
                 a.finishDate || "",
@@ -493,7 +462,6 @@ const AdminActivities = () => {
 
           setActivities(transformedActivities);
 
-          // Generate week zones from TODAY (6-week lookahead from current date)
           if (programmeActivities.length > 0) {
             const todayForWeeks = new Date();
             todayForWeeks.setHours(0, 0, 0, 0);
@@ -505,7 +473,6 @@ const AdminActivities = () => {
               const weekEnd = new Date(weekStartDate);
               weekEnd.setDate(weekStartDate.getDate() + 6);
 
-              // Week 1 is always current week
               const isCurrent = i === 0;
 
               const formatDate = (d: Date) =>
@@ -521,7 +488,6 @@ const AdminActivities = () => {
             setWeeks(generatedWeeks);
           }
 
-          // Set last updated timestamp
           const now = new Date();
           setLastUpdated(
             now.toLocaleDateString("en-GB", {
@@ -536,7 +502,6 @@ const AdminActivities = () => {
               }),
           );
         } else {
-          // No programme found for this project
           setActivities([]);
           setWeeks([]);
           setProgrammeId("");
@@ -588,7 +553,6 @@ const AdminActivities = () => {
     navigate("/admin/action");
   };
 
-  // Reassign modal handlers
   const handleOpenReassign = (action: {
     _id: string;
     title: string;
@@ -633,7 +597,6 @@ const AdminActivities = () => {
       });
 
       if (response.success) {
-        // Refresh actions data
         if (programmeId) {
           const actionsResponse = await actionAPI.getByProgramme(programmeId);
           if (actionsResponse.success && actionsResponse.actions) {
@@ -695,12 +658,10 @@ const AdminActivities = () => {
 
       if (response.success) {
         handleAssignClose();
-        // Refresh actions data to show the new assignment
         const actionsResponse = await actionAPI.getByProgramme(programmeId);
         if (actionsResponse.success && actionsResponse.actions) {
           setProgrammeActions(actionsResponse.actions);
         }
-        // Refresh the activities data
         const progResponse = await programmeAPI.getByProject(selectedProjectId);
         if (progResponse.success && progResponse.programme) {
           const programmeActivities: ProgrammeActivity[] =
@@ -709,7 +670,6 @@ const AdminActivities = () => {
             progResponse.programme.uploadedBy?.name || "Admin";
           const freshActions = actionsResponse?.actions || [];
 
-          // Use today's date for weekStart calculation
           const todayRefresh = new Date();
           todayRefresh.setHours(0, 0, 0, 0);
           const dayOfWeekRefresh = todayRefresh.getDay();
@@ -722,7 +682,6 @@ const AdminActivities = () => {
 
           const transformedActivities: Activity[] = programmeActivities.map(
             (a, index) => {
-              // Calculate RAG zone based on dates (from today)
               const ragZoneData = calculateRagZone(
                 a.startDate || "",
                 a.finishDate || "",
@@ -1331,8 +1290,6 @@ const AdminActivities = () => {
                   }
                   slotProps={{
                     htmlInput: {
-                      // Due date can be set from today; activity start date is
-                      // no longer the floor.
                       min: new Date().toLocaleDateString("en-CA"),
                       max: assigningActivity?.endDate,
                     },

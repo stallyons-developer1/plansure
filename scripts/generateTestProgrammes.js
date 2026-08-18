@@ -1,11 +1,22 @@
 import PDFDocument from "pdfkit";
 import fs from "fs";
 
-// Generate multiple test programmes for Governance Dashboard demo
-
 const today = new Date();
 const formatDate = (date) => {
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const months = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
   const d = new Date(date);
   return `${String(d.getDate()).padStart(2, "0")}-${months[d.getMonth()]}-${String(d.getFullYear()).slice(-2)}`;
 };
@@ -16,7 +27,6 @@ const addDays = (date, days) => {
   return result;
 };
 
-// Colors
 const ORANGE = "#D35400";
 const BLACK = "#000000";
 const GRAY = "#666666";
@@ -39,7 +49,6 @@ function generateProgrammePDF(config) {
 
   const pageWidth = doc.page.width - 30;
 
-  // Column positions
   const COL_ID_X = 15;
   const COL_ID_WIDTH = 85;
   const COL_NAME_X = 100;
@@ -56,7 +65,6 @@ function generateProgrammePDF(config) {
 
   let y = 15;
 
-  // Title
   doc.fontSize(12).fillColor(BLACK);
   doc.text(config.title, 15, y);
   doc.fontSize(8).fillColor(GRAY);
@@ -64,7 +72,6 @@ function generateProgrammePDF(config) {
 
   y += 35;
 
-  // Column Headers
   doc.rect(COL_ID_X, y, TABLE_END_X - COL_ID_X, 22).fill(HEADER_BG);
   doc.rect(GANTT_START_X, y, GANTT_WIDTH, 22).fill(HEADER_BG);
 
@@ -75,8 +82,20 @@ function generateProgrammePDF(config) {
   doc.text("Start", COL_START_X + 3, y + 6);
   doc.text("Finish", COL_FINISH_X + 3, y + 6);
 
-  // Timeline months
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const months = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
   doc.fontSize(7).fillColor(GRAY);
 
   const timelineStart = new Date(2026, 0, 1);
@@ -98,54 +117,74 @@ function generateProgrammePDF(config) {
   });
 
   doc.strokeColor(GRAY).lineWidth(0.5);
-  [COL_NAME_X, COL_DURATION_X, COL_START_X, COL_FINISH_X, TABLE_END_X].forEach(x => {
-    doc.moveTo(x, y).lineTo(x, y + 22).stroke();
-  });
+  [COL_NAME_X, COL_DURATION_X, COL_START_X, COL_FINISH_X, TABLE_END_X].forEach(
+    (x) => {
+      doc
+        .moveTo(x, y)
+        .lineTo(x, y + 22)
+        .stroke();
+    },
+  );
 
   y += 22;
 
-  // Draw rows
   const rowHeight = 20;
   doc.font("Helvetica");
 
   config.activities.forEach((activity, index) => {
     const rowY = y + index * rowHeight;
 
-    // Row backgrounds
     if (index % 2 === 0) {
-      doc.rect(COL_ID_X, rowY, TABLE_END_X - COL_ID_X, rowHeight).fill("#FAFAFA");
+      doc
+        .rect(COL_ID_X, rowY, TABLE_END_X - COL_ID_X, rowHeight)
+        .fill("#FAFAFA");
     } else {
       doc.rect(COL_ID_X, rowY, TABLE_END_X - COL_ID_X, rowHeight).fill(WHITE);
     }
 
     if (activity.isHeader) {
-      doc.rect(COL_ID_X, rowY, COL_NAME_X - COL_ID_X + COL_NAME_WIDTH, rowHeight).fill(ORANGE);
+      doc
+        .rect(COL_ID_X, rowY, COL_NAME_X - COL_ID_X + COL_NAME_WIDTH, rowHeight)
+        .fill(ORANGE);
     }
 
-    doc.rect(GANTT_START_X, rowY, GANTT_WIDTH, rowHeight).fill(index % 2 === 0 ? "#FAFAFA" : WHITE);
+    doc
+      .rect(GANTT_START_X, rowY, GANTT_WIDTH, rowHeight)
+      .fill(index % 2 === 0 ? "#FAFAFA" : WHITE);
 
-    // Grid lines
     doc.strokeColor(LIGHT_GRAY).lineWidth(0.3);
     doc.rect(COL_ID_X, rowY, TABLE_END_X - COL_ID_X, rowHeight).stroke();
     doc.rect(GANTT_START_X, rowY, GANTT_WIDTH, rowHeight).stroke();
 
-    [COL_NAME_X, COL_DURATION_X, COL_START_X, COL_FINISH_X].forEach(x => {
-      doc.moveTo(x, rowY).lineTo(x, rowY + rowHeight).stroke();
+    [COL_NAME_X, COL_DURATION_X, COL_START_X, COL_FINISH_X].forEach((x) => {
+      doc
+        .moveTo(x, rowY)
+        .lineTo(x, rowY + rowHeight)
+        .stroke();
     });
 
-    // Text content
     doc.fontSize(7);
     doc.fillColor(activity.isHeader ? WHITE : BLACK);
     doc.font(activity.isHeader ? "Helvetica-Bold" : "Helvetica");
     doc.text(activity.id, COL_ID_X + 3, rowY + 6, { width: COL_ID_WIDTH - 6 });
-    doc.text(activity.name, COL_NAME_X + 3, rowY + 6, { width: COL_NAME_WIDTH - 6 });
+    doc.text(activity.name, COL_NAME_X + 3, rowY + 6, {
+      width: COL_NAME_WIDTH - 6,
+    });
 
     doc.font("Helvetica").fillColor(BLACK);
-    doc.text(activity.duration, COL_DURATION_X + 3, rowY + 6, { width: COL_DURATION_WIDTH - 6, align: "center" });
-    doc.text(activity.start, COL_START_X + 3, rowY + 6, { width: COL_START_WIDTH - 6, align: "center" });
-    doc.text(activity.finish, COL_FINISH_X + 3, rowY + 6, { width: COL_FINISH_WIDTH - 6, align: "center" });
+    doc.text(activity.duration, COL_DURATION_X + 3, rowY + 6, {
+      width: COL_DURATION_WIDTH - 6,
+      align: "center",
+    });
+    doc.text(activity.start, COL_START_X + 3, rowY + 6, {
+      width: COL_START_WIDTH - 6,
+      align: "center",
+    });
+    doc.text(activity.finish, COL_FINISH_X + 3, rowY + 6, {
+      width: COL_FINISH_WIDTH - 6,
+      align: "center",
+    });
 
-    // Gantt bars
     const barY = rowY + 5;
     const barHeight = 10;
 
@@ -154,40 +193,56 @@ function generateProgrammePDF(config) {
       if (milestoneX >= GANTT_START_X && milestoneX <= pageWidth - 20) {
         const size = 5;
         doc.fillColor(BLACK);
-        doc.moveTo(milestoneX, barY + barHeight / 2 - size)
+        doc
+          .moveTo(milestoneX, barY + barHeight / 2 - size)
           .lineTo(milestoneX + size, barY + barHeight / 2)
           .lineTo(milestoneX, barY + barHeight / 2 + size)
           .lineTo(milestoneX - size, barY + barHeight / 2)
           .fill();
       }
     } else if (activity.startDate && activity.endDate) {
-      const barStartX = Math.max(getXForDate(activity.startDate), GANTT_START_X);
+      const barStartX = Math.max(
+        getXForDate(activity.startDate),
+        GANTT_START_X,
+      );
       const barEndX = Math.min(getXForDate(activity.endDate), pageWidth - 15);
       const barWidth = barEndX - barStartX;
 
       if (barWidth > 0) {
         if (activity.isHeader) {
           doc.strokeColor(activity.barColor || ORANGE).lineWidth(2);
-          doc.moveTo(barStartX, barY + barHeight).lineTo(barStartX, barY + barHeight - 3).stroke();
-          doc.moveTo(barStartX, barY + barHeight).lineTo(barEndX, barY + barHeight).stroke();
-          doc.moveTo(barEndX, barY + barHeight).lineTo(barEndX, barY + barHeight - 3).stroke();
+          doc
+            .moveTo(barStartX, barY + barHeight)
+            .lineTo(barStartX, barY + barHeight - 3)
+            .stroke();
+          doc
+            .moveTo(barStartX, barY + barHeight)
+            .lineTo(barEndX, barY + barHeight)
+            .stroke();
+          doc
+            .moveTo(barEndX, barY + barHeight)
+            .lineTo(barEndX, barY + barHeight - 3)
+            .stroke();
         } else {
-          doc.rect(barStartX, barY, barWidth, barHeight).fill(activity.barColor || BLUE);
+          doc
+            .rect(barStartX, barY, barWidth, barHeight)
+            .fill(activity.barColor || BLUE);
         }
       }
     }
   });
 
-  // Footer
   const footerY = y + config.activities.length * rowHeight + 20;
   doc.fontSize(6).fillColor(GRAY);
-  doc.text("Generated by PlanSure | " + new Date().toLocaleString(), 15, footerY);
+  doc.text(
+    "Generated by PlanSure | " + new Date().toLocaleString(),
+    15,
+    footerY,
+  );
 
   doc.end();
-  console.log(`Generated: ${config.outputPath}`);
 }
 
-// Programme 1: Airport Terminal Project - Has Material Delivery delays
 const programme1 = {
   title: "Airport Terminal 2 Expansion / 2026 Programme",
   outputPath: "./test-programme-1.pdf",
@@ -295,7 +350,6 @@ const programme1 = {
   ],
 };
 
-// Programme 2: Commercial Tower Project - Has Approval & Subcontractor delays
 const programme2 = {
   title: "Commercial Tower Development / 2026 Programme",
   outputPath: "./test-programme-2.pdf",
@@ -403,7 +457,6 @@ const programme2 = {
   ],
 };
 
-// Programme 3: Hospital Project - Has Resource & Design delays
 const programme3 = {
   title: "Central Hospital Expansion / 2026 Programme",
   outputPath: "./test-programme-3.pdf",
@@ -511,7 +564,6 @@ const programme3 = {
   ],
 };
 
-// Programme 4: Infrastructure Project - Good progress, minimal delays
 const programme4 = {
   title: "Highway Extension Project / 2026 Programme",
   outputPath: "./test-programme-4.pdf",
@@ -618,17 +670,7 @@ const programme4 = {
   ],
 };
 
-// Generate all PDFs
-console.log("Generating test programmes...\n");
 generateProgrammePDF(programme1);
 generateProgrammePDF(programme2);
 generateProgrammePDF(programme3);
 generateProgrammePDF(programme4);
-
-console.log("\n=== Summary ===");
-console.log("Generated 4 test programmes:");
-console.log("1. Airport Terminal 2 - Material Delivery delays (Overdue)");
-console.log("2. Commercial Tower - Approvals & Subcontractor delays (Overdue)");
-console.log("3. Central Hospital - Design & Resource delays (Overdue)");
-console.log("4. Highway Extension - Good progress (minimal delays)");
-console.log("\nUpload these to different projects to see Constraint Intelligence data!");
