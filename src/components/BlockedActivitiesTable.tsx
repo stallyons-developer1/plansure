@@ -81,10 +81,20 @@ interface BlockedActivitiesTableProps {
   activities?: BlockedActivity[];
   weeklyPlanPreview?: WeeklyPlanActivity[];
   plannerToDo?: PlannerToDoItem[];
-  onAssignClick?: (activity: { activityId: string; activityName: string; startDate?: string; finishDate?: string }) => void;
+  onAssignClick?: (activity: {
+    activityId: string;
+    activityName: string;
+    startDate?: string;
+    finishDate?: string;
+  }) => void;
   onUnblockClick?: (activityId: string) => void;
   onActionIdClick?: (actionId: string) => void;
-  onReassignClick?: (action: { _id?: string; actionId: string; title: string; currentAssignee?: string }) => void;
+  onReassignClick?: (action: {
+    _id?: string;
+    actionId: string;
+    title: string;
+    currentAssignee?: string;
+  }) => void;
   isProjectEnded?: boolean;
   cycleStatus?: string;
 }
@@ -100,7 +110,8 @@ const BlockedActivitiesTable = ({
   isProjectEnded = false,
   cycleStatus = "",
 }: BlockedActivitiesTableProps) => {
-  const canUnblock = cycleStatus === "Execution" || cycleStatus === "Close-Out Eligible";
+  const canUnblock =
+    cycleStatus === "Execution" || cycleStatus === "Close-Out Eligible";
   const [activeTab, setActiveTab] = useState(0);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
@@ -118,8 +129,8 @@ const BlockedActivitiesTable = ({
 
   const tabs = [
     "Blocked / Risk Activities",
-    "Weekly Plan Preview",
-    "Planner To-Do",
+    // "Weekly Plan Preview",
+    // "Planner To-Do",
   ];
 
   const formatDate = (dateString: string) => {
@@ -358,7 +369,9 @@ const BlockedActivitiesTable = ({
                     ) : (
                       <Button
                         onClick={() =>
-                          !isProjectEnded && !activity.isBlocked && onAssignClick?.({
+                          !isProjectEnded &&
+                          !activity.isBlocked &&
+                          onAssignClick?.({
                             activityId: activity.activityId,
                             activityName: activity.activityName,
                             startDate: activity.startDate,
@@ -376,18 +389,31 @@ const BlockedActivitiesTable = ({
                         sx={{
                           fontSize: "11px",
                           fontWeight: 500,
-                          color: (isProjectEnded || activity.isBlocked) ? COLORS.textMuted : COLORS.blue,
+                          color:
+                            isProjectEnded || activity.isBlocked
+                              ? COLORS.textMuted
+                              : COLORS.blue,
                           textTransform: "none",
-                          bgcolor: (isProjectEnded || activity.isBlocked) ? "transparent" : COLORS.blueBgLight,
-                          border: `1px solid ${(isProjectEnded || activity.isBlocked) ? COLORS.textMuted : COLORS.blue}50`,
+                          bgcolor:
+                            isProjectEnded || activity.isBlocked
+                              ? "transparent"
+                              : COLORS.blueBgLight,
+                          border: `1px solid ${isProjectEnded || activity.isBlocked ? COLORS.textMuted : COLORS.blue}50`,
                           borderRadius: "6px",
                           px: 1.5,
                           py: 0.3,
                           minWidth: "auto",
-                          cursor: (isProjectEnded || activity.isBlocked) ? "not-allowed" : "pointer",
-                          opacity: (isProjectEnded || activity.isBlocked) ? 0.5 : 1,
+                          cursor:
+                            isProjectEnded || activity.isBlocked
+                              ? "not-allowed"
+                              : "pointer",
+                          opacity:
+                            isProjectEnded || activity.isBlocked ? 0.5 : 1,
                           "&:hover": {
-                            bgcolor: (isProjectEnded || activity.isBlocked) ? "transparent" : COLORS.blueBgMedium,
+                            bgcolor:
+                              isProjectEnded || activity.isBlocked
+                                ? "transparent"
+                                : COLORS.blueBgMedium,
                           },
                         }}
                       >
@@ -410,7 +436,9 @@ const BlockedActivitiesTable = ({
                   <Box sx={{ display: "flex", justifyContent: "center" }}>
                     {activity.linkedAction?.actionId ? (
                       <Typography
-                        onClick={() => onActionIdClick?.(activity.linkedAction!.actionId)}
+                        onClick={() =>
+                          onActionIdClick?.(activity.linkedAction!.actionId)
+                        }
                         sx={{
                           color: COLORS.blue,
                           fontSize: "11px",
@@ -454,7 +482,9 @@ const BlockedActivitiesTable = ({
                         <Box
                           sx={{
                             bgcolor: `${chipColor}20`,
-                            border: isRed ? `1px solid ${COLORS.red}40` : "none",
+                            border: isRed
+                              ? `1px solid ${COLORS.red}40`
+                              : "none",
                             color: chipColor,
                             px: 1.5,
                             py: 0.5,
@@ -484,23 +514,39 @@ const BlockedActivitiesTable = ({
                       >
                         <span>
                           <Button
-                            onClick={() => canUnblock && !isProjectEnded && onUnblockClick?.(activity.activityId)}
+                            onClick={() =>
+                              canUnblock &&
+                              !isProjectEnded &&
+                              onUnblockClick?.(activity.activityId)
+                            }
                             disabled={isProjectEnded || !canUnblock}
                             sx={{
                               fontSize: "11px",
                               fontWeight: 500,
-                              color: (isProjectEnded || !canUnblock) ? COLORS.textMuted : COLORS.green,
+                              color:
+                                isProjectEnded || !canUnblock
+                                  ? COLORS.textMuted
+                                  : COLORS.green,
                               textTransform: "none",
-                              bgcolor: (isProjectEnded || !canUnblock) ? "transparent" : `${COLORS.green}15`,
-                              border: `1px solid ${(isProjectEnded || !canUnblock) ? COLORS.textMuted : COLORS.green}50`,
+                              bgcolor:
+                                isProjectEnded || !canUnblock
+                                  ? "transparent"
+                                  : `${COLORS.green}15`,
+                              border: `1px solid ${isProjectEnded || !canUnblock ? COLORS.textMuted : COLORS.green}50`,
                               borderRadius: "6px",
                               px: 1.5,
                               py: 0.3,
                               minWidth: "auto",
-                              cursor: (isProjectEnded || !canUnblock) ? "not-allowed" : "pointer",
-                              opacity: (isProjectEnded || !canUnblock) ? 0.5 : 1,
+                              cursor:
+                                isProjectEnded || !canUnblock
+                                  ? "not-allowed"
+                                  : "pointer",
+                              opacity: isProjectEnded || !canUnblock ? 0.5 : 1,
                               "&:hover": {
-                                bgcolor: (isProjectEnded || !canUnblock) ? "transparent" : `${COLORS.green}25`,
+                                bgcolor:
+                                  isProjectEnded || !canUnblock
+                                    ? "transparent"
+                                    : `${COLORS.green}25`,
                               },
                             }}
                           >
@@ -509,7 +555,9 @@ const BlockedActivitiesTable = ({
                         </span>
                       </Tooltip>
                     ) : (
-                      <Typography sx={{ color: COLORS.textMuted, fontSize: "11px" }}>
+                      <Typography
+                        sx={{ color: COLORS.textMuted, fontSize: "11px" }}
+                      >
                         -
                       </Typography>
                     )}
@@ -534,31 +582,120 @@ const BlockedActivitiesTable = ({
                 <Table size="small">
                   <TableHead>
                     <TableRow sx={{ bgcolor: "transparent" }}>
-                      <TableCell sx={{ color: COLORS.textMuted, fontSize: "11px", fontWeight: 600, borderBottom: `1px solid ${COLORS.border}`, py: 1.5, pl: 2, letterSpacing: "0.05em" }}>
+                      <TableCell
+                        sx={{
+                          color: COLORS.textMuted,
+                          fontSize: "11px",
+                          fontWeight: 600,
+                          borderBottom: `1px solid ${COLORS.border}`,
+                          py: 1.5,
+                          pl: 2,
+                          letterSpacing: "0.05em",
+                        }}
+                      >
                         ACTIVITY ID
                       </TableCell>
-                      <TableCell sx={{ color: COLORS.textMuted, fontSize: "11px", fontWeight: 600, borderBottom: `1px solid ${COLORS.border}`, py: 1.5, letterSpacing: "0.05em" }}>
+                      <TableCell
+                        sx={{
+                          color: COLORS.textMuted,
+                          fontSize: "11px",
+                          fontWeight: 600,
+                          borderBottom: `1px solid ${COLORS.border}`,
+                          py: 1.5,
+                          letterSpacing: "0.05em",
+                        }}
+                      >
                         ACTIVITY NAME
                       </TableCell>
-                      <TableCell align="center" sx={{ color: COLORS.textMuted, fontSize: "11px", fontWeight: 600, borderBottom: `1px solid ${COLORS.border}`, py: 1.5, letterSpacing: "0.05em" }}>
+                      <TableCell
+                        align="center"
+                        sx={{
+                          color: COLORS.textMuted,
+                          fontSize: "11px",
+                          fontWeight: 600,
+                          borderBottom: `1px solid ${COLORS.border}`,
+                          py: 1.5,
+                          letterSpacing: "0.05em",
+                        }}
+                      >
                         START
                       </TableCell>
-                      <TableCell align="center" sx={{ color: COLORS.textMuted, fontSize: "11px", fontWeight: 600, borderBottom: `1px solid ${COLORS.border}`, py: 1.5, letterSpacing: "0.05em" }}>
+                      <TableCell
+                        align="center"
+                        sx={{
+                          color: COLORS.textMuted,
+                          fontSize: "11px",
+                          fontWeight: 600,
+                          borderBottom: `1px solid ${COLORS.border}`,
+                          py: 1.5,
+                          letterSpacing: "0.05em",
+                        }}
+                      >
                         END
                       </TableCell>
-                      <TableCell align="center" sx={{ color: COLORS.textMuted, fontSize: "11px", fontWeight: 600, borderBottom: `1px solid ${COLORS.border}`, py: 1.5, letterSpacing: "0.05em" }}>
+                      <TableCell
+                        align="center"
+                        sx={{
+                          color: COLORS.textMuted,
+                          fontSize: "11px",
+                          fontWeight: 600,
+                          borderBottom: `1px solid ${COLORS.border}`,
+                          py: 1.5,
+                          letterSpacing: "0.05em",
+                        }}
+                      >
                         DURATION
                       </TableCell>
-                      <TableCell align="center" sx={{ color: COLORS.textMuted, fontSize: "11px", fontWeight: 600, borderBottom: `1px solid ${COLORS.border}`, py: 1.5, letterSpacing: "0.05em" }}>
+                      <TableCell
+                        align="center"
+                        sx={{
+                          color: COLORS.textMuted,
+                          fontSize: "11px",
+                          fontWeight: 600,
+                          borderBottom: `1px solid ${COLORS.border}`,
+                          py: 1.5,
+                          letterSpacing: "0.05em",
+                        }}
+                      >
                         ACTIONS
                       </TableCell>
-                      <TableCell align="center" sx={{ color: COLORS.textMuted, fontSize: "11px", fontWeight: 600, borderBottom: `1px solid ${COLORS.border}`, py: 1.5, letterSpacing: "0.05em" }}>
+                      <TableCell
+                        align="center"
+                        sx={{
+                          color: COLORS.textMuted,
+                          fontSize: "11px",
+                          fontWeight: 600,
+                          borderBottom: `1px solid ${COLORS.border}`,
+                          py: 1.5,
+                          letterSpacing: "0.05em",
+                        }}
+                      >
                         RAG
                       </TableCell>
-                      <TableCell align="center" sx={{ color: COLORS.textMuted, fontSize: "11px", fontWeight: 600, borderBottom: `1px solid ${COLORS.border}`, py: 1.5, letterSpacing: "0.05em" }}>
+                      <TableCell
+                        align="center"
+                        sx={{
+                          color: COLORS.textMuted,
+                          fontSize: "11px",
+                          fontWeight: 600,
+                          borderBottom: `1px solid ${COLORS.border}`,
+                          py: 1.5,
+                          letterSpacing: "0.05em",
+                        }}
+                      >
                         STATUS
                       </TableCell>
-                      <TableCell align="center" sx={{ color: COLORS.textMuted, fontSize: "11px", fontWeight: 600, borderBottom: `1px solid ${COLORS.border}`, py: 1.5, letterSpacing: "0.05em" }}>
+                      <TableCell
+                        align="center"
+                        sx={{
+                          color: COLORS.textMuted,
+                          fontSize: "11px",
+                          fontWeight: 600,
+                          borderBottom: `1px solid ${COLORS.border}`,
+                          py: 1.5,
+                          letterSpacing: "0.05em",
+                        }}
+                      >
                         OWNER
                       </TableCell>
                     </TableRow>
@@ -566,9 +703,26 @@ const BlockedActivitiesTable = ({
                   <TableBody>
                     {weeklyPlanPreview.map((activity) => {
                       const isExpanded = expandedRows.has(activity.activityId);
-                      const hasActions = (activity.linkedActions?.length || 0) > 0 || (activity.actionsCount || 0) > 0;
-                      const ragColor = activity.ragStatus === "Green" ? COLORS.green : activity.ragStatus === "Amber" ? COLORS.amber : activity.ragStatus === "Blue" ? COLORS.blue : COLORS.red;
-                      const statusColor = activity.activityStatus === "Ready" ? COLORS.green : (activity.activityStatus === "Complete" || activity.activityStatus === "Completed") ? COLORS.blue : activity.activityStatus === "Blocked" ? COLORS.red : COLORS.amber;
+                      const hasActions =
+                        (activity.linkedActions?.length || 0) > 0 ||
+                        (activity.actionsCount || 0) > 0;
+                      const ragColor =
+                        activity.ragStatus === "Green"
+                          ? COLORS.green
+                          : activity.ragStatus === "Amber"
+                            ? COLORS.amber
+                            : activity.ragStatus === "Blue"
+                              ? COLORS.blue
+                              : COLORS.red;
+                      const statusColor =
+                        activity.activityStatus === "Ready"
+                          ? COLORS.green
+                          : activity.activityStatus === "Complete" ||
+                              activity.activityStatus === "Completed"
+                            ? COLORS.blue
+                            : activity.activityStatus === "Blocked"
+                              ? COLORS.red
+                              : COLORS.amber;
 
                       return (
                         <Fragment key={activity.activityId}>
@@ -576,34 +730,112 @@ const BlockedActivitiesTable = ({
                             key={activity.activityId}
                             sx={{
                               "&:hover": { bgcolor: "rgba(255,255,255,0.02)" },
-                              bgcolor: isExpanded ? "rgba(59, 130, 246, 0.05)" : "transparent",
+                              bgcolor: isExpanded
+                                ? "rgba(59, 130, 246, 0.05)"
+                                : "transparent",
                               cursor: hasActions ? "pointer" : "default",
                             }}
-                            onClick={() => hasActions && toggleRow(activity.activityId)}
+                            onClick={() =>
+                              hasActions && toggleRow(activity.activityId)
+                            }
                           >
-                            <TableCell sx={{ color: COLORS.blue, fontSize: "13px", fontWeight: 500, borderBottom: isExpanded ? `1px solid ${COLORS.border}` : "none", py: 1.5, pl: 2 }}>
+                            <TableCell
+                              sx={{
+                                color: COLORS.blue,
+                                fontSize: "13px",
+                                fontWeight: 500,
+                                borderBottom: isExpanded
+                                  ? `1px solid ${COLORS.border}`
+                                  : "none",
+                                py: 1.5,
+                                pl: 2,
+                              }}
+                            >
                               {activity.activityId}
                             </TableCell>
-                            <TableCell sx={{ color: COLORS.textPrimary, fontSize: "13px", borderBottom: isExpanded ? `1px solid ${COLORS.border}` : "none", py: 1.5 }}>
-                              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                            <TableCell
+                              sx={{
+                                color: COLORS.textPrimary,
+                                fontSize: "13px",
+                                borderBottom: isExpanded
+                                  ? `1px solid ${COLORS.border}`
+                                  : "none",
+                                py: 1.5,
+                              }}
+                            >
+                              <Box
+                                sx={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 0.5,
+                                }}
+                              >
                                 {hasActions && (
-                                  <IconButton size="small" sx={{ color: COLORS.textSecondary, p: 0.25 }}>
-                                    {isExpanded ? <KeyboardArrowDown fontSize="small" /> : <KeyboardArrowRight fontSize="small" />}
+                                  <IconButton
+                                    size="small"
+                                    sx={{
+                                      color: COLORS.textSecondary,
+                                      p: 0.25,
+                                    }}
+                                  >
+                                    {isExpanded ? (
+                                      <KeyboardArrowDown fontSize="small" />
+                                    ) : (
+                                      <KeyboardArrowRight fontSize="small" />
+                                    )}
                                   </IconButton>
                                 )}
                                 {activity.activityName}
                               </Box>
                             </TableCell>
-                            <TableCell align="center" sx={{ color: COLORS.textSecondary, fontSize: "13px", borderBottom: isExpanded ? `1px solid ${COLORS.border}` : "none", py: 1.5 }}>
+                            <TableCell
+                              align="center"
+                              sx={{
+                                color: COLORS.textSecondary,
+                                fontSize: "13px",
+                                borderBottom: isExpanded
+                                  ? `1px solid ${COLORS.border}`
+                                  : "none",
+                                py: 1.5,
+                              }}
+                            >
                               {formatDate(activity.startDate)}
                             </TableCell>
-                            <TableCell align="center" sx={{ color: COLORS.textSecondary, fontSize: "13px", borderBottom: isExpanded ? `1px solid ${COLORS.border}` : "none", py: 1.5 }}>
+                            <TableCell
+                              align="center"
+                              sx={{
+                                color: COLORS.textSecondary,
+                                fontSize: "13px",
+                                borderBottom: isExpanded
+                                  ? `1px solid ${COLORS.border}`
+                                  : "none",
+                                py: 1.5,
+                              }}
+                            >
                               {formatDate(activity.finishDate)}
                             </TableCell>
-                            <TableCell align="center" sx={{ color: COLORS.textSecondary, fontSize: "13px", borderBottom: isExpanded ? `1px solid ${COLORS.border}` : "none", py: 1.5 }}>
+                            <TableCell
+                              align="center"
+                              sx={{
+                                color: COLORS.textSecondary,
+                                fontSize: "13px",
+                                borderBottom: isExpanded
+                                  ? `1px solid ${COLORS.border}`
+                                  : "none",
+                                py: 1.5,
+                              }}
+                            >
                               {activity.duration || "-"}
                             </TableCell>
-                            <TableCell align="center" sx={{ borderBottom: isExpanded ? `1px solid ${COLORS.border}` : "none", py: 1.5 }}>
+                            <TableCell
+                              align="center"
+                              sx={{
+                                borderBottom: isExpanded
+                                  ? `1px solid ${COLORS.border}`
+                                  : "none",
+                                py: 1.5,
+                              }}
+                            >
                               <Typography
                                 sx={{
                                   fontSize: "12px",
@@ -612,10 +844,19 @@ const BlockedActivitiesTable = ({
                                   "&:hover": { textDecoration: "underline" },
                                 }}
                               >
-                                {activity.actionsCount || 0} action{(activity.actionsCount || 0) !== 1 ? "s" : ""}
+                                {activity.actionsCount || 0} action
+                                {(activity.actionsCount || 0) !== 1 ? "s" : ""}
                               </Typography>
                             </TableCell>
-                            <TableCell align="center" sx={{ borderBottom: isExpanded ? `1px solid ${COLORS.border}` : "none", py: 1.5 }}>
+                            <TableCell
+                              align="center"
+                              sx={{
+                                borderBottom: isExpanded
+                                  ? `1px solid ${COLORS.border}`
+                                  : "none",
+                                py: 1.5,
+                              }}
+                            >
                               <Box
                                 sx={{
                                   bgcolor: `${ragColor}20`,
@@ -630,7 +871,14 @@ const BlockedActivitiesTable = ({
                                   gap: 0.75,
                                 }}
                               >
-                                <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: ragColor }} />
+                                <Box
+                                  sx={{
+                                    width: 6,
+                                    height: 6,
+                                    borderRadius: "50%",
+                                    bgcolor: ragColor,
+                                  }}
+                                />
                                 {activity.ragStatus === "Red"
                                   ? "Blocked"
                                   : activity.ragStatus === "Amber"
@@ -642,7 +890,15 @@ const BlockedActivitiesTable = ({
                                         : "Unassigned"}
                               </Box>
                             </TableCell>
-                            <TableCell align="center" sx={{ borderBottom: isExpanded ? `1px solid ${COLORS.border}` : "none", py: 1.5 }}>
+                            <TableCell
+                              align="center"
+                              sx={{
+                                borderBottom: isExpanded
+                                  ? `1px solid ${COLORS.border}`
+                                  : "none",
+                                py: 1.5,
+                              }}
+                            >
                               <Box
                                 sx={{
                                   bgcolor: `${statusColor}20`,
@@ -658,91 +914,191 @@ const BlockedActivitiesTable = ({
                                 {activity.activityStatus || "Ready"}
                               </Box>
                             </TableCell>
-                            <TableCell align="center" sx={{ color: COLORS.textSecondary, fontSize: "13px", borderBottom: isExpanded ? `1px solid ${COLORS.border}` : "none", py: 1.5 }}>
+                            <TableCell
+                              align="center"
+                              sx={{
+                                color: COLORS.textSecondary,
+                                fontSize: "13px",
+                                borderBottom: isExpanded
+                                  ? `1px solid ${COLORS.border}`
+                                  : "none",
+                                py: 1.5,
+                              }}
+                            >
                               {activity.owner || "-"}
                             </TableCell>
                           </TableRow>
 
                           {/* Expanded Section - Linked Actions */}
-                          {activity.linkedActions && activity.linkedActions.length > 0 && (
-                            <TableRow>
-                              <TableCell colSpan={9} sx={{ py: 0, px: 0, borderBottom: isExpanded ? `1px solid ${COLORS.border}` : "none", bgcolor: COLORS.bgPrimary }}>
-                                <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-                                  <Box sx={{ py: 2, px: 3, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 4 }}>
-                                    <Box>
-                                      <Typography sx={{ color: COLORS.textMuted, fontSize: "11px", fontWeight: 600, mb: 1.5, letterSpacing: "0.05em" }}>
-                                        LINKED ACTIONS
-                                      </Typography>
-                                      {activity.linkedActions.map((action, actionIndex) => (
-                                        <Box key={actionIndex} sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.75 }}>
-                                          <ChevronRight sx={{ color: COLORS.blue, fontSize: "1rem" }} />
-                                          <Typography
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              onActionIdClick?.(action.actionId);
-                                            }}
-                                            sx={{
-                                              color: COLORS.textLight,
-                                              fontSize: "13px",
-                                              cursor: "pointer",
-                                              "&:hover": { color: COLORS.blue, textDecoration: "underline" },
-                                            }}
-                                          >
-                                            {action.title || action.actionId}
-                                          </Typography>
-                                        </Box>
-                                      ))}
+                          {activity.linkedActions &&
+                            activity.linkedActions.length > 0 && (
+                              <TableRow>
+                                <TableCell
+                                  colSpan={9}
+                                  sx={{
+                                    py: 0,
+                                    px: 0,
+                                    borderBottom: isExpanded
+                                      ? `1px solid ${COLORS.border}`
+                                      : "none",
+                                    bgcolor: COLORS.bgPrimary,
+                                  }}
+                                >
+                                  <Collapse
+                                    in={isExpanded}
+                                    timeout="auto"
+                                    unmountOnExit
+                                  >
+                                    <Box
+                                      sx={{
+                                        py: 2,
+                                        px: 3,
+                                        display: "grid",
+                                        gridTemplateColumns: "1fr 1fr 1fr",
+                                        gap: 4,
+                                      }}
+                                    >
+                                      <Box>
+                                        <Typography
+                                          sx={{
+                                            color: COLORS.textMuted,
+                                            fontSize: "11px",
+                                            fontWeight: 600,
+                                            mb: 1.5,
+                                            letterSpacing: "0.05em",
+                                          }}
+                                        >
+                                          LINKED ACTIONS
+                                        </Typography>
+                                        {activity.linkedActions.map(
+                                          (action, actionIndex) => (
+                                            <Box
+                                              key={actionIndex}
+                                              sx={{
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: 1,
+                                                mb: 0.75,
+                                              }}
+                                            >
+                                              <ChevronRight
+                                                sx={{
+                                                  color: COLORS.blue,
+                                                  fontSize: "1rem",
+                                                }}
+                                              />
+                                              <Typography
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  onActionIdClick?.(
+                                                    action.actionId,
+                                                  );
+                                                }}
+                                                sx={{
+                                                  color: COLORS.textLight,
+                                                  fontSize: "13px",
+                                                  cursor: "pointer",
+                                                  "&:hover": {
+                                                    color: COLORS.blue,
+                                                    textDecoration: "underline",
+                                                  },
+                                                }}
+                                              >
+                                                {action.title ||
+                                                  action.actionId}
+                                              </Typography>
+                                            </Box>
+                                          ),
+                                        )}
+                                      </Box>
+                                      <Box>
+                                        <Typography
+                                          sx={{
+                                            color: COLORS.textMuted,
+                                            fontSize: "11px",
+                                            fontWeight: 600,
+                                            mb: 1.5,
+                                            letterSpacing: "0.05em",
+                                          }}
+                                        >
+                                          REASSIGN
+                                        </Typography>
+                                        {activity.linkedActions.map(
+                                          (action, actionIndex) => (
+                                            <Box
+                                              key={actionIndex}
+                                              sx={{ mb: 0.75 }}
+                                            >
+                                              <Button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  onReassignClick?.({
+                                                    _id: action._id,
+                                                    actionId: action.actionId,
+                                                    title: action.title,
+                                                    currentAssignee:
+                                                      action.assigneeId,
+                                                  });
+                                                }}
+                                                disabled={
+                                                  isProjectEnded ||
+                                                  action.status === "Completed"
+                                                }
+                                                sx={{
+                                                  fontSize: "10px",
+                                                  fontWeight: 500,
+                                                  color: COLORS.amber,
+                                                  textTransform: "none",
+                                                  bgcolor:
+                                                    "rgba(245, 158, 11, 0.15)",
+                                                  border: `1px solid ${COLORS.amber}30`,
+                                                  borderRadius: "6px",
+                                                  px: 1.5,
+                                                  py: 0.3,
+                                                  minWidth: "auto",
+                                                  "&:hover": {
+                                                    bgcolor:
+                                                      "rgba(245, 158, 11, 0.25)",
+                                                  },
+                                                  "&.Mui-disabled": {
+                                                    color: COLORS.textMuted,
+                                                    bgcolor: COLORS.bgTertiary,
+                                                    borderColor: COLORS.border,
+                                                  },
+                                                }}
+                                              >
+                                                Reassign
+                                              </Button>
+                                            </Box>
+                                          ),
+                                        )}
+                                      </Box>
+                                      <Box>
+                                        <Typography
+                                          sx={{
+                                            color: COLORS.textMuted,
+                                            fontSize: "11px",
+                                            fontWeight: 600,
+                                            mb: 1.5,
+                                            letterSpacing: "0.05em",
+                                          }}
+                                        >
+                                          NOTES
+                                        </Typography>
+                                        <Typography
+                                          sx={{
+                                            color: COLORS.textLight,
+                                            fontSize: "13px",
+                                          }}
+                                        >
+                                          {activity.notes || "-"}
+                                        </Typography>
+                                      </Box>
                                     </Box>
-                                    <Box>
-                                      <Typography sx={{ color: COLORS.textMuted, fontSize: "11px", fontWeight: 600, mb: 1.5, letterSpacing: "0.05em" }}>
-                                        REASSIGN
-                                      </Typography>
-                                      {activity.linkedActions.map((action, actionIndex) => (
-                                        <Box key={actionIndex} sx={{ mb: 0.75 }}>
-                                          <Button
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              onReassignClick?.({
-                                                _id: action._id,
-                                                actionId: action.actionId,
-                                                title: action.title,
-                                                currentAssignee: action.assigneeId,
-                                              });
-                                            }}
-                                            disabled={isProjectEnded || action.status === "Completed"}
-                                            sx={{
-                                              fontSize: "10px",
-                                              fontWeight: 500,
-                                              color: COLORS.amber,
-                                              textTransform: "none",
-                                              bgcolor: "rgba(245, 158, 11, 0.15)",
-                                              border: `1px solid ${COLORS.amber}30`,
-                                              borderRadius: "6px",
-                                              px: 1.5,
-                                              py: 0.3,
-                                              minWidth: "auto",
-                                              "&:hover": { bgcolor: "rgba(245, 158, 11, 0.25)" },
-                                              "&.Mui-disabled": { color: COLORS.textMuted, bgcolor: COLORS.bgTertiary, borderColor: COLORS.border },
-                                            }}
-                                          >
-                                            Reassign
-                                          </Button>
-                                        </Box>
-                                      ))}
-                                    </Box>
-                                    <Box>
-                                      <Typography sx={{ color: COLORS.textMuted, fontSize: "11px", fontWeight: 600, mb: 1.5, letterSpacing: "0.05em" }}>
-                                        NOTES
-                                      </Typography>
-                                      <Typography sx={{ color: COLORS.textLight, fontSize: "13px" }}>
-                                        {activity.notes || "-"}
-                                      </Typography>
-                                    </Box>
-                                  </Box>
-                                </Collapse>
-                              </TableCell>
-                            </TableRow>
-                          )}
+                                  </Collapse>
+                                </TableCell>
+                              </TableRow>
+                            )}
                         </Fragment>
                       );
                     })}
@@ -883,8 +1239,11 @@ const BlockedActivitiesTable = ({
                     ) : (
                       <Button
                         onClick={() =>
-                          !isProjectEnded && (() => {
-                            const wpActivity = weeklyPlanPreview.find(wp => wp.activityId === item.activityId);
+                          !isProjectEnded &&
+                          (() => {
+                            const wpActivity = weeklyPlanPreview.find(
+                              (wp) => wp.activityId === item.activityId,
+                            );
                             onAssignClick?.({
                               activityId: item.activityId,
                               activityName: item.activityName,
@@ -894,13 +1253,21 @@ const BlockedActivitiesTable = ({
                           })()
                         }
                         disabled={isProjectEnded}
-                        title={isProjectEnded ? "Project has ended - read only" : "Assign action"}
+                        title={
+                          isProjectEnded
+                            ? "Project has ended - read only"
+                            : "Assign action"
+                        }
                         sx={{
                           fontSize: "11px",
                           fontWeight: 500,
-                          color: isProjectEnded ? COLORS.textMuted : COLORS.blue,
+                          color: isProjectEnded
+                            ? COLORS.textMuted
+                            : COLORS.blue,
                           textTransform: "none",
-                          bgcolor: isProjectEnded ? "transparent" : COLORS.blueBgLight,
+                          bgcolor: isProjectEnded
+                            ? "transparent"
+                            : COLORS.blueBgLight,
                           border: `1px solid ${isProjectEnded ? COLORS.textMuted : COLORS.blue}50`,
                           borderRadius: "6px",
                           px: 1.5,
@@ -909,7 +1276,9 @@ const BlockedActivitiesTable = ({
                           cursor: isProjectEnded ? "not-allowed" : "pointer",
                           opacity: isProjectEnded ? 0.5 : 1,
                           "&:hover": {
-                            bgcolor: isProjectEnded ? "transparent" : COLORS.blueBgMedium,
+                            bgcolor: isProjectEnded
+                              ? "transparent"
+                              : COLORS.blueBgMedium,
                           },
                         }}
                       >
@@ -969,7 +1338,10 @@ const BlockedActivitiesTable = ({
                   </Box>
                   <Typography
                     sx={{
-                      color: item.actionStatus === "Overdue" ? COLORS.red : COLORS.textSecondary,
+                      color:
+                        item.actionStatus === "Overdue"
+                          ? COLORS.red
+                          : COLORS.textSecondary,
                       fontSize: "12px",
                       fontWeight: item.actionStatus === "Overdue" ? 500 : 400,
                       textAlign: "center",

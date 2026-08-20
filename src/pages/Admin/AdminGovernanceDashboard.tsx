@@ -6,6 +6,8 @@ import {
   FormControl,
   Select,
   MenuItem,
+  TextField,
+  Button,
 } from "@mui/material";
 import type { SelectChangeEvent } from "@mui/material/Select";
 import { dashboardAPI, projectAPI } from "../../services/api";
@@ -422,6 +424,27 @@ const TrendBadge = ({ trend }: { trend: string }) => {
   );
 };
 
+/* Shared styling for the governance date-range inputs. */
+const dateFilterSx = {
+  "& .MuiOutlinedInput-root": {
+    bgcolor: COLORS.bgPrimary,
+    borderRadius: "8px",
+    "& fieldset": { borderColor: COLORS.border },
+    "&:hover fieldset": { borderColor: COLORS.border },
+    "&.Mui-focused fieldset": { borderColor: COLORS.blue, borderWidth: 1 },
+  },
+  "& .MuiInputBase-input": {
+    color: COLORS.textPrimary,
+    fontSize: "13px",
+    py: 1,
+    "&::-webkit-calendar-picker-indicator": {
+      filter: "invert(1)",
+      cursor: "pointer",
+      opacity: 0.6,
+    },
+  },
+};
+
 const AdminGovernanceDashboard = () => {
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -431,13 +454,22 @@ const AdminGovernanceDashboard = () => {
   const [projects, setProjects] = useState<{ _id: string; name: string }[]>([]);
   const [explorerProjectId, setExplorerProjectId] = useState<string>("");
   const [explorerWeeks, setExplorerWeeks] = useState<HistoricalWeek[]>([]);
+
+  /* Optional close-date range. Governance is derived from closed weeks, so
+     narrowing this narrows every score and trend on the page, not just the
+     week explorer. */
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [explorerLoading, setExplorerLoading] = useState(false);
 
   useEffect(() => {
     const fetchGovernanceData = async () => {
       try {
         setLoading(true);
-        const response = await dashboardAPI.getGovernance();
+        const response = await dashboardAPI.getGovernance(undefined, {
+          startDate,
+          endDate,
+        });
         if (response.governance) {
           setGovernanceData(response.governance);
           if (response.governance.historicalWeeks?.length > 0) {
@@ -452,7 +484,7 @@ const AdminGovernanceDashboard = () => {
     };
 
     fetchGovernanceData();
-  }, []);
+  }, [startDate, endDate]);
 
   useEffect(() => {
     const fetchProjects = async () => {
@@ -480,7 +512,10 @@ const AdminGovernanceDashboard = () => {
     const fetchExplorerWeeks = async () => {
       try {
         setExplorerLoading(true);
-        const response = await dashboardAPI.getGovernance(explorerProjectId);
+        const response = await dashboardAPI.getGovernance(
+          explorerProjectId,
+          { startDate, endDate },
+        );
         if (cancelled) return;
         setExplorerWeeks(response.governance?.historicalWeeks || []);
       } catch (error) {
@@ -497,7 +532,7 @@ const AdminGovernanceDashboard = () => {
     return () => {
       cancelled = true;
     };
-  }, [explorerProjectId]);
+  }, [explorerProjectId, startDate, endDate]);
 
   const handleExplorerProjectChange = (event: SelectChangeEvent<string>) => {
     setExplorerProjectId(event.target.value);
@@ -597,6 +632,86 @@ const AdminGovernanceDashboard = () => {
     }
   }, [explorerWeeksList, explorerLoading, selectedWeek]);
 
+  /* Rendered by both the populated page and the empty state. When a range
+     filters everything away the bar has to stay on screen — otherwise the
+     only way back is a page reload. */
+  const dateFilterBar = (
+    <Box
+      sx={{
+        display: "flex",
+        flexWrap: "wrap",
+        alignItems: "center",
+        gap: 1.5,
+        bgcolor: COLORS.bgSecondary,
+        border: `1px solid ${COLORS.border}`,
+        borderRadius: "12px",
+        px: 3,
+        py: 2,
+      }}
+    >
+      <Typography
+        sx={{
+          color: COLORS.textMuted,
+          fontSize: "11px",
+          fontWeight: 600,
+          letterSpacing: "0.5px",
+          mr: 0.5,
+        }}
+      >
+        DATE RANGE
+      </Typography>
+
+      {/* Empty means no bound on that end, so one field alone still
+          works as "from" or "up to". */}
+      <TextField
+        size="small"
+        type="date"
+        value={startDate}
+        onChange={(e) => setStartDate(e.target.value)}
+        sx={dateFilterSx}
+      />
+      <Typography sx={{ color: COLORS.textMuted, fontSize: "13px" }}>
+        to
+      </Typography>
+      <TextField
+        size="small"
+        type="date"
+        value={endDate}
+        onChange={(e) => setEndDate(e.target.value)}
+        sx={dateFilterSx}
+      />
+      {(startDate || endDate) && (
+        <Button
+          onClick={() => {
+            setStartDate("");
+            setEndDate("");
+          }}
+          sx={{
+            color: COLORS.textSecondary,
+            textTransform: "none",
+            fontSize: "13px",
+            minWidth: "auto",
+            px: 1.5,
+          }}
+        >
+          Clear
+        </Button>
+      )}
+
+      <Typography
+        sx={{
+          ml: "auto",
+          color: COLORS.textMuted,
+          fontSize: "12px",
+        }}
+      >
+        {startDate || endDate
+          ? "Filtering the whole dashboard by week close date"
+          : "Showing all closed weeks"}
+      </Typography>
+    </Box>
+  );
+
   if (loading) {
     return (
       <AdminLayout
@@ -623,13 +738,16 @@ const AdminGovernanceDashboard = () => {
         title="Governance Dashboard"
         subtitle="Project governance performance and historical analysis"
       >
+        {dateFilterBar}
+
         <Box
           sx={{
             display: "flex",
             flexDirection: "column",
             justifyContent: "center",
             alignItems: "center",
-            height: "500px",
+            height: "440px",
+            mt: 3,
             bgcolor: COLORS.bgSecondary,
             border: `1px solid ${COLORS.border}`,
             borderRadius: "12px",
@@ -670,6 +788,24 @@ const AdminGovernanceDashboard = () => {
             {governanceData?.message ||
               "Upload a programme PDF to a project to start tracking governance metrics."}
           </Typography>
+          {(startDate || endDate) && (
+            <Button
+              onClick={() => {
+                setStartDate("");
+                setEndDate("");
+              }}
+              sx={{
+                mt: 3,
+                color: COLORS.textPrimary,
+                border: `1px solid ${COLORS.border}`,
+                textTransform: "none",
+                fontSize: "13px",
+                px: 2.5,
+              }}
+            >
+              Clear date filter
+            </Button>
+          )}
         </Box>
       </AdminLayout>
     );
@@ -885,6 +1021,8 @@ const AdminGovernanceDashboard = () => {
           </Box>
         </Box>
       </Box> */}
+
+      {dateFilterBar}
 
       <Box
         sx={{

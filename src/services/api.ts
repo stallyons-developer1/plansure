@@ -479,9 +479,16 @@ export const dashboardAPI = {
     return response.data;
   },
 
-  getGovernance: async (projectId?: string) => {
-    const params = projectId ? `?projectId=${projectId}` : "";
-    const response = await api.get(`/dashboard/governance${params}`);
+  getGovernance: async (
+    projectId?: string,
+    range?: { startDate?: string; endDate?: string },
+  ) => {
+    const params = new URLSearchParams();
+    if (projectId) params.append("projectId", projectId);
+    if (range?.startDate) params.append("startDate", range.startDate);
+    if (range?.endDate) params.append("endDate", range.endDate);
+    const query = params.toString() ? `?${params.toString()}` : "";
+    const response = await api.get(`/dashboard/governance${query}`);
     return response.data;
   },
 };
