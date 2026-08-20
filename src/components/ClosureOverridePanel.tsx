@@ -208,7 +208,7 @@ const ClosureOverridePanel = ({
               mb: 2,
             }}
           >
-            WEEK ACTIONS
+            WEEK STATUS
           </Typography>
 
           <Box
@@ -395,9 +395,7 @@ const ClosureOverridePanel = ({
                 {cycleStatus === "Meeting Open" && (
                   <Box
                     onClick={() =>
-                      onUploadProgram
-                        ? onUploadProgram()
-                        : onStartExecution?.()
+                      onUploadProgram ? onUploadProgram() : onStartExecution?.()
                     }
                     sx={{
                       display: "flex",

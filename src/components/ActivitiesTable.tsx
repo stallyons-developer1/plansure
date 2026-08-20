@@ -274,7 +274,7 @@ const ActivityRow = ({
   isFirst?: boolean;
   onAssignClick?: (activity: Activity) => void;
   onAddActionClick?: (activity: Activity) => void;
-  onActionClick?: () => void;
+  onActionClick?: (action: ActivityAction) => void;
   onReassignClick?: (action: {
     _id: string;
     title: string;
@@ -764,7 +764,7 @@ const ActivityRow = ({
                           }}
                         />
                         <Typography
-                          onClick={() => onActionClick?.()}
+                          onClick={() => onActionClick?.(action)}
                           sx={{
                             color: COLORS.textLight,
                             fontSize: "13px",
@@ -974,7 +974,7 @@ interface ActivitiesTableProps {
   activities: Activity[];
   onAssignClick?: (activity: Activity) => void;
   onAddActionClick?: (activity: Activity) => void;
-  onActionClick?: () => void;
+  onActionClick?: (action: ActivityAction) => void;
   onReassignClick?: (action: {
     _id: string;
     title: string;

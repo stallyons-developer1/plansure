@@ -2367,9 +2367,6 @@ const AdminActions = () => {
                     setFormData({ ...formData, dueDate: e.target.value })
                   }
                   slotProps={{
-                    htmlInput: {
-                      min: new Date().toLocaleDateString("en-CA"),
-                    },
                     input: {
                       endAdornment: (
                         <InputAdornment

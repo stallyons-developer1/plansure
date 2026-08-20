@@ -45,6 +45,7 @@ import BlockedActivitiesTable from "../../components/BlockedActivitiesTable";
 import AdminActivitiesSummary from "../../components/AdminActivitiesSummary";
 import ActivitiesTable from "../../components/ActivitiesTable";
 import type { Activity } from "../../components/ActivitiesTable";
+import ActionDetailsDialog from "../../components/ActionDetailsDialog";
 
 interface ProjectData {
   _id: string;
@@ -157,6 +158,24 @@ const getWeekDateRangeFromToday = (): string => {
   return `${formatDateShort(startDate)} - ${formatDateShort(endDate)}`;
 };
 
+/* "Aug 19, 2026 03:00 PM" — used by the Edit dialog's update history. */
+const formatAuditStamp = (value?: string): string => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const datePart = date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+  const timePart = date.toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+  return `${datePart} ${timePart}`;
+};
+
 const toDateInputFormat = (dateStr: string): string => {
   if (!dateStr) return "";
 
@@ -230,6 +249,8 @@ interface ActionItem {
   status: string;
   priority: string;
   createdAt?: string;
+  updatedAt?: string;
+  overrideReason?: string;
 }
 
 const AdminProjectWorkspace = () => {
@@ -339,6 +360,7 @@ const AdminProjectWorkspace = () => {
     activityName: string;
     startDate: string;
     finishDate: string;
+    ownerName?: string;
   } | null>(null);
   const [assignFormData, setAssignFormData] = useState({
     title: "",
@@ -347,16 +369,20 @@ const AdminProjectWorkspace = () => {
     priority: "Medium",
     assignee: "",
     dueDate: "",
+    status: "Open",
   });
   const [assignSaveLoading, setAssignSaveLoading] = useState(false);
   const [assignError, setAssignError] = useState("");
 
+  // Read-only action record, opened from a linked action in the table.
+  const [actionDetailId, setActionDetailId] = useState<string | null>(null);
   const [assignChoiceOpen, setAssignChoiceOpen] = useState(false);
   const [assignChoiceActivity, setAssignChoiceActivity] = useState<{
     activityId: string;
     activityName: string;
     startDate: string;
     finishDate: string;
+    ownerName?: string;
   } | null>(null);
   const [noActionLoading, setNoActionLoading] = useState(false);
 
@@ -419,6 +445,7 @@ const AdminProjectWorkspace = () => {
       weekZone: string | null;
       actionsCount?: number;
       openActionsCount?: number;
+      ownerName?: string;
     }>;
     summary: {
       total: number;
@@ -446,6 +473,8 @@ const AdminProjectWorkspace = () => {
       assignee?: { _id?: string; name: string };
       dueDate: string;
       createdAt?: string;
+      updatedAt?: string;
+      overrideReason?: string;
     }>
   >([]);
   const [selectedActionId, setSelectedActionId] = useState<string | null>(null);
@@ -756,6 +785,9 @@ const AdminProjectWorkspace = () => {
         if (response.success && response.programme) {
           const programme = response.programme;
           setProgrammeAnchor(programme.lookaheadStartDate || null);
+          // Also set here: this is the load path that populates the workspace,
+          // and without it the Owner column fell back to "Unknown".
+          setUploaderName(programme.uploadedBy?.name || "");
           const activities = programme.extractedData?.activities || [];
           const summary = programme.extractedData?.summary || {
             total: 0,
@@ -1204,7 +1236,8 @@ const AdminProjectWorkspace = () => {
     } catch (error: unknown) {
       const message =
         (error as { response?: { data?: { message?: string } } })?.response
-          ?.data?.message || "Could not override this action. Please try again.";
+          ?.data?.message ||
+        "Could not override this action. Please try again.";
       setToastSeverity("warning");
       setToastMessage(message);
       setToastOpen(true);
@@ -1319,6 +1352,19 @@ const AdminProjectWorkspace = () => {
   const handleEditUpdate = async () => {
     if (!editingAction || !editingActionId) return;
 
+    // The server enforces this too, but catching it here avoids a round trip.
+    if (
+      editingAction.status === "PM Override" &&
+      (editingAction.overrideReason || "").trim().length < 10
+    ) {
+      setToastSeverity("warning");
+      setToastMessage(
+        "A reason of at least 10 characters is required to PM Override an action.",
+      );
+      setToastOpen(true);
+      return;
+    }
+
     setEditSaveLoading(true);
     try {
       const selectedActivity = lookaheadData?.activities?.find(
@@ -1337,6 +1383,7 @@ const AdminProjectWorkspace = () => {
         type: editingAction.type,
         priority: editingAction.priority,
         status: editingAction.status,
+        overrideReason: editingAction.overrideReason,
         assignee: editingAction.assigneeId,
         dueDate: editingAction.dueDate,
       });
@@ -1370,9 +1417,16 @@ const AdminProjectWorkspace = () => {
   };
 
   const handleEditChange = (field: keyof ActionItem, value: string) => {
-    if (editingAction) {
-      setEditingAction({ ...editingAction, [field]: value });
+    if (!editingAction) return;
+
+    // Moving off PM Override clears the evidence too — leaving stale text in a
+    // disabled field would re-appear next time the action is opened.
+    if (field === "status" && value !== "PM Override") {
+      setEditingAction({ ...editingAction, status: value, overrideReason: "" });
+      return;
     }
+
+    setEditingAction({ ...editingAction, [field]: value });
   };
 
   const handleAssignClose = () => {
@@ -1385,6 +1439,7 @@ const AdminProjectWorkspace = () => {
       priority: "Medium",
       assignee: "",
       dueDate: "",
+      status: "Open",
     });
     setAssignError("");
   };
@@ -1419,6 +1474,7 @@ const AdminProjectWorkspace = () => {
         priority: assignFormData.priority,
         assignee: assignFormData.assignee,
         dueDate: assignFormData.dueDate,
+        status: assignFormData.status,
       });
 
       if (response.success) {
@@ -1467,12 +1523,14 @@ const AdminProjectWorkspace = () => {
     name: string;
     startDate: string;
     endDate: string;
+    ownerName?: string;
   }) => {
     setAssignChoiceActivity({
       activityId: a.id,
       activityName: a.name,
       startDate: toDateInputFormat(a.startDate),
       finishDate: toDateInputFormat(a.endDate),
+      ownerName: a.ownerName,
     });
     setAssignError("");
     setAssignChoiceOpen(true);
@@ -1493,6 +1551,7 @@ const AdminProjectWorkspace = () => {
       priority: "Medium",
       assignee: "",
       dueDate: new Date().toLocaleDateString("en-CA"),
+      status: "Open",
     });
     setAssignChoiceOpen(false);
     setAssignModalOpen(true);
@@ -1763,10 +1822,13 @@ const AdminProjectWorkspace = () => {
 
       const overdueActions = weeklyControlData.actionsByStatus?.overdue || 0;
 
+      // Force-closed actions still belong on the Planner To-Do: the work was
+      // not done, so the Planner must reflect it in the programme update.
       const outstandingActions =
         (weeklyControlData.weeklyActionsByStatus?.open || 0) +
         (weeklyControlData.weeklyActionsByStatus?.inProgress || 0) +
-        (weeklyControlData.weeklyActionsByStatus?.overdue || 0);
+        (weeklyControlData.weeklyActionsByStatus?.overdue || 0) +
+        pmOverrideActions;
 
       const blockedActivities =
         weeklyControlData.blockedRiskActivities?.length || 0;
@@ -1903,6 +1965,9 @@ const AdminProjectWorkspace = () => {
         }
         const programme = response.programme;
         setProgrammeAnchor(programme.lookaheadStartDate || null);
+        // Carried through from the upload response, otherwise the Owner column
+        // reads "Unknown" until the page is reloaded.
+        setUploaderName(programme.uploadedBy?.name || "");
         const activities =
           programme.activities || programme.extractedData?.activities || [];
         const summary = programme.summary ||
@@ -2056,13 +2121,18 @@ const AdminProjectWorkspace = () => {
     inProgress: projectActions.filter(
       (a) => a.status === "In Progress" && !isActionFromClosedWeek(a),
     ).length,
-    closed: projectActions.filter((a) => a.status === "Completed").length,
+    // PM Override is terminal: it counts as closed and can never be overdue,
+    // so Total still reconciles with Open + In Progress + Closed + Overdue.
+    closed: projectActions.filter(
+      (a) => a.status === "Completed" || a.status === "PM Override",
+    ).length,
     overdue: projectActions.filter(
       (a) =>
         a.dueDate &&
         new Date(a.dueDate) < startOfToday &&
         a.status !== "Completed" &&
         a.status !== "Cancelled" &&
+        a.status !== "PM Override" &&
         !isActionFromClosedWeek(a),
     ).length,
   };
@@ -2080,6 +2150,16 @@ const AdminProjectWorkspace = () => {
       (weeklyControlData?.requiredActionsByStatus?.open || 0) +
       (weeklyControlData?.requiredActionsByStatus?.inProgress || 0),
   };
+
+  /* The activity's owner, looked up from the lookahead. Used read-only by the
+     Assign and Edit dialogs; lists that carry no owner resolve through here. */
+  const ownerNameForActivity = (activityId?: string) =>
+    lookaheadData?.activities?.find((a) => a.activityId === activityId)
+      ?.ownerName || uploaderName;
+
+  const editingActionOwnerName = ownerNameForActivity(
+    editingAction?.linkedActivity,
+  );
 
   const handleStepClick = (_stepNumber: number) => {};
 
@@ -3653,6 +3733,7 @@ const AdminProjectWorkspace = () => {
                         name: a.name,
                         startDate: a.startDate,
                         endDate: a.endDate,
+                        ownerName: a.owner?.name,
                       })
                     }
                     onAddActionClick={(a) => {
@@ -3662,6 +3743,7 @@ const AdminProjectWorkspace = () => {
                         activityName: a.name,
                         startDate: startDateFormatted,
                         finishDate: toDateInputFormat(a.endDate),
+                        ownerName: a.owner?.name,
                       });
                       setAssignFormData({
                         title: "",
@@ -3670,10 +3752,11 @@ const AdminProjectWorkspace = () => {
                         priority: "Medium",
                         assignee: "",
                         dueDate: new Date().toLocaleDateString("en-CA"),
+                        status: "Open",
                       });
                       setAssignModalOpen(true);
                     }}
-                    onActionClick={() => setActiveTab(3)}
+                    onActionClick={(action) => setActionDetailId(action._id)}
                     onReassignClick={(a) => {
                       const action = projectActions.find(
                         (ac) => ac._id === a._id,
@@ -4306,6 +4389,9 @@ const AdminProjectWorkspace = () => {
                                     : "",
                                   status: action.status,
                                   priority: action.priority,
+                                  createdAt: action.createdAt,
+                                  updatedAt: action.updatedAt,
+                                  overrideReason: action.overrideReason,
                                 },
                                 index,
                                 action._id,
@@ -5446,6 +5532,7 @@ const AdminProjectWorkspace = () => {
                     name: activity.activityName,
                     startDate: activity.startDate || "",
                     endDate: activity.finishDate || "",
+                    ownerName: ownerNameForActivity(activity.activityId),
                   })
                 }
                 onUnblockClick={async (activityId) => {
@@ -5577,7 +5664,7 @@ const AdminProjectWorkspace = () => {
                           fontWeight: 600,
                         }}
                       >
-                        Close-Out Eligible (Stage 4)
+                        Close-Out Eligible
                       </Typography>
                       <Typography
                         sx={{
@@ -6450,7 +6537,7 @@ const AdminProjectWorkspace = () => {
                       ? "This week is Close-Out Eligible. It can now be closed and locked from Weekly Control."
                       : weeklyActionStats.openRequired > 0
                         ? `${weeklyActionStats.openRequired} required action(s) still open. Complete them to mark this week Close-Out Eligible.`
-                        : "All required actions for this week are complete. Mark the week Close-Out Eligible to enable closing."}
+                        : "Mark the week Close-Out Eligible to enable closing."}
                   </Typography>
 
                   {uploadedProgramme?.cycleStatus === "Close-Out Eligible" ? (
@@ -6473,7 +6560,7 @@ const AdminProjectWorkspace = () => {
                           fontWeight: 600,
                         }}
                       >
-                        ✓ Close-Out Eligible (Stage 4)
+                        ✓ Close-Out Eligible
                       </Typography>
                     </Box>
                   ) : (
@@ -6758,8 +6845,7 @@ const AdminProjectWorkspace = () => {
                           fullWidth
                           onClick={handleExportPlannerTodo}
                           disabled={
-                            isExporting === "todo" ||
-                            exportGatingStatus.isGated
+                            isExporting === "todo" || exportGatingStatus.isGated
                           }
                           startIcon={
                             isExporting === "todo" ? (
@@ -7353,6 +7439,28 @@ const AdminProjectWorkspace = () => {
                       },
                     },
                   }}
+                  MenuProps={{
+                    slotProps: {
+                      paper: {
+                        sx: {
+                          bgcolor: COLORS.bgPrimary,
+                          border: `1px solid ${COLORS.border}`,
+                          borderRadius: "8px",
+                          mt: 0.5,
+                          maxHeight: 260,
+                          "& .MuiMenuItem-root": {
+                            color: COLORS.textPrimary,
+                            fontSize: "14px",
+                            "&:hover": { bgcolor: COLORS.bgTertiary },
+                            "&.Mui-selected": {
+                              bgcolor: COLORS.blueBgMedium,
+                              "&:hover": { bgcolor: COLORS.blueBgHover },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  }}
                 >
                   <MenuItem value={project?._id || ""}>
                     {project?.name || "Unknown Project"}
@@ -7770,11 +7878,6 @@ const AdminProjectWorkspace = () => {
                     onChange={(e) =>
                       handleEditChange("dueDate", e.target.value)
                     }
-                    slotProps={{
-                      htmlInput: {
-                        min: new Date().toLocaleDateString("en-CA"),
-                      },
-                    }}
                     sx={{
                       "& .MuiOutlinedInput-root": {
                         bgcolor: COLORS.bgPrimary,
@@ -7868,9 +7971,164 @@ const AdminProjectWorkspace = () => {
                     <MenuItem value="In Progress">In Progress</MenuItem>
                     <MenuItem value="Completed">Completed</MenuItem>
                     <MenuItem value="Cancelled">Cancelled</MenuItem>
+                    <MenuItem value="PM Override">PM Override</MenuItem>
                   </Select>
                 </Box>
-                <Box />
+                <Box>
+                  <Typography
+                    sx={{
+                      color: COLORS.textSecondary,
+                      fontSize: "12px",
+                      fontWeight: 500,
+                      mb: 0.5,
+                      mt: 2,
+                    }}
+                  >
+                    Owner
+                  </Typography>
+                  <Box
+                    sx={{
+                      bgcolor: COLORS.bgPrimary,
+                      borderRadius: "8px",
+                      border: `1px solid ${COLORS.border}`,
+                      px: 1.5,
+                      py: 1.2,
+                    }}
+                  >
+                    <Typography
+                      sx={{
+                        color: editingActionOwnerName
+                          ? COLORS.textPrimary
+                          : COLORS.textMuted,
+                        fontSize: "14px",
+                      }}
+                    >
+                      {editingActionOwnerName || "Unassigned"}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Box>
+
+              {/* Evidence / correspondence. Only meaningful for a PM Override,
+                  so it stays disabled until that status is selected. */}
+              <Box>
+                <Typography
+                  sx={{
+                    color: COLORS.textSecondary,
+                    fontSize: "12px",
+                    fontWeight: 500,
+                    mb: 0.5,
+                    mt: 2,
+                  }}
+                >
+                  Evidence / Correspondence
+                  {editingAction?.status === "PM Override" && (
+                    <span style={{ color: COLORS.red }}> *</span>
+                  )}
+                </Typography>
+                <TextField
+                  fullWidth
+                  multiline
+                  rows={3}
+                  disabled={editingAction?.status !== "PM Override"}
+                  value={editingAction?.overrideReason || ""}
+                  onChange={(e) =>
+                    handleEditChange("overrideReason", e.target.value)
+                  }
+                  placeholder={
+                    editingAction?.status === "PM Override"
+                      ? "Why is this action being force-closed? (min 10 characters)"
+                      : "Available when status is set to PM Override"
+                  }
+                  sx={{
+                    "& .MuiOutlinedInput-root": {
+                      bgcolor: COLORS.bgPrimary,
+                      borderRadius: "8px",
+                      "& fieldset": { borderColor: COLORS.border },
+                      "&:hover fieldset": { borderColor: COLORS.border },
+                      "&.Mui-focused fieldset": {
+                        borderColor: COLORS.amber,
+                        borderWidth: 1,
+                      },
+                    },
+                    "& .MuiInputBase-input": {
+                      color: COLORS.textPrimary,
+                      fontSize: "13px",
+                      "&::placeholder": {
+                        color: COLORS.textMuted,
+                        opacity: 1,
+                      },
+                    },
+                    "& .Mui-disabled": {
+                      WebkitTextFillColor: `${COLORS.textMuted} !important`,
+                    },
+                  }}
+                />
+              </Box>
+              {/* Update history — when the action was raised, and when it was
+                  last changed. "Last updated" is hidden until it differs from
+                  creation, so an untouched action does not show the same
+                  timestamp twice. */}
+              <Box>
+                <Typography
+                  sx={{
+                    color: COLORS.textSecondary,
+                    fontSize: "12px",
+                    fontWeight: 500,
+                    mb: 0.5,
+                    mt: 2,
+                  }}
+                >
+                  Update History
+                </Typography>
+                <Box
+                  sx={{
+                    bgcolor: COLORS.bgPrimary,
+                    borderRadius: "8px",
+                    border: `1px solid ${COLORS.border}`,
+                    px: 1.5,
+                    py: 1.2,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 0.5,
+                  }}
+                >
+                  <Box sx={{ display: "flex", gap: 1 }}>
+                    <Typography
+                      sx={{
+                        color: COLORS.textMuted,
+                        fontSize: "13px",
+                        minWidth: 92,
+                      }}
+                    >
+                      Created
+                    </Typography>
+                    <Typography
+                      sx={{ color: COLORS.textPrimary, fontSize: "13px" }}
+                    >
+                      {formatAuditStamp(editingAction?.createdAt) || "-"}
+                    </Typography>
+                  </Box>
+                  {editingAction?.updatedAt &&
+                    editingAction.updatedAt !== editingAction.createdAt && (
+                      <Box sx={{ display: "flex", gap: 1 }}>
+                        <Typography
+                          sx={{
+                            color: COLORS.textMuted,
+                            fontSize: "13px",
+                            minWidth: 92,
+                          }}
+                        >
+                          Last updated
+                        </Typography>
+                        <Typography
+                          sx={{ color: COLORS.textPrimary, fontSize: "13px" }}
+                        >
+                          {formatAuditStamp(editingAction.updatedAt)}
+                        </Typography>
+                      </Box>
+                    )}
+                </Box>
               </Box>
             </Box>
           </DialogContent>
@@ -8459,6 +8717,51 @@ const AdminProjectWorkspace = () => {
                 />
               </Box>
 
+              {/* Description — already sent to the API, but had no input, so
+                  every action was saved with an empty description. */}
+              <Box>
+                <Typography
+                  sx={{
+                    color: COLORS.textSecondary,
+                    fontSize: "12px",
+                    fontWeight: 500,
+                    mb: 0.5,
+                    mt: 2,
+                  }}
+                >
+                  Description
+                </Typography>
+                <TextField
+                  fullWidth
+                  multiline
+                  rows={3}
+                  placeholder="What needs doing, and why..."
+                  value={assignFormData.description}
+                  onChange={(e) =>
+                    handleAssignChange("description", e.target.value)
+                  }
+                  sx={{
+                    "& .MuiOutlinedInput-root": {
+                      bgcolor: COLORS.bgPrimary,
+                      borderRadius: "8px",
+                      "& fieldset": { borderColor: COLORS.border },
+                      "&:hover fieldset": { borderColor: COLORS.border },
+                      "&.Mui-focused fieldset": {
+                        borderColor: COLORS.blue,
+                        borderWidth: 1,
+                      },
+                    },
+                    "& .MuiInputBase-input": {
+                      color: COLORS.textPrimary,
+                      fontSize: "14px",
+                      "&::placeholder": {
+                        color: COLORS.textMuted,
+                        opacity: 1,
+                      },
+                    },
+                  }}
+                />
+              </Box>
               {/* Type | Priority row */}
               <Box
                 sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}
@@ -8689,11 +8992,6 @@ const AdminProjectWorkspace = () => {
                     onChange={(e) =>
                       handleAssignChange("dueDate", e.target.value)
                     }
-                    slotProps={{
-                      htmlInput: {
-                        min: new Date().toLocaleDateString("en-CA"),
-                      },
-                    }}
                     sx={{
                       "& .MuiOutlinedInput-root": {
                         bgcolor: COLORS.bgPrimary,
@@ -8719,6 +9017,111 @@ const AdminProjectWorkspace = () => {
                       },
                     }}
                   />
+                </Box>
+              </Box>
+              {/* Status | Owner row. Owner is the activity's accountable
+                  person and is saved onto the activity, not the action. */}
+              <Box
+                sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}
+              >
+                <Box>
+                  <Typography
+                    sx={{
+                      color: COLORS.textSecondary,
+                      fontSize: "12px",
+                      fontWeight: 500,
+                      mb: 0.5,
+                      mt: 2,
+                    }}
+                  >
+                    Status
+                  </Typography>
+                  <Select
+                    fullWidth
+                    value={assignFormData.status}
+                    onChange={(e) =>
+                      handleAssignChange("status", e.target.value)
+                    }
+                    IconComponent={ArrowDownIcon}
+                    sx={{
+                      bgcolor: COLORS.bgPrimary,
+                      borderRadius: "8px",
+                      "& .MuiOutlinedInput-notchedOutline": {
+                        borderColor: COLORS.border,
+                      },
+                      "&:hover .MuiOutlinedInput-notchedOutline": {
+                        borderColor: COLORS.border,
+                      },
+                      "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                        borderColor: COLORS.blue,
+                        borderWidth: 1,
+                      },
+                      "& .MuiSelect-select": {
+                        color: COLORS.textPrimary,
+                        fontSize: "14px",
+                        py: 1.2,
+                      },
+                      "& .MuiSvgIcon-root": { color: COLORS.textMuted },
+                    }}
+                    MenuProps={{
+                      slotProps: {
+                        paper: {
+                          sx: {
+                            bgcolor: COLORS.bgPrimary,
+                            border: `1px solid ${COLORS.border}`,
+                            borderRadius: "8px",
+                            mt: 0.5,
+                            maxHeight: 260,
+                            "& .MuiMenuItem-root": {
+                              color: COLORS.textPrimary,
+                              fontSize: "14px",
+                              "&:hover": { bgcolor: COLORS.bgTertiary },
+                              "&.Mui-selected": {
+                                bgcolor: COLORS.blueBgMedium,
+                                "&:hover": { bgcolor: COLORS.blueBgHover },
+                              },
+                            },
+                          },
+                        },
+                      },
+                    }}
+                  >
+                    <MenuItem value="Open">Open</MenuItem>
+                    <MenuItem value="In Progress">In Progress</MenuItem>
+                  </Select>
+                </Box>
+                <Box>
+                  <Typography
+                    sx={{
+                      color: COLORS.textSecondary,
+                      fontSize: "12px",
+                      fontWeight: 500,
+                      mb: 0.5,
+                      mt: 2,
+                    }}
+                  >
+                    Owner
+                  </Typography>
+                  <Box
+                    sx={{
+                      bgcolor: COLORS.bgPrimary,
+                      borderRadius: "8px",
+                      border: `1px solid ${COLORS.border}`,
+                      px: 1.5,
+                      py: 1.2,
+                    }}
+                  >
+                    <Typography
+                      sx={{
+                        color: assigningActivity?.ownerName
+                          ? COLORS.textPrimary
+                          : COLORS.textMuted,
+                        fontSize: "14px",
+                      }}
+                    >
+                      {assigningActivity?.ownerName || "Unassigned"}
+                    </Typography>
+                  </Box>
                 </Box>
               </Box>
             </Box>
@@ -9097,9 +9500,7 @@ const AdminProjectWorkspace = () => {
                   textAlign: "center",
                 }}
               >
-                <Typography
-                  sx={{ color: COLORS.textMuted, fontSize: "14px" }}
-                >
+                <Typography sx={{ color: COLORS.textMuted, fontSize: "14px" }}>
                   No open actions to override.
                 </Typography>
               </Box>
@@ -9257,9 +9658,7 @@ const AdminProjectWorkspace = () => {
               </Box>
             )}
 
-            <Box
-              sx={{ display: "flex", justifyContent: "flex-end", mt: 3 }}
-            >
+            <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 3 }}>
               <Button
                 onClick={() => setOverrideModalOpen(false)}
                 sx={{
@@ -9273,6 +9672,12 @@ const AdminProjectWorkspace = () => {
             </Box>
           </Box>
         </Dialog>
+
+        <ActionDetailsDialog
+          open={actionDetailId !== null}
+          actionId={actionDetailId}
+          onClose={() => setActionDetailId(null)}
+        />
 
         {/* Toast notification for execution not started */}
         <Snackbar

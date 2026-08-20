@@ -50,7 +50,8 @@
       "Bash(echo \"FRONTEND EXIT: $?\")",
       "Bash(node --check routes/dashboardRoutes.js)",
       "Bash(node scripts/generateM5TestCycle4PDF.js)",
-      "Bash(sips -s format png --out m5c4.png /Users/apple/Downloads/m5_test_cycle_4.pdf)"
+      "Bash(sips -s format png --out m5c4.png /Users/apple/Downloads/m5_test_cycle_4.pdf)",
+      "Bash(node --check routes/auditRoutes.js)"
     ]
   }
 }

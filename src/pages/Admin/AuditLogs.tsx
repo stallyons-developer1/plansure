@@ -17,6 +17,7 @@ import {
 import AdminLayout from "../../layouts/AdminLayout";
 import { COLORS } from "../../constants/colors";
 import { auditAPI, userAPI } from "../../services/api";
+import ActionDetailsDialog from "../../components/ActionDetailsDialog";
 
 interface AuditLog {
   _id: string;
@@ -91,6 +92,57 @@ const categories = [
   { value: "SYSTEM", label: "System" },
 ];
 
+/* Shared dropdown styling, matching the existing filter selects. */
+const filterSelectSx = {
+  width: "100%",
+  bgcolor: COLORS.bgPrimary,
+  borderRadius: "8px",
+  "& .MuiOutlinedInput-notchedOutline": { borderColor: COLORS.border },
+  "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: COLORS.border },
+  "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+    borderColor: COLORS.blue,
+    borderWidth: 1,
+  },
+  "& .MuiSelect-select": {
+    color: COLORS.textPrimary,
+    fontSize: "14px",
+    py: 1.25,
+    px: 2,
+  },
+  "& .MuiSvgIcon-root": { color: COLORS.textMuted },
+};
+
+const filterMenuProps = {
+  slotProps: {
+    paper: {
+      sx: {
+        bgcolor: COLORS.bgPrimary,
+        border: `1px solid ${COLORS.border}`,
+        borderRadius: "8px",
+        mt: 0.5,
+        maxHeight: 300,
+        "& .MuiMenuItem-root": {
+          color: COLORS.textPrimary,
+          fontSize: "14px",
+          "&:hover": { bgcolor: COLORS.bgTertiary },
+          "&.Mui-selected": {
+            bgcolor: COLORS.blueBgMedium,
+            "&:hover": { bgcolor: COLORS.blueBgHover },
+          },
+        },
+      },
+    },
+  },
+};
+
+const filterLabelSx = {
+  color: COLORS.textMuted,
+  fontSize: "11px",
+  fontWeight: 600,
+  letterSpacing: "0.5px",
+  mb: 1,
+};
+
 const entityTypes = [
   "All entity",
   "User",
@@ -102,6 +154,7 @@ const entityTypes = [
   "Export",
   "System",
 ];
+
 
 const AuditLogs = () => {
   const [logs, setLogs] = useState<AuditLog[]>([]);
@@ -117,8 +170,21 @@ const AuditLogs = () => {
   const [categoryFilter, setCategoryFilter] = useState("");
   const [userFilter, setUserFilter] = useState("");
   const [entityTypeFilter, setEntityTypeFilter] = useState("All entity");
+  const [projectFilter, setProjectFilter] = useState("");
+  const [weekFilter, setWeekFilter] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+
+  // Only projects/weeks that actually appear in the log, so a filter can never
+  // be set to something that returns nothing.
+  const [auditProjects, setAuditProjects] = useState<
+    Array<{ _id: string; name: string }>
+  >([]);
+  const [auditWeeks, setAuditWeeks] = useState<number[]>([]);
+
+  // Which Action audit row is open in the detail dialog.
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailLog, setDetailLog] = useState<AuditLog | null>(null);
 
   const fetchLogs = async () => {
     setLoading(true);
@@ -128,6 +194,8 @@ const AuditLogs = () => {
         limit: number;
         category?: string;
         userId?: string;
+        projectId?: string;
+        weekNumber?: string;
         startDate?: string;
         endDate?: string;
       } = {
@@ -137,6 +205,8 @@ const AuditLogs = () => {
 
       if (categoryFilter) params.category = categoryFilter;
       if (userFilter) params.userId = userFilter;
+      if (projectFilter) params.projectId = projectFilter;
+      if (weekFilter) params.weekNumber = weekFilter;
       if (startDate) params.startDate = startDate;
       if (endDate) params.endDate = endDate;
 
@@ -160,6 +230,14 @@ const AuditLogs = () => {
     }
   };
 
+  /* Action rows open the underlying action, read-only. The audit entry itself
+     is immutable, so nothing here is editable. */
+  const openActionDetail = (log: AuditLog) => {
+    if (log.resourceType !== "Action" || !log.resourceId) return;
+    setDetailLog(log);
+    setDetailOpen(true);
+  };
+
   const fetchUsers = async () => {
     try {
       const response = await userAPI.getAll();
@@ -171,9 +249,41 @@ const AuditLogs = () => {
     }
   };
 
+  const fetchAuditProjects = async () => {
+    try {
+      const response = await auditAPI.getProjects();
+      if (response.success) {
+        setAuditProjects(response.projects || []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch audit projects:", error);
+    }
+  };
+
+  const fetchAuditWeeks = async (projectId: string) => {
+    try {
+      const response = await auditAPI.getWeeks(projectId || undefined);
+      if (response.success) {
+        const weeks: number[] = response.weeks || [];
+        setAuditWeeks(weeks);
+        // Narrowing by project can drop the week that was selected.
+        setWeekFilter((current) =>
+          current && !weeks.includes(Number(current)) ? "" : current,
+        );
+      }
+    } catch (error) {
+      console.error("Failed to fetch audit weeks:", error);
+    }
+  };
+
   useEffect(() => {
     fetchUsers();
+    fetchAuditProjects();
   }, []);
+
+  useEffect(() => {
+    fetchAuditWeeks(projectFilter);
+  }, [projectFilter]);
 
   useEffect(() => {
     fetchLogs();
@@ -182,6 +292,8 @@ const AuditLogs = () => {
     categoryFilter,
     userFilter,
     entityTypeFilter,
+    projectFilter,
+    weekFilter,
     startDate,
     endDate,
   ]);
@@ -190,6 +302,8 @@ const AuditLogs = () => {
     setCategoryFilter("");
     setUserFilter("");
     setEntityTypeFilter("All entity");
+    setProjectFilter("");
+    setWeekFilter("");
     setStartDate("");
     setEndDate("");
     setPagination((prev) => ({ ...prev, page: 1 }));
@@ -293,7 +407,8 @@ const AuditLogs = () => {
             gridTemplateColumns: {
               xs: "1fr",
               sm: "1fr 1fr",
-              lg: "2fr 1fr 1fr 1fr auto",
+              md: "repeat(3, 1fr)",
+              xl: "2fr repeat(5, 1fr) auto",
             },
             gap: { xs: 2, md: 3 },
             alignItems: "end",
@@ -619,6 +734,44 @@ const AuditLogs = () => {
             </Select>
           </Box>
 
+          <Box>
+            <Typography sx={filterLabelSx}>PROJECT</Typography>
+            <Select
+              value={projectFilter}
+              onChange={(e) => setProjectFilter(e.target.value)}
+              displayEmpty
+              IconComponent={ArrowDownIcon}
+              sx={filterSelectSx}
+              MenuProps={filterMenuProps}
+            >
+              <MenuItem value="">All projects</MenuItem>
+              {auditProjects.map((project) => (
+                <MenuItem key={project._id} value={project._id}>
+                  {project.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </Box>
+
+          <Box>
+            <Typography sx={filterLabelSx}>WEEK</Typography>
+            <Select
+              value={weekFilter}
+              onChange={(e) => setWeekFilter(e.target.value)}
+              displayEmpty
+              IconComponent={ArrowDownIcon}
+              sx={filterSelectSx}
+              MenuProps={filterMenuProps}
+            >
+              <MenuItem value="">All weeks</MenuItem>
+              {auditWeeks.map((week) => (
+                <MenuItem key={week} value={String(week)}>
+                  {`Week ${week}`}
+                </MenuItem>
+              ))}
+            </Select>
+          </Box>
+
           <Button
             onClick={handleClear}
             sx={{
@@ -807,6 +960,7 @@ const AuditLogs = () => {
                 {logs.map((log, index) => (
                   <Box
                     key={log._id}
+                    onClick={() => openActionDetail(log)}
                     sx={{
                       display: "grid",
                       gridTemplateColumns: "14% 14% 18% 12% 12% 30%",
@@ -817,6 +971,10 @@ const AuditLogs = () => {
                           ? `1px solid ${COLORS.borderDark}`
                           : "none",
                       alignItems: "center",
+                      cursor:
+                        log.resourceType === "Action" && log.resourceId
+                          ? "pointer"
+                          : "default",
                       "&:hover": {
                         bgcolor: COLORS.bgTertiary,
                       },
@@ -915,6 +1073,19 @@ const AuditLogs = () => {
           </>
         )}
       </Box>
+
+      <ActionDetailsDialog
+        open={detailOpen}
+        actionId={detailLog?.resourceId || null}
+        subtitle={
+          detailLog
+            ? `${formatAction(detailLog.action)} · ${formatTimestamp(
+                detailLog.createdAt,
+              )}`
+            : undefined
+        }
+        onClose={() => setDetailOpen(false)}
+      />
     </AdminLayout>
   );
 };

@@ -391,6 +391,7 @@ export const actionAPI = {
     priority?: string;
     assignee: string;
     dueDate: string;
+    status?: string;
   }) => {
     const response = await api.post("/actions", data);
     return response.data;
@@ -406,6 +407,7 @@ export const actionAPI = {
       assignee?: string;
       dueDate?: string;
       status?: string;
+      overrideReason?: string;
       programmeId?: string;
       linkedActivity?: { activityId: string; activityName: string };
     },
@@ -550,6 +552,7 @@ export const auditAPI = {
     action?: string;
     userId?: string;
     projectId?: string;
+    weekNumber?: number | string;
     startDate?: string;
     endDate?: string;
     search?: string;
@@ -561,6 +564,8 @@ export const auditAPI = {
     if (params?.action) searchParams.append("action", params.action);
     if (params?.userId) searchParams.append("userId", params.userId);
     if (params?.projectId) searchParams.append("projectId", params.projectId);
+    if (params?.weekNumber !== undefined && params.weekNumber !== "")
+      searchParams.append("weekNumber", params.weekNumber.toString());
     if (params?.startDate) searchParams.append("startDate", params.startDate);
     if (params?.endDate) searchParams.append("endDate", params.endDate);
     if (params?.search) searchParams.append("search", params.search);
@@ -575,6 +580,19 @@ export const auditAPI = {
 
   getActions: async () => {
     const response = await api.get("/audit-logs/actions");
+    return response.data;
+  },
+
+  /** Projects that appear in the audit log, for the filter dropdown. */
+  getProjects: async () => {
+    const response = await api.get("/audit-logs/projects");
+    return response.data;
+  },
+
+  /** Week numbers present in the audit log, optionally narrowed to a project. */
+  getWeeks: async (projectId?: string) => {
+    const params = projectId ? `?projectId=${projectId}` : "";
+    const response = await api.get(`/audit-logs/weeks${params}`);
     return response.data;
   },
 

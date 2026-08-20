@@ -1290,7 +1290,6 @@ const AdminActivities = () => {
                   }
                   slotProps={{
                     htmlInput: {
-                      min: new Date().toLocaleDateString("en-CA"),
                       max: assigningActivity?.endDate,
                     },
                   }}

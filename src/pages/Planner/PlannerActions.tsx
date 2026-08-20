@@ -216,11 +216,14 @@ const PlannerActions = () => {
 
         try {
           const usersRes = await userAPI.getAll({ status: "active" });
+          // The signed-in planner stays in the list so they can assign an
+          // action to themselves; the Admin pages already allow this.
           const activeUsers = (usersRes.users || []).filter(
             (u: User) =>
               (u.role === "planner" || u.role === "user") &&
-              u.status === "active" &&
-              u._id !== user?.id,
+              u.status === "active",
+            //Exclude the signed-in planner
+            // && u._id !== user?.id,
           );
           setUsers(activeUsers);
         } catch (userError) {}
@@ -2178,9 +2181,6 @@ const PlannerActions = () => {
                     setFormData({ ...formData, dueDate: e.target.value })
                   }
                   slotProps={{
-                    htmlInput: {
-                      min: new Date().toLocaleDateString("en-CA"),
-                    },
                     input: {
                       endAdornment: (
                         <InputAdornment

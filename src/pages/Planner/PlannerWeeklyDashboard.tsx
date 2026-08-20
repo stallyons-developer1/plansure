@@ -1102,6 +1102,13 @@ const PlannerWeeklyDashboard = () => {
       "true";
   // The dashboard shows the project's last COMPLETED week, so reflect it as
   // "Closed" rather than the active programme's live (Draft) status.
+  /* The Weekly Dashboard reports on completed governance weeks. Until a week
+     has actually been closed there is nothing to report on, and showing live
+     mid-week figures made it look like a week was closeable from here. */
+  const hasClosedWeek =
+    (data?.cycle?.completedCount ?? 0) > 0 ||
+    _weeksStatus.some((w) => w.status === "closed");
+
   const shownWeekClosed =
     _weeksStatus.find((w) => w.weekNumber === currentWeekNumber)?.status ===
       "closed" || backendCycleStatus === "Closed";
@@ -1292,6 +1299,25 @@ const PlannerWeeklyDashboard = () => {
               </Typography>
             </>
           )}
+        </Box>
+      ) : !hasClosedWeek ? (
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            alignItems: "center",
+            minHeight: 400,
+            gap: 1,
+          }}
+        >
+          <Typography sx={{ color: COLORS.textMuted, fontSize: "16px" }}>
+            No completed weeks yet.
+          </Typography>
+          <Typography sx={{ color: COLORS.textSecondary, fontSize: "14px" }}>
+            Close a governance week in the project workspace to see it reported
+            here.
+          </Typography>
         </Box>
       ) : (
         <>
@@ -2901,7 +2927,6 @@ const PlannerWeeklyDashboard = () => {
                       }
                       slotProps={{
                         htmlInput: {
-                          min: new Date().toLocaleDateString("en-CA"),
                           max: assigningActivity?.finishDate,
                         },
                       }}
