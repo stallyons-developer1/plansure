@@ -97,6 +97,13 @@ interface BlockedActivitiesTableProps {
   }) => void;
   isProjectEnded?: boolean;
   cycleStatus?: string;
+  /*
+   * Weekly Plan Preview and Planner To-Do are the Planner's own outputs, so
+   * they are hidden by default and opted into on the Planner pages. Their
+   * panels are always mounted; this only governs whether the tabs are
+   * reachable.
+   */
+  showPlannerTabs?: boolean;
 }
 
 const BlockedActivitiesTable = ({
@@ -109,6 +116,7 @@ const BlockedActivitiesTable = ({
   onReassignClick,
   isProjectEnded = false,
   cycleStatus = "",
+  showPlannerTabs = false,
 }: BlockedActivitiesTableProps) => {
   const canUnblock =
     cycleStatus === "Execution" || cycleStatus === "Close-Out Eligible";
@@ -129,8 +137,7 @@ const BlockedActivitiesTable = ({
 
   const tabs = [
     "Blocked / Risk Activities",
-    // "Weekly Plan Preview",
-    // "Planner To-Do",
+    ...(showPlannerTabs ? ["Weekly Plan Preview", "Planner To-Do"] : []),
   ];
 
   const formatDate = (dateString: string) => {

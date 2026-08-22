@@ -5350,6 +5350,7 @@ const PlannerProjectWorkspace = () => {
                 }
                 weeklyPlanPreview={weeklyControlData?.weeklyPlanPreview || []}
                 plannerToDo={weeklyControlData?.plannerToDo || []}
+                showPlannerTabs
                 onAssignClick={(activity) =>
                   openAssignChoice({
                     id: activity.activityId,

@@ -915,10 +915,12 @@ const PlannerProjects = () => {
                 <MenuItem value="" disabled>
                   Select phase
                 </MenuItem>
-                <MenuItem value="pre-construction">Pre-construction</MenuItem>
-                <MenuItem value="design">Design</MenuItem>
-                <MenuItem value="construction">Construction</MenuItem>
-                <MenuItem value="commissioning">Commissioning</MenuItem>
+                <MenuItem value="Planning">Planning</MenuItem>
+                <MenuItem value="Design">Design</MenuItem>
+                <MenuItem value="Pre-Construction">Pre-Construction</MenuItem>
+                <MenuItem value="Construction">Construction</MenuItem>
+                <MenuItem value="Commissioning">Commissioning</MenuItem>
+                <MenuItem value="Handover">Handover</MenuItem>
               </Select>
             </Box>
 

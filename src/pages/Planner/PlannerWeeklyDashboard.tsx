@@ -2431,6 +2431,7 @@ const PlannerWeeklyDashboard = () => {
               activities={data?.blockedActivities || []}
               weeklyPlanPreview={data?.weeklyPlanPreview || []}
               plannerToDo={data?.plannerToDo || []}
+              showPlannerTabs
               isProjectEnded={data?.isProjectEnded || false}
               cycleStatus={data?.cycle?.status || ""}
               onAssignClick={(activity) => {

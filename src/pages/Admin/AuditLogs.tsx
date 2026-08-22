@@ -27,9 +27,11 @@ interface AuditLog {
     _id: string;
     name: string;
     email: string;
+    role?: string;
   };
   performedByName?: string;
   performedByEmail?: string;
+  performedByRole?: string;
   resourceType?: string;
   resourceId?: string;
   resourceName?: string;
@@ -53,6 +55,26 @@ const formatAction = (action: string) => {
     .split(" ")
     .map((word) => word.charAt(0) + word.slice(1).toLowerCase())
     .join(" ");
+};
+
+/*
+ * The role is stamped on the entry at write time so it reflects who the actor
+ * was then, not who they are now. Entries written before that field existed
+ * fall back to the account's current role, and anything system-generated has
+ * no actor at all.
+ */
+const actorRole = (log: AuditLog) => {
+  const role = log.performedByRole || log.performedBy?.role;
+  if (!role) return null;
+  return role.charAt(0).toUpperCase() + role.slice(1);
+};
+
+// "admin@plansure.com (Admin)". System-generated entries have no actor and
+// no role, so they stay bare rather than reading "System ()".
+const actorLabel = (log: AuditLog) => {
+  const who = log.performedByEmail || log.performedByName || "System";
+  const role = actorRole(log);
+  return role ? `${who} (${role})` : who;
 };
 
 const formatTimestamp = (dateStr: string) => {
@@ -318,6 +340,7 @@ const AuditLogs = () => {
       "Timestamp",
       "Event Type",
       "Actor",
+      "Actor Role",
       "Entity Type",
       "Entity ID",
       "Description",
@@ -326,6 +349,7 @@ const AuditLogs = () => {
       formatTimestamp(log.createdAt),
       formatAction(log.action),
       log.performedByEmail || log.performedByName || "System",
+      actorRole(log) || "-",
       log.resourceType || "-",
       getEntityId(log),
       log.description,
@@ -1007,7 +1031,7 @@ const AuditLogs = () => {
                         textAlign: "center",
                       }}
                     >
-                      {log.performedByEmail || log.performedByName || "System"}
+                      {actorLabel(log)}
                     </Typography>
                     <Typography
                       sx={{
