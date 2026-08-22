@@ -9,6 +9,8 @@ import {
   DialogActions,
   IconButton,
   CircularProgress,
+  Select,
+  MenuItem,
 } from "@mui/material";
 import {
   Add as AddIcon,
@@ -24,7 +26,7 @@ import {
 import AdminLayout from "../../layouts/AdminLayout";
 import { COLORS } from "../../constants/colors";
 import editIcon from "../../assets/tabler_edit.png";
-import { userAPI } from "../../services/api";
+import { userAPI, projectAPI } from "../../services/api";
 
 interface User {
   _id: string;
@@ -33,6 +35,8 @@ interface User {
   email: string;
   role: "admin" | "planner" | "user";
   projectAccess: string;
+  projectIds?: string[];
+  allProjects?: boolean;
   status: "active" | "pending" | "blocked";
   lastLogin: string | null;
 }
@@ -74,6 +78,8 @@ const UserManagement = () => {
   const [loading, setLoading] = useState(true);
   const [inviteLoading, setInviteLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [projectFilter, setProjectFilter] = useState("");
+  const [projects, setProjects] = useState<{ _id: string; name: string }[]>([]);
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
   const [selectedRole, setSelectedRole] = useState("");
   const [inviteName, setInviteName] = useState("");
@@ -99,8 +105,12 @@ const UserManagement = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const usersRes = await userAPI.getAll();
+        const [usersRes, projectsRes] = await Promise.all([
+          userAPI.getAll(),
+          projectAPI.getAll(),
+        ]);
         setUsers(usersRes.users || []);
+        setProjects(projectsRes.projects || []);
       } catch (error) {
         console.error("Error fetching data:", error);
       } finally {
@@ -241,11 +251,21 @@ const UserManagement = () => {
     }
   };
 
-  const filteredUsers = users.filter(
-    (user) =>
-      user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
+  const filteredUsers = users.filter((user) => {
+    const query = searchQuery.toLowerCase();
+    const matchesSearch =
+      user.name.toLowerCase().includes(query) ||
+      user.email.toLowerCase().includes(query);
+
+    // An admin reaches every project, so they stay listed whichever one is
+    // picked rather than looking unassigned.
+    const matchesProject =
+      !projectFilter ||
+      user.allProjects ||
+      (user.projectIds || []).includes(projectFilter);
+
+    return matchesSearch && matchesProject;
+  });
 
   const totalUsers = users.length;
   const adminCount = users.filter((u) => u.role === "admin").length;
@@ -523,6 +543,52 @@ const UserManagement = () => {
               width: { xs: "100%", md: "auto" },
             }}
           >
+            <Select
+              value={projectFilter}
+              onChange={(e) => setProjectFilter(e.target.value)}
+              displayEmpty
+              sx={{
+                bgcolor: COLORS.bgPrimary,
+                color: COLORS.textPrimary,
+                borderRadius: "8px",
+                fontSize: "14px",
+                minWidth: { xs: "100%", md: "200px" },
+                "& .MuiOutlinedInput-notchedOutline": {
+                  borderColor: COLORS.border,
+                },
+                "&:hover .MuiOutlinedInput-notchedOutline": {
+                  borderColor: COLORS.textMuted,
+                },
+                "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                  borderColor: COLORS.blue,
+                },
+                "& .MuiSelect-select": { py: 1, px: 2 },
+                "& .MuiSvgIcon-root": { color: COLORS.textMuted },
+              }}
+              MenuProps={{
+                slotProps: {
+                  paper: {
+                    sx: {
+                      bgcolor: COLORS.bgSecondary,
+                      border: `1px solid ${COLORS.border}`,
+                      borderRadius: "8px",
+                      mt: 0.5,
+                      "& .MuiMenuItem-root": {
+                        color: COLORS.textPrimary,
+                        fontSize: "14px",
+                      },
+                    },
+                  },
+                },
+              }}
+            >
+              <MenuItem value="">All Projects</MenuItem>
+              {projects.map((project) => (
+                <MenuItem key={project._id} value={project._id}>
+                  {project.name}
+                </MenuItem>
+              ))}
+            </Select>
             <Box
               sx={{
                 display: "flex",
@@ -833,9 +899,12 @@ const UserManagement = () => {
                   <Box
                     sx={{ display: "flex", justifyContent: "center", gap: 2 }}
                   >
-                    {user.status === "pending" && (
-                      resendingUserId === user._id ? (
-                        <CircularProgress size={18} sx={{ color: COLORS.blue }} />
+                    {user.status === "pending" &&
+                      (resendingUserId === user._id ? (
+                        <CircularProgress
+                          size={18}
+                          sx={{ color: COLORS.blue }}
+                        />
                       ) : (
                         <SendIcon
                           onClick={() => handleResendInvite(user._id)}
@@ -848,8 +917,7 @@ const UserManagement = () => {
                           }}
                           titleAccess="Resend Invite"
                         />
-                      )
-                    )}
+                      ))}
                     <Box
                       component="img"
                       src={editIcon}

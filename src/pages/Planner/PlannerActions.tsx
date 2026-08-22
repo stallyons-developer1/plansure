@@ -134,6 +134,7 @@ const PlannerActions = () => {
   const [completeConfirmOpen, setCompleteConfirmOpen] = useState(false);
   const [actionToComplete, setActionToComplete] = useState<Action | null>(null);
   const [completeLoading, setCompleteLoading] = useState(false);
+  const [completeNote, setCompleteNote] = useState("");
 
   const [formData, setFormData] = useState({
     selectedProject: "",
@@ -461,6 +462,7 @@ const PlannerActions = () => {
   const handleCloseCompleteConfirm = () => {
     setCompleteConfirmOpen(false);
     setActionToComplete(null);
+    setCompleteNote("");
   };
 
   const handleConfirmComplete = async () => {
@@ -468,7 +470,10 @@ const PlannerActions = () => {
 
     setCompleteLoading(true);
     try {
-      const response = await actionAPI.complete(actionToComplete._id);
+      const response = await actionAPI.complete(
+        actionToComplete._id,
+        completeNote,
+      );
       if (response.success) {
         await fetchActions();
         await fetchStats();
@@ -3008,6 +3013,49 @@ const PlannerActions = () => {
                 {actionToComplete?.title}
               </Typography>
             </Box>
+          </Box>
+          <Box>
+            <Typography
+              sx={{
+                color: COLORS.textSecondary,
+                fontSize: "12px",
+                fontWeight: 500,
+                mb: 0.5,
+              }}
+            >
+              Reason{" "}
+              <Box component="span" sx={{ color: COLORS.textMuted }}>
+                (optional)
+              </Box>
+            </Typography>
+            <TextField
+              fullWidth
+              multiline
+              rows={3}
+              placeholder="How was this resolved?"
+              value={completeNote}
+              onChange={(e) => setCompleteNote(e.target.value)}
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  bgcolor: COLORS.bgPrimary,
+                  borderRadius: "8px",
+                  "& fieldset": { borderColor: COLORS.border },
+                  "&:hover fieldset": { borderColor: COLORS.border },
+                  "&.Mui-focused fieldset": {
+                    borderColor: COLORS.blue,
+                    borderWidth: 1,
+                  },
+                },
+                "& .MuiInputBase-input": {
+                  color: COLORS.textPrimary,
+                  fontSize: "14px",
+                  "&::placeholder": {
+                    color: COLORS.textMuted,
+                    opacity: 1,
+                  },
+                },
+              }}
+            />
           </Box>
         </DialogContent>
 

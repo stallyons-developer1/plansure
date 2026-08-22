@@ -475,8 +475,14 @@ const AdminProjectWorkspace = () => {
       createdAt?: string;
       updatedAt?: string;
       overrideReason?: string;
+      completionNote?: string;
     }>
   >([]);
+  /* The column only earns its width once something has actually been
+     completed, so it stays hidden on a list of purely open actions. */
+  const showCompletionReason = projectActions.some(
+    (action) => action.status === "Completed",
+  );
   const [selectedActionId, setSelectedActionId] = useState<string | null>(null);
   const [completeConfirmOpen, setCompleteConfirmOpen] = useState(false);
   const [actionToComplete, setActionToComplete] = useState<{
@@ -484,6 +490,7 @@ const AdminProjectWorkspace = () => {
     title: string;
   } | null>(null);
   const [completeLoading, setCompleteLoading] = useState(false);
+  const [completeNote, setCompleteNote] = useState("");
   const [users, setUsers] = useState<
     Array<{ _id: string; name: string; email: string; role: string }>
   >([]);
@@ -1666,6 +1673,7 @@ const AdminProjectWorkspace = () => {
   const handleCloseCompleteConfirm = () => {
     setCompleteConfirmOpen(false);
     setActionToComplete(null);
+    setCompleteNote("");
   };
 
   const handleConfirmComplete = async () => {
@@ -1673,7 +1681,10 @@ const AdminProjectWorkspace = () => {
 
     setCompleteLoading(true);
     try {
-      const response = await actionAPI.complete(actionToComplete._id);
+      const response = await actionAPI.complete(
+        actionToComplete._id,
+        completeNote,
+      );
       if (response.success) {
         if (projectId) {
           const actionsRes = await actionAPI.getAll({
@@ -4054,13 +4065,14 @@ const AdminProjectWorkspace = () => {
                 <Box
                   sx={{
                     display: "grid",
-                    gridTemplateColumns:
-                      "80px minmax(200px, 1fr) 120px 85px 140px 100px 75px 85px 70px",
+                    gridTemplateColumns: showCompletionReason
+                      ? "80px minmax(180px, 1fr) 120px 85px 140px 100px 85px 95px 180px 70px"
+                      : "80px minmax(180px, 1fr) 120px 85px 140px 100px 85px 95px 70px",
                     gap: 1.5,
                     px: 2,
                     py: 1.5,
                     borderBottom: `1px solid ${COLORS.border}`,
-                    minWidth: 1050,
+                    minWidth: showCompletionReason ? 1230 : 1070,
                   }}
                 >
                   {[
@@ -4072,6 +4084,7 @@ const AdminProjectWorkspace = () => {
                     "DUE DATE",
                     "STATUS",
                     "PRIORITY",
+                    ...(showCompletionReason ? ["COMPLETION REASON"] : []),
                     "ACTIONS",
                   ].map((header) => (
                     <Typography
@@ -4116,8 +4129,9 @@ const AdminProjectWorkspace = () => {
                         id={`action-row-${action._id}`}
                         sx={{
                           display: "grid",
-                          gridTemplateColumns:
-                            "80px minmax(200px, 1fr) 120px 85px 140px 100px 75px 85px 70px",
+                          gridTemplateColumns: showCompletionReason
+                            ? "80px minmax(180px, 1fr) 120px 85px 140px 100px 85px 95px 180px 70px"
+                            : "80px minmax(180px, 1fr) 120px 85px 140px 100px 85px 95px 70px",
                           gap: 1.5,
                           px: 2,
                           py: 2,
@@ -4126,7 +4140,7 @@ const AdminProjectWorkspace = () => {
                               ? `1px solid ${COLORS.border}`
                               : "none",
                           alignItems: "center",
-                          minWidth: 1050,
+                          minWidth: showCompletionReason ? 1230 : 1070,
                           bgcolor: isSelected
                             ? `${COLORS.blue}15`
                             : "transparent",
@@ -4330,6 +4344,33 @@ const AdminProjectWorkspace = () => {
                             {action.priority}
                           </Box>
                         </Box>
+                        {showCompletionReason && (
+                          <Box
+                            sx={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                          >
+                            <Typography
+                              sx={{
+                                color: action.completionNote
+                                  ? COLORS.textSecondary
+                                  : COLORS.textMuted,
+                                fontSize: "13px",
+                                textAlign: "center",
+                                maxWidth: "100%",
+                                // Wraps onto as many lines as the note needs
+                                // rather than truncating it out of sight.
+                                whiteSpace: "normal",
+                                overflowWrap: "anywhere",
+                                lineHeight: 1.4,
+                              }}
+                            >
+                              {action.completionNote || "-"}
+                            </Typography>
+                          </Box>
+                        )}
                         <Box
                           sx={{
                             display: "flex",
@@ -8371,6 +8412,49 @@ const AdminProjectWorkspace = () => {
                   {actionToComplete?.title}
                 </Typography>
               </Box>
+            </Box>
+            <Box>
+              <Typography
+                sx={{
+                  color: COLORS.textSecondary,
+                  fontSize: "12px",
+                  fontWeight: 500,
+                  mb: 0.5,
+                }}
+              >
+                Reason{" "}
+                <Box component="span" sx={{ color: COLORS.textMuted }}>
+                  (optional)
+                </Box>
+              </Typography>
+              <TextField
+                fullWidth
+                multiline
+                rows={3}
+                placeholder="How was this resolved?"
+                value={completeNote}
+                onChange={(e) => setCompleteNote(e.target.value)}
+                sx={{
+                  "& .MuiOutlinedInput-root": {
+                    bgcolor: COLORS.bgPrimary,
+                    borderRadius: "8px",
+                    "& fieldset": { borderColor: COLORS.border },
+                    "&:hover fieldset": { borderColor: COLORS.border },
+                    "&.Mui-focused fieldset": {
+                      borderColor: COLORS.blue,
+                      borderWidth: 1,
+                    },
+                  },
+                  "& .MuiInputBase-input": {
+                    color: COLORS.textPrimary,
+                    fontSize: "14px",
+                    "&::placeholder": {
+                      color: COLORS.textMuted,
+                      opacity: 1,
+                    },
+                  },
+                }}
+              />
             </Box>
           </DialogContent>
 

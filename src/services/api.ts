@@ -416,8 +416,9 @@ export const actionAPI = {
     return response.data;
   },
 
-  complete: async (id: string) => {
-    const response = await api.patch(`/actions/${id}/complete`);
+  /** Toggles completion. `reason` is an optional note explaining the outcome. */
+  complete: async (id: string, reason?: string) => {
+    const response = await api.patch(`/actions/${id}/complete`, { reason });
     return response.data;
   },
 
