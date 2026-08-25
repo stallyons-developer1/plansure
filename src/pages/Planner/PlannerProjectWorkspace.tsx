@@ -258,6 +258,27 @@ const PlannerProjectWorkspace = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
+
+  /* Admins aside, an action can be completed by the person it sits with or by
+     whoever raised it — a planner who assigns work to another planner still
+     owns the outcome and needs to be able to close it out. Mirrors the same
+     rule on PATCH /actions/:id/complete. */
+  const canCompleteAction = (action: {
+    status?: string;
+    assignee?: { _id?: string } | null;
+    createdBy?: { _id?: string } | null;
+  }) => {
+    // PM Override is terminal: the action was force-closed against a recorded
+    // reason, so it cannot then be marked complete by anyone, admins included.
+    if (action.status === "PM Override") return false;
+    if (user?.role === "admin") return true;
+    const userId = String(user?.id || "");
+    if (!userId) return false;
+    return (
+      String(action.assignee?._id || "") === userId ||
+      String(action.createdBy?._id || "") === userId
+    );
+  };
   const [project, setProject] = useState<ProjectData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState(() => {
@@ -415,6 +436,7 @@ const PlannerProjectWorkspace = () => {
       updatedAt?: string;
       overrideReason?: string;
       completionNote?: string;
+      createdBy?: { _id?: string; name?: string };
     }>
   >([]);
   /* The column only earns its width once something has actually been
@@ -2125,6 +2147,13 @@ const PlannerProjectWorkspace = () => {
         !isActionFromClosedWeek(a),
     ).length,
   };
+
+  /* Close-out needs both halves of the interrogation done: every activity in
+     the lookahead assigned (or explicitly marked as needing no action), and
+     every required action closed. unassignedInWeek comes from weekly-control
+     and uses the same window as the backend gate. */
+  const unassignedActivityCount =
+    weeklyControlData?.unassignedInWeek || 0;
 
   const weeklyActionStats = {
     total:
@@ -4319,15 +4348,9 @@ const PlannerProjectWorkspace = () => {
                                 setToastOpen(true);
                                 return;
                               }
-                              const assigneeId = String(
-                                (action.assignee as unknown as { _id?: string })
-                                  ?._id || "",
-                              );
-                              const userId = String(user?.id || "");
-                              const isAssignee =
-                                assigneeId === userId && assigneeId !== "";
+                              const canComplete = canCompleteAction(action);
 
-                              if (action.status !== "Completed" && isAssignee) {
+                              if (action.status !== "Completed" && canComplete) {
                                 handleOpenCompleteConfirm({
                                   _id: action._id,
                                   title: action.title,
@@ -4337,16 +4360,12 @@ const PlannerProjectWorkspace = () => {
                             title={
                               action.status === "Completed"
                                 ? "Already completed"
+                                : action.status === "PM Override"
+                                  ? "Force-closed by PM Override — cannot be completed"
                                 : isActionFromClosedWeek(action)
                                   ? "Cannot complete action from closed week"
-                                  : String(
-                                        (
-                                          action.assignee as unknown as {
-                                            _id?: string;
-                                          }
-                                        )?._id || "",
-                                      ) !== String(user?.id || "")
-                                    ? "Only the assignee can complete this action"
+                                  : !canCompleteAction(action)
+                                    ? "Only the assignee or the person who raised it can complete this action"
                                     : "Mark as complete"
                             }
                             sx={{
@@ -4355,26 +4374,14 @@ const PlannerProjectWorkspace = () => {
                               cursor:
                                 action.status === "Completed" ||
                                 isActionFromClosedWeek(action) ||
-                                String(
-                                  (
-                                    action.assignee as unknown as {
-                                      _id?: string;
-                                    }
-                                  )?._id || "",
-                                ) !== String(user?.id || "")
+                                !canCompleteAction(action)
                                   ? "not-allowed"
                                   : "pointer",
                               opacity:
                                 action.status === "Completed"
                                   ? 1
                                   : isActionFromClosedWeek(action) ||
-                                      String(
-                                        (
-                                          action.assignee as unknown as {
-                                            _id?: string;
-                                          }
-                                        )?._id || "",
-                                      ) !== String(user?.id || "")
+                                      !canCompleteAction(action)
                                     ? 0.3
                                     : 0.7,
                               filter:
@@ -4385,26 +4392,14 @@ const PlannerProjectWorkspace = () => {
                                 opacity:
                                   action.status === "Completed" ||
                                   isActionFromClosedWeek(action) ||
-                                  String(
-                                    (
-                                      action.assignee as unknown as {
-                                        _id?: string;
-                                      }
-                                    )?._id || "",
-                                  ) !== String(user?.id || "")
+                                  !canCompleteAction(action)
                                     ? action.status === "Completed"
                                       ? 1
                                       : 0.3
                                     : 1,
                                 filter:
                                   action.status !== "Completed" &&
-                                  String(
-                                    (
-                                      action.assignee as unknown as {
-                                        _id?: string;
-                                      }
-                                    )?._id || "",
-                                  ) === String(user?.id || "")
+                                  canCompleteAction(action)
                                     ? "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(5323%) hue-rotate(107deg) brightness(92%) contrast(88%)"
                                     : action.status === "Completed"
                                       ? "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(5323%) hue-rotate(107deg) brightness(92%) contrast(88%)"
@@ -6397,9 +6392,14 @@ const PlannerProjectWorkspace = () => {
                   >
                     {uploadedProgramme?.cycleStatus === "Close-Out Eligible"
                       ? "This week is Close-Out Eligible. It can now be closed and locked from Weekly Control."
-                      : weeklyActionStats.openRequired > 0
-                        ? `${weeklyActionStats.openRequired} required action(s) still open. Complete them to mark this week Close-Out Eligible.`
-                        : "Mark the week Close-Out Eligible to enable closing."}
+                      : unassignedActivityCount > 0 &&
+                          weeklyActionStats.openRequired > 0
+                        ? `${unassignedActivityCount} activit${unassignedActivityCount === 1 ? "y" : "ies"} still unassigned and ${weeklyActionStats.openRequired} required action(s) still open.`
+                        : unassignedActivityCount > 0
+                          ? `${unassignedActivityCount} activit${unassignedActivityCount === 1 ? "y is" : "ies are"} still unassigned. Assign every activity to mark this week Close-Out Eligible.`
+                          : weeklyActionStats.openRequired > 0
+                            ? `${weeklyActionStats.openRequired} required action(s) still open. Complete them to mark this week Close-Out Eligible.`
+                            : "Mark the week Close-Out Eligible to enable closing."}
                   </Typography>
 
                   {uploadedProgramme?.cycleStatus === "Close-Out Eligible" ? (
@@ -6431,6 +6431,7 @@ const PlannerProjectWorkspace = () => {
                       disabled={
                         markingCloseOut ||
                         weeklyActionStats.openRequired > 0 ||
+                        unassignedActivityCount > 0 ||
                         weeklyControlData?.isProjectEnded
                       }
                       startIcon={

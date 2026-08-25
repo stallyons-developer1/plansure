@@ -108,6 +108,27 @@ const getInitials = (name: string): string => {
 
 const AdminActions = () => {
   const { user } = useAuth();
+
+  /* Admins aside, an action can be completed by the person it sits with or by
+     whoever raised it — a planner who assigns work to another planner still
+     owns the outcome and needs to be able to close it out. Mirrors the same
+     rule on PATCH /actions/:id/complete. */
+  const canCompleteAction = (action: {
+    status?: string;
+    assignee?: { _id?: string } | null;
+    createdBy?: { _id?: string } | null;
+  }) => {
+    // PM Override is terminal: the action was force-closed against a recorded
+    // reason, so it cannot then be marked complete by anyone, admins included.
+    if (action.status === "PM Override") return false;
+    if (user?.role === "admin") return true;
+    const userId = String(user?.id || "");
+    if (!userId) return false;
+    return (
+      String(action.assignee?._id || "") === userId ||
+      String(action.createdBy?._id || "") === userId
+    );
+  };
   const [actions, setActions] = useState<Action[]>([]);
   const [actionsLoading, setActionsLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("all");
@@ -1485,12 +1506,7 @@ const AdminActions = () => {
                             setToastOpen(true);
                             return;
                           }
-                          const assigneeId = String(action.assignee?._id || "");
-                          const userId = String(user?.id || "");
-                          const isAssignee =
-                            assigneeId === userId && assigneeId !== "";
-                          const canComplete =
-                            user?.role === "admin" || isAssignee;
+                          const canComplete = canCompleteAction(action);
 
                           if (action.status !== "Completed" && canComplete) {
                             handleOpenCompleteConfirm(action);
@@ -1501,10 +1517,10 @@ const AdminActions = () => {
                             ? "Execution has not started yet. Please start execution first."
                             : action.status === "Completed"
                               ? "Already completed"
-                              : String(action.assignee?._id || "") !==
-                                    String(user?.id || "") &&
-                                  user?.role !== "admin"
-                                ? "Only the assignee can complete this action"
+                                : action.status === "PM Override"
+                                  ? "Force-closed by PM Override — cannot be completed"
+                              : !canCompleteAction(action)
+                                ? "Only the assignee or the person who raised it can complete this action"
                                 : "Mark as complete"
                         }
                         sx={{
@@ -1513,18 +1529,14 @@ const AdminActions = () => {
                           cursor:
                             !isExecutionMode() ||
                             action.status === "Completed" ||
-                            (String(action.assignee?._id || "") !==
-                              String(user?.id || "") &&
-                              user?.role !== "admin")
+                            (!canCompleteAction(action))
                               ? "not-allowed"
                               : "pointer",
                           opacity: !isExecutionMode()
                             ? 0.3
                             : action.status === "Completed"
                               ? 1
-                              : String(action.assignee?._id || "") !==
-                                    String(user?.id || "") &&
-                                  user?.role !== "admin"
+                              : !canCompleteAction(action)
                                 ? 0.3
                                 : 0.6,
                           filter:
@@ -1534,18 +1546,14 @@ const AdminActions = () => {
                           "&:hover": {
                             opacity:
                               action.status === "Completed" ||
-                              (String(action.assignee?._id || "") !==
-                                String(user?.id || "") &&
-                                user?.role !== "admin")
+                              (!canCompleteAction(action))
                                 ? action.status === "Completed"
                                   ? 1
                                   : 0.3
                                 : 1,
                             filter:
                               action.status !== "Completed" &&
-                              (String(action.assignee?._id || "") ===
-                                String(user?.id || "") ||
-                                user?.role === "admin")
+                              canCompleteAction(action)
                                 ? "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(5323%) hue-rotate(107deg) brightness(92%) contrast(88%)"
                                 : action.status === "Completed"
                                   ? "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(5323%) hue-rotate(107deg) brightness(92%) contrast(88%)"

@@ -113,6 +113,27 @@ const getInitials = (name: string): string => {
 
 const PlannerActions = () => {
   const { user } = useAuth();
+
+  /* Admins aside, an action can be completed by the person it sits with or by
+     whoever raised it — a planner who assigns work to another planner still
+     owns the outcome and needs to be able to close it out. Mirrors the same
+     rule on PATCH /actions/:id/complete. */
+  const canCompleteAction = (action: {
+    status?: string;
+    assignee?: { _id?: string } | null;
+    createdBy?: { _id?: string } | null;
+  }) => {
+    // PM Override is terminal: the action was force-closed against a recorded
+    // reason, so it cannot then be marked complete by anyone, admins included.
+    if (action.status === "PM Override") return false;
+    if (user?.role === "admin") return true;
+    const userId = String(user?.id || "");
+    if (!userId) return false;
+    return (
+      String(action.assignee?._id || "") === userId ||
+      String(action.createdBy?._id || "") === userId
+    );
+  };
   const [actions, setActions] = useState<Action[]>([]);
   const [actionsLoading, setActionsLoading] = useState(true);
   const [actionStats, setActionStats] = useState<ActionStats>({
@@ -1326,21 +1347,19 @@ const PlannerActions = () => {
                         component="img"
                         src={frameIcon}
                         onClick={() => {
-                          const assigneeId = String(action.assignee?._id || "");
-                          const userId = String(user?.id || "");
-                          const isAssignee =
-                            assigneeId === userId && assigneeId !== "";
+                          const canComplete = canCompleteAction(action);
 
-                          if (action.status !== "Completed" && isAssignee) {
+                          if (action.status !== "Completed" && canComplete) {
                             handleOpenCompleteConfirm(action);
                           }
                         }}
                         title={
                           action.status === "Completed"
                             ? "Already completed"
-                            : String(action.assignee?._id || "") !==
-                                String(user?.id || "")
-                              ? "Only the assignee can complete this action"
+                                : action.status === "PM Override"
+                                  ? "Force-closed by PM Override — cannot be completed"
+                            : !canCompleteAction(action)
+                              ? "Only the assignee or the person who raised it can complete this action"
                               : "Mark as complete"
                         }
                         sx={{
@@ -1348,15 +1367,13 @@ const PlannerActions = () => {
                           height: 18,
                           cursor:
                             action.status === "Completed" ||
-                            String(action.assignee?._id || "") !==
-                              String(user?.id || "")
+                            !canCompleteAction(action)
                               ? "not-allowed"
                               : "pointer",
                           opacity:
                             action.status === "Completed"
                               ? 1
-                              : String(action.assignee?._id || "") !==
-                                  String(user?.id || "")
+                              : !canCompleteAction(action)
                                 ? 0.3
                                 : 0.6,
                           filter:
@@ -1366,16 +1383,14 @@ const PlannerActions = () => {
                           "&:hover": {
                             opacity:
                               action.status === "Completed" ||
-                              String(action.assignee?._id || "") !==
-                                String(user?.id || "")
+                              !canCompleteAction(action)
                                 ? action.status === "Completed"
                                   ? 1
                                   : 0.3
                                 : 1,
                             filter:
                               action.status !== "Completed" &&
-                              String(action.assignee?._id || "") ===
-                                String(user?.id || "")
+                              canCompleteAction(action)
                                 ? "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(5323%) hue-rotate(107deg) brightness(92%) contrast(88%)"
                                 : action.status === "Completed"
                                   ? "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(5323%) hue-rotate(107deg) brightness(92%) contrast(88%)"

@@ -28,6 +28,7 @@ interface ActionDetail {
   dueDate?: string;
   createdAt?: string;
   updatedAt?: string;
+  completionNote?: string;
   overrideReason?: string;
   overriddenAt?: string;
   overriddenBy?: { name?: string };
@@ -289,6 +290,14 @@ const ActionDetailsDialog = ({
                 value={action.linkedActivityOwnerName || "Unassigned"}
               />
             </Box>
+
+            {/* Optional note captured when the action was completed. Shown
+                always so its absence is explicit rather than ambiguous. */}
+            <ReadOnlyField
+              label="Completion Reason"
+              value={action.completionNote}
+              rows={2}
+            />
 
             {/* Evidence only exists for a PM Override. */}
             {action.status === "PM Override" && (
