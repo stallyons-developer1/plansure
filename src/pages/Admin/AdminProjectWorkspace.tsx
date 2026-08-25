@@ -8428,16 +8428,16 @@ const AdminProjectWorkspace = () => {
                   mb: 0.5,
                 }}
               >
-                Reason{" "}
-                <Box component="span" sx={{ color: COLORS.textMuted }}>
-                  (optional)
+                Closure Narrative{" "}
+                <Box component="span" sx={{ color: COLORS.red }}>
+                  *
                 </Box>
               </Typography>
               <TextField
                 fullWidth
                 multiline
                 rows={3}
-                placeholder="How was this resolved?"
+                placeholder="What was the response or outcome? (required)"
                 value={completeNote}
                 onChange={(e) => setCompleteNote(e.target.value)}
                 sx={{
@@ -8493,7 +8493,7 @@ const AdminProjectWorkspace = () => {
             </Button>
             <Button
               onClick={handleConfirmComplete}
-              disabled={completeLoading}
+              disabled={completeLoading || completeNote.trim().length < 10}
               sx={{
                 color: COLORS.white,
                 bgcolor: COLORS.green,

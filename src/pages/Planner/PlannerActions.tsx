@@ -459,20 +459,14 @@ const PlannerActions = () => {
     }
   };
 
-  const handleCloseAction = async () => {
-    if (viewingAction) {
-      try {
-        const response = await actionAPI.complete(viewingAction._id);
-        if (response.success) {
-          await fetchActions();
-          await fetchStats();
-          handleCloseDetailDrawer();
-        }
-      } catch (error) {
-        console.error("Failed to close action:", error);
-        alert("Failed to close action. Please try again.");
-      }
-    }
+  /* Closing from the detail drawer goes through the same confirm dialog as the
+     list, because closure now requires a narrative (MS-05 N1) and this path
+     had no field to capture one. */
+  const handleCloseAction = () => {
+    if (!viewingAction) return;
+    const action = viewingAction;
+    handleCloseDetailDrawer();
+    handleOpenCompleteConfirm(action);
   };
 
   const handleOpenCompleteConfirm = (action: Action) => {
@@ -3038,16 +3032,16 @@ const PlannerActions = () => {
                 mb: 0.5,
               }}
             >
-              Reason{" "}
-              <Box component="span" sx={{ color: COLORS.textMuted }}>
-                (optional)
+              Closure Narrative{" "}
+              <Box component="span" sx={{ color: COLORS.red }}>
+                *
               </Box>
             </Typography>
             <TextField
               fullWidth
               multiline
               rows={3}
-              placeholder="How was this resolved?"
+              placeholder="What was the response or outcome? (required)"
               value={completeNote}
               onChange={(e) => setCompleteNote(e.target.value)}
               sx={{
@@ -3103,7 +3097,7 @@ const PlannerActions = () => {
           </Button>
           <Button
             onClick={handleConfirmComplete}
-            disabled={completeLoading}
+            disabled={completeLoading || completeNote.trim().length < 10}
             sx={{
               color: COLORS.white,
               bgcolor: COLORS.green,
