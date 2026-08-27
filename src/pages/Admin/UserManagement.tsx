@@ -11,6 +11,7 @@ import {
   CircularProgress,
   Select,
   MenuItem,
+  Checkbox,
 } from "@mui/material";
 import {
   Add as AddIcon,
@@ -84,6 +85,9 @@ const UserManagement = () => {
   const [selectedRole, setSelectedRole] = useState("");
   const [inviteName, setInviteName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
+  /* Projects granted at invite time. Only offered for the User role — the
+     other roles are not scoped to projects this way. */
+  const [inviteProjects, setInviteProjects] = useState<string[]>([]);
   const [inviteError, setInviteError] = useState("");
 
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -125,6 +129,7 @@ const UserManagement = () => {
     setInviteName("");
     setInviteEmail("");
     setSelectedRole("");
+    setInviteProjects([]);
     setInviteError("");
   };
 
@@ -141,6 +146,9 @@ const UserManagement = () => {
         name: inviteName,
         email: inviteEmail,
         role: selectedRole.toLowerCase(),
+        ...(selectedRole === "User" && inviteProjects.length > 0
+          ? { projectIds: inviteProjects }
+          : {}),
       });
 
       if (response.success) {
@@ -1113,7 +1121,10 @@ const UserManagement = () => {
               sx={{ display: "flex", flexDirection: "column", gap: 1.5, mt: 1 }}
             >
               <Box
-                onClick={() => setSelectedRole("Admin")}
+                onClick={() => {
+                  setSelectedRole("Admin");
+                  setInviteProjects([]);
+                }}
                 sx={{
                   display: "flex",
                   alignItems: "flex-start",
@@ -1156,7 +1167,10 @@ const UserManagement = () => {
               </Box>
 
               <Box
-                onClick={() => setSelectedRole("Planner")}
+                onClick={() => {
+                  setSelectedRole("Planner");
+                  setInviteProjects([]);
+                }}
                 sx={{
                   display: "flex",
                   alignItems: "flex-start",
@@ -1243,6 +1257,109 @@ const UserManagement = () => {
               </Box>
             </Box>
           </Box>
+
+          {/* Project access is scoped per user, so it is only asked for once
+              the User role is chosen. Multiple projects can be granted. */}
+          {selectedRole === "User" && (
+            <Box sx={{ mt: 2 }}>
+              <Typography
+                sx={{
+                  color: COLORS.border,
+                  fontSize: "12px",
+                  fontWeight: 500,
+                  mb: 0.5,
+                }}
+              >
+                Project Access
+              </Typography>
+              <Select
+                multiple
+                fullWidth
+                displayEmpty
+                value={inviteProjects}
+                onChange={(e) =>
+                  setInviteProjects(
+                    typeof e.target.value === "string"
+                      ? e.target.value.split(",")
+                      : e.target.value,
+                  )
+                }
+                renderValue={(selected) =>
+                  selected.length === 0 ? (
+                    <Box component="span" sx={{ color: COLORS.textMuted }}>
+                      No projects
+                    </Box>
+                  ) : (
+                    projects
+                      .filter((p) => selected.includes(p._id))
+                      .map((p) => p.name)
+                      .join(", ")
+                  )
+                }
+                sx={{
+                  bgcolor: COLORS.bgPrimary,
+                  color: COLORS.textPrimary,
+                  borderRadius: "8px",
+                  fontSize: "14px",
+                  "& .MuiOutlinedInput-notchedOutline": {
+                    borderColor: COLORS.white,
+                  },
+                  "&:hover .MuiOutlinedInput-notchedOutline": {
+                    borderColor: COLORS.textMuted,
+                  },
+                  "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                    borderColor: COLORS.blue,
+                  },
+                  "& .MuiSelect-select": { py: 1.4, px: 1.75 },
+                  "& .MuiSvgIcon-root": { color: COLORS.textMuted },
+                }}
+                MenuProps={{
+                  slotProps: {
+                    paper: {
+                      sx: {
+                        bgcolor: COLORS.bgSecondary,
+                        border: `1px solid ${COLORS.border}`,
+                        borderRadius: "8px",
+                        mt: 0.5,
+                        maxHeight: 280,
+                        "& .MuiMenuItem-root": {
+                          color: COLORS.textPrimary,
+                          fontSize: "14px",
+                        },
+                      },
+                    },
+                  },
+                }}
+              >
+                {projects.length === 0 ? (
+                  <MenuItem disabled value="">
+                    No projects available
+                  </MenuItem>
+                ) : (
+                  projects.map((project) => (
+                    <MenuItem key={project._id} value={project._id}>
+                      <Checkbox
+                        checked={inviteProjects.includes(project._id)}
+                        sx={{
+                          color: COLORS.textMuted,
+                          p: 0.5,
+                          mr: 1,
+                          "&.Mui-checked": { color: COLORS.blue },
+                        }}
+                      />
+                      {project.name}
+                    </MenuItem>
+                  ))
+                )}
+              </Select>
+              <Typography
+                sx={{ color: COLORS.textMuted, fontSize: "12px", mt: 0.5 }}
+              >
+                Optional — access also appears automatically once work is
+                assigned to them.
+              </Typography>
+            </Box>
+          )}
         </DialogContent>
         <DialogActions
           sx={{

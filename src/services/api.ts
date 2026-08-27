@@ -309,6 +309,7 @@ export const userAPI = {
     email: string;
     role: string;
     projectId?: string;
+    projectIds?: string[];
   }) => {
     const response = await api.post("/users/invite", data);
     return response.data;
