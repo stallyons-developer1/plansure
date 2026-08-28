@@ -685,7 +685,7 @@ const PlannerProjectWorkspace = () => {
           // action to themselves; the Admin workspace already allows this.
           const activeUsers = (response.users || []).filter(
             (u: { _id: string; role: string; status: string }) =>
-              (u.role === "planner" || u.role === "user") &&
+              u.role === "planner" &&
               u.status === "active",
             //Exclude the signed-in planner
             // && u._id !== user?.id,

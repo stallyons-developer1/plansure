@@ -703,7 +703,7 @@ const AdminProjectWorkspace = () => {
         if (response.success) {
           const activeUsers = (response.users || []).filter(
             (user: { role: string; status: string }) =>
-              (user.role === "planner" || user.role === "user") &&
+              user.role === "planner" &&
               user.status === "active",
           );
           setUsers(activeUsers);
