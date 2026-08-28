@@ -32,7 +32,7 @@ import { useAuth } from "../context/AuthContext";
 import { COLORS } from "../constants/colors";
 import logo from "../assets/logo.png";
 import projectsIcon from "../assets/sidebar/projects.png";
-import activitiesIcon from "../assets/sidebar/activitiesClipboard.png";
+// import activitiesIcon from "../assets/sidebar/activitiesClipboard.png";
 import exportIcon from "../assets/sidebar/export.png";
 
 const DRAWER_WIDTH = 240;
@@ -147,13 +147,13 @@ const DashboardLayout = ({
   ];
 
   const viewMenuItems = [
-    {
-      text: "Activities & Lookahead",
-      iconSrc: activitiesIcon,
-      path: "/dashboard/activities",
-      isCustomIcon: true,
-      iconSize: { width: 16, height: 18 },
-    },
+    // {
+    //   text: "Activities & Lookahead",
+    //   iconSrc: activitiesIcon,
+    //   path: "/dashboard/activities",
+    //   isCustomIcon: true,
+    //   iconSize: { width: 16, height: 18 },
+    // },
     /* SRS §10.2 grants the User role: view dashboard, view projects, view
        lookahead and view exports (read-only). Governance Dashboard is not on
        that list; exports are, so this slot carries exports. */
