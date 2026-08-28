@@ -7953,7 +7953,12 @@ const AdminProjectWorkspace = () => {
 
               {/* Status row (half width) */}
               <Box
-                sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 2,
+                  mt: 2,
+                }}
               >
                 <Box>
                   <Typography
@@ -7962,7 +7967,6 @@ const AdminProjectWorkspace = () => {
                       fontSize: "12px",
                       fontWeight: 500,
                       mb: 0.5,
-                      mt: 2,
                     }}
                   >
                     Status
@@ -9112,7 +9116,12 @@ const AdminProjectWorkspace = () => {
               {/* Status | Owner row. Owner is the activity's accountable
                   person and is saved onto the activity, not the action. */}
               <Box
-                sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 2,
+                  mt: 2,
+                }}
               >
                 <Box>
                   <Typography
@@ -9121,7 +9130,6 @@ const AdminProjectWorkspace = () => {
                       fontSize: "12px",
                       fontWeight: 500,
                       mb: 0.5,
-                      mt: 2,
                     }}
                   >
                     Status
