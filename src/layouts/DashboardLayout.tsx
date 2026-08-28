@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   Box,
@@ -29,6 +29,8 @@ import {
   SettingsOutlined as SettingsIcon,
 } from "@mui/icons-material";
 import { useAuth } from "../context/AuthContext";
+import { notificationAPI } from "../services/api";
+import { usePushNotifications } from "../hooks/usePushNotifications";
 import { COLORS } from "../constants/colors";
 import logo from "../assets/logo.png";
 import projectsIcon from "../assets/sidebar/projects.png";
@@ -44,36 +46,27 @@ interface DashboardLayoutProps {
   headerAction?: React.ReactNode;
 }
 
-const sampleNotifications = [
-  {
-    id: 1,
-    title: "New project assigned",
-    message: "You have been assigned to Project Alpha",
-    time: "2 min ago",
-    read: false,
-  },
-  {
-    id: 2,
-    title: "Action overdue",
-    message: "Action #1234 is overdue by 2 days",
-    time: "1 hour ago",
-    read: false,
-  },
-  {
-    id: 3,
-    title: "Weekly report ready",
-    message: "Your weekly governance report is ready",
-    time: "3 hours ago",
-    read: true,
-  },
-  {
-    id: 4,
-    title: "RAG status changed",
-    message: "Project Beta status changed to Amber",
-    time: "Yesterday",
-    read: true,
-  },
-];
+/* Matches the payload from GET /api/notifications, which the Admin and Planner
+   layouts already render. This layout showed a hardcoded sample list, so a real
+   notification never reached a User. */
+interface Notification {
+  _id: string;
+  title: string;
+  message: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
+const timeAgo = (value: string) => {
+  const diff = Date.now() - new Date(value).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins} min ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days === 1 ? "" : "s"} ago`;
+};
 
 const DashboardLayout = ({
   children,
@@ -86,23 +79,64 @@ const DashboardLayout = ({
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [notificationAnchor, setNotificationAnchor] =
     useState<HTMLElement | null>(null);
-  const [notifications, setNotifications] = useState(sampleNotifications);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  usePushNotifications();
+
+  const fetchNotifications = useCallback(async () => {
+    try {
+      const response = await notificationAPI.getAll(20, false);
+      if (response.success) {
+        setNotifications(response.notifications || []);
+        setUnreadCount(response.unreadCount || 0);
+      }
+    } catch (error) {
+      console.error("Failed to fetch notifications:", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 5000);
+    return () => clearInterval(interval);
+  }, [fetchNotifications]);
 
   const handleNotificationClick = (event: React.MouseEvent<HTMLElement>) => {
     setNotificationAnchor(event.currentTarget);
+    fetchNotifications();
   };
 
   const handleNotificationClose = () => {
     setNotificationAnchor(null);
   };
 
-  const handleMarkAllRead = () => {
-    setNotifications(notifications.map((n) => ({ ...n, read: true })));
+  const handleMarkAllRead = async () => {
+    try {
+      await notificationAPI.markAllAsRead();
+      setNotifications(notifications.map((n) => ({ ...n, isRead: true })));
+      setUnreadCount(0);
+    } catch (error) {
+      console.error("Failed to mark all as read:", error);
+    }
+  };
+
+  const handleNotificationItemClick = async (notification: Notification) => {
+    if (notification.isRead) return;
+    try {
+      await notificationAPI.markAsRead(notification._id);
+      setNotifications(
+        notifications.map((n) =>
+          n._id === notification._id ? { ...n, isRead: true } : n,
+        ),
+      );
+      setUnreadCount((count) => Math.max(0, count - 1));
+    } catch (error) {
+      console.error("Failed to mark as read:", error);
+    }
   };
 
   const handleViewAll = () => {
@@ -596,14 +630,24 @@ const DashboardLayout = ({
               )}
             </Box>
             <Box sx={{ maxHeight: 300, overflowY: "auto" }}>
-              {notifications.map((notification) => (
+              {notifications.length === 0 ? (
+                <Box sx={{ p: 3, textAlign: "center" }}>
+                  <Typography
+                    sx={{ color: COLORS.textMuted, fontSize: "14px" }}
+                  >
+                    No notifications
+                  </Typography>
+                </Box>
+              ) : (
+                notifications.map((notification) => (
                 <Box
-                  key={notification.id}
+                  key={notification._id}
+                  onClick={() => handleNotificationItemClick(notification)}
                   sx={{
                     p: 2,
                     borderBottom: `1px solid ${COLORS.border}`,
                     cursor: "pointer",
-                    bgcolor: notification.read
+                    bgcolor: notification.isRead
                       ? "transparent"
                       : "rgba(59, 130, 246, 0.05)",
                     "&:hover": {
@@ -622,13 +666,13 @@ const DashboardLayout = ({
                     <Typography
                       sx={{
                         color: COLORS.textPrimary,
-                        fontWeight: notification.read ? 400 : 600,
+                        fontWeight: notification.isRead ? 400 : 600,
                         fontSize: "14px",
                       }}
                     >
                       {notification.title}
                     </Typography>
-                    {!notification.read && (
+                    {!notification.isRead && (
                       <Box
                         sx={{
                           width: 8,
@@ -656,10 +700,11 @@ const DashboardLayout = ({
                       fontSize: "12px",
                     }}
                   >
-                    {notification.time}
+                    {timeAgo(notification.createdAt)}
                   </Typography>
                 </Box>
-              ))}
+                ))
+              )}
             </Box>
             <Box
               sx={{

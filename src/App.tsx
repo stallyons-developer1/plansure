@@ -57,6 +57,9 @@ const UserGovernanceDashboard = lazy(
   () => import("./pages/Dashboard/UserGovernanceDashboard"),
 );
 const UserExports = lazy(() => import("./pages/Dashboard/UserExports"));
+const UserNotifications = lazy(
+  () => import("./pages/Dashboard/UserNotifications"),
+);
 
 const PageFallback = () => (
   <div
@@ -377,6 +380,15 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={["user"]}>
               <UserExports />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/dashboard/notifications"
+          element={
+            <ProtectedRoute allowedRoles={["user"]}>
+              <UserNotifications />
             </ProtectedRoute>
           }
         />
