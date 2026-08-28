@@ -7771,7 +7771,12 @@ const PlannerProjectWorkspace = () => {
 
               {/* Status row (half width) */}
               <Box
-                sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 2,
+                  mt: 2,
+                }}
               >
                 <Box>
                   <Typography
@@ -7780,7 +7785,6 @@ const PlannerProjectWorkspace = () => {
                       fontSize: "12px",
                       fontWeight: 500,
                       mb: 0.5,
-                      mt: 2,
                     }}
                   >
                     Status
