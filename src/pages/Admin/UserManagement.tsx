@@ -37,6 +37,10 @@ interface User {
   role: "admin" | "planner" | "user";
   projectAccess: string;
   projectIds?: string[];
+  /* Only what an admin granted directly — projectIds also carries access
+     derived from assigned actions, which must not be turned into a grant by
+     saving the edit form. */
+  grantedProjectIds?: string[];
   allProjects?: boolean;
   status: "active" | "pending" | "blocked";
   lastLogin: string | null;
@@ -98,6 +102,7 @@ const UserManagement = () => {
     "user",
   );
   const [editStatus, setEditStatus] = useState<"active" | "blocked">("active");
+  const [editProjects, setEditProjects] = useState<string[]>([]);
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState("");
 
@@ -137,6 +142,12 @@ const UserManagement = () => {
     if (!inviteName || !inviteEmail || !selectedRole) {
       return;
     }
+    /* A User is scoped to the projects they are granted, so inviting one
+       without any would create an account that can see nothing. */
+    if (selectedRole === "User" && inviteProjects.length === 0) {
+      setInviteError("Select at least one project for this user.");
+      return;
+    }
 
     setInviteLoading(true);
     setInviteError("");
@@ -146,9 +157,7 @@ const UserManagement = () => {
         name: inviteName,
         email: inviteEmail,
         role: selectedRole.toLowerCase(),
-        ...(selectedRole === "User" && inviteProjects.length > 0
-          ? { projectIds: inviteProjects }
-          : {}),
+        ...(selectedRole === "User" ? { projectIds: inviteProjects } : {}),
       });
 
       if (response.success) {
@@ -182,6 +191,9 @@ const UserManagement = () => {
     setEditEmail(user.email);
     setEditRole(user.role);
     setEditStatus(user.status === "blocked" ? "blocked" : "active");
+    /* Only the directly granted projects are editable here — access derived
+       from assigned actions is computed on read and is not stored. */
+    setEditProjects(user.grantedProjectIds || []);
     setEditModalOpen(true);
   };
 
@@ -192,11 +204,16 @@ const UserManagement = () => {
     setEditEmail("");
     setEditRole("user");
     setEditStatus("active");
+    setEditProjects([]);
     setEditError("");
   };
 
   const handleSaveChanges = async () => {
     if (!editingUser || !editName.trim()) return;
+    if (editRole === "user" && editProjects.length === 0) {
+      setEditError("Select at least one project for this user.");
+      return;
+    }
 
     setEditLoading(true);
     setEditError("");
@@ -206,6 +223,7 @@ const UserManagement = () => {
         name: editName,
         role: editRole,
         status: editStatus,
+        ...(editRole === "user" ? { projects: editProjects } : {}),
       });
 
       const usersRes = await userAPI.getAll();
@@ -1270,7 +1288,10 @@ const UserManagement = () => {
                   mb: 0.5,
                 }}
               >
-                Project Access
+                Project Access{" "}
+                <Box component="span" sx={{ color: COLORS.red }}>
+                  *
+                </Box>
               </Typography>
               <Select
                 multiple
@@ -1355,8 +1376,7 @@ const UserManagement = () => {
               <Typography
                 sx={{ color: COLORS.textMuted, fontSize: "12px", mt: 0.5 }}
               >
-                Optional — access also appears automatically once work is
-                assigned to them.
+                Select at least one project this user may view.
               </Typography>
             </Box>
           )}
@@ -1708,6 +1728,106 @@ const UserManagement = () => {
               </Box>
             </Box>
           </Box>
+
+          {/* Same project scoping as the invite dialog, so access can be
+              corrected after the fact. */}
+          {editRole === "user" && (
+            <Box sx={{ mt: 2 }}>
+              <Typography
+                sx={{
+                  color: COLORS.border,
+                  fontSize: "12px",
+                  fontWeight: 500,
+                  mb: 0.5,
+                }}
+              >
+                Project Access{" "}
+                <Box component="span" sx={{ color: COLORS.red }}>
+                  *
+                </Box>
+              </Typography>
+              <Select
+                multiple
+                fullWidth
+                displayEmpty
+                value={editProjects}
+                onChange={(e) =>
+                  setEditProjects(
+                    typeof e.target.value === "string"
+                      ? e.target.value.split(",")
+                      : e.target.value,
+                  )
+                }
+                renderValue={(selected) =>
+                  selected.length === 0 ? (
+                    <Box component="span" sx={{ color: COLORS.textMuted }}>
+                      No projects
+                    </Box>
+                  ) : (
+                    projects
+                      .filter((p) => selected.includes(p._id))
+                      .map((p) => p.name)
+                      .join(", ")
+                  )
+                }
+                sx={{
+                  bgcolor: COLORS.bgPrimary,
+                  color: COLORS.textPrimary,
+                  borderRadius: "8px",
+                  fontSize: "14px",
+                  "& .MuiOutlinedInput-notchedOutline": {
+                    borderColor: COLORS.white,
+                  },
+                  "&:hover .MuiOutlinedInput-notchedOutline": {
+                    borderColor: COLORS.textMuted,
+                  },
+                  "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                    borderColor: COLORS.blue,
+                  },
+                  "& .MuiSelect-select": { py: 1.4, px: 1.75 },
+                  "& .MuiSvgIcon-root": { color: COLORS.textMuted },
+                }}
+                MenuProps={{
+                  slotProps: {
+                    paper: {
+                      sx: {
+                        bgcolor: COLORS.bgSecondary,
+                        border: `1px solid ${COLORS.border}`,
+                        borderRadius: "8px",
+                        mt: 0.5,
+                        maxHeight: 280,
+                        "& .MuiMenuItem-root": {
+                          color: COLORS.textPrimary,
+                          fontSize: "14px",
+                        },
+                      },
+                    },
+                  },
+                }}
+              >
+                {projects.length === 0 ? (
+                  <MenuItem disabled value="">
+                    No projects available
+                  </MenuItem>
+                ) : (
+                  projects.map((project) => (
+                    <MenuItem key={project._id} value={project._id}>
+                      <Checkbox
+                        checked={editProjects.includes(project._id)}
+                        sx={{
+                          color: COLORS.textMuted,
+                          p: 0.5,
+                          mr: 1,
+                          "&.Mui-checked": { color: COLORS.blue },
+                        }}
+                      />
+                      {project.name}
+                    </MenuItem>
+                  ))
+                )}
+              </Select>
+            </Box>
+          )}
 
           <Box>
             <Typography
