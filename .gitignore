@@ -24,3 +24,5 @@ dist-ssr
 *.sw?
 plansure-25934-firebase-adminsdk-fbsvc-7f58679778.json
 .env
+
+fbkey.env
