@@ -7852,13 +7852,15 @@ const PlannerProjectWorkspace = () => {
                   >
                     Owner
                   </Typography>
+                  {/* Padding, font size and line height match the Select
+                      beside it, so the two boxes are the same height. */}
                   <Box
                     sx={{
                       bgcolor: COLORS.bgPrimary,
                       borderRadius: "8px",
                       border: `1px solid ${COLORS.border}`,
-                      px: 1.5,
-                      py: 1,
+                      px: 1.75,
+                      py: 1.2,
                     }}
                   >
                     <Typography
@@ -7866,7 +7868,8 @@ const PlannerProjectWorkspace = () => {
                         color: editingActionOwnerName
                           ? COLORS.textPrimary
                           : COLORS.textMuted,
-                        fontSize: "13px",
+                        fontSize: "14px",
+                        lineHeight: "1.4375em",
                       }}
                     >
                       {editingActionOwnerName || "Unassigned"}

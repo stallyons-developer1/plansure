@@ -8042,7 +8042,7 @@ const AdminProjectWorkspace = () => {
                       bgcolor: COLORS.bgPrimary,
                       borderRadius: "8px",
                       border: `1px solid ${COLORS.border}`,
-                      px: 1.5,
+                      px: 1.75,
                       py: 1.2,
                     }}
                   >
@@ -8052,6 +8052,9 @@ const AdminProjectWorkspace = () => {
                           ? COLORS.textPrimary
                           : COLORS.textMuted,
                         fontSize: "14px",
+                        // MUI applies this inside the Select; matching it here
+                        // keeps both boxes the same height.
+                        lineHeight: "1.4375em",
                       }}
                     >
                       {editingActionOwnerName || "Unassigned"}
