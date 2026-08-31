@@ -280,27 +280,23 @@ const PlannerProjectWorkspace = () => {
     );
   };
 
-  /* A PM Override is a closure, so it answers to the same ownership rule as a
-     normal one — with no admin exemption, since SRS 10.2 denies the override
-     to the Admin outright. Mirrors canForceClose on the backend. */
+  /* Strictly the planner the action is assigned to — tighter than a normal
+     closure, which also admits whoever raised it, and with no admin exemption
+     since SRS 10.2 denies the override to the Admin outright. Mirrors
+     canForceClose on the backend. */
   const canOverrideAction = (action: {
     assignee?: { _id?: string } | null;
-    createdBy?: { _id?: string } | null;
   }) => {
     if (user?.role !== "planner") return false;
     const userId = String(user?.id || "");
     if (!userId) return false;
-    return (
-      String(action.assignee?._id || "") === userId ||
-      String(action.createdBy?._id || "") === userId
-    );
+    return String(action.assignee?._id || "") === userId;
   };
 
   /* Only the open actions this planner is entitled to force-close. */
   const isMineToOverride = (action: {
     status: string;
     assignee?: { _id?: string } | null;
-    createdBy?: { _id?: string } | null;
   }) => isOverridableAction(action) && canOverrideAction(action);
   const [project, setProject] = useState<ProjectData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -9422,7 +9418,7 @@ const PlannerProjectWorkspace = () => {
               >
                 <Typography sx={{ color: COLORS.textMuted, fontSize: "14px" }}>
                   No open actions assigned to you. A PM Override can only be
-                  applied to an action you hold or raised.
+                  applied to an action you hold.
                 </Typography>
               </Box>
             ) : (
