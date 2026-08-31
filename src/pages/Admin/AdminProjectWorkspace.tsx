@@ -1002,6 +1002,16 @@ const AdminProjectWorkspace = () => {
     }
   }, [weeksStatus?.closedWeeksCount, uploadedProgramme?._id, lockedViewWeek]);
 
+  /* The header week comes from the server's week ledger, not from the local
+     counter. weekNum is a per-browser localStorage value bumped when someone
+     acknowledges a close, so it read differently for every account looking at
+     the same project. The first week not yet closed is the week in progress. */
+  const headerWeekNum =
+    weeksStatus?.weeks?.find((w) => !w.isClosed)?.weekNumber ??
+    weeksStatus?.totalWeeks ??
+    weekNum;
+  const headerClosedCount = weeksStatus?.closedWeeksCount ?? 0;
+
   const weekPendingClose = weeksStatus?.weeks.find(
     (w) => w.canClose,
   )?.weekNumber;
@@ -2309,8 +2319,8 @@ const AdminProjectWorkspace = () => {
           }}
           projectName={project.name}
           phase={project.phase}
-          week={`Week ${weekNum}`}
-          weekDates={`${weekNum - 1} closed`}
+          week={`Week ${headerWeekNum}`}
+          weekDates={`${headerClosedCount} closed`}
           planner={planner}
           currentStep={currentStep}
           steps={steps}

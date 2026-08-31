@@ -704,8 +704,7 @@ const PlannerProjectWorkspace = () => {
           // action to themselves; the Admin workspace already allows this.
           const activeUsers = (response.users || []).filter(
             (u: { _id: string; role: string; status: string }) =>
-              u.role === "planner" &&
-              u.status === "active",
+              u.role === "planner" && u.status === "active",
             //Exclude the signed-in planner
             // && u._id !== user?.id,
           );
@@ -982,6 +981,16 @@ const PlannerProjectWorkspace = () => {
       fetchWeeklyControlData(uploadedProgramme._id, weekNumber);
     }
   }, [weeksStatus?.closedWeeksCount, uploadedProgramme?._id, lockedViewWeek]);
+
+  /* The header week comes from the server's week ledger, not from the local
+     counter. weekNum is a per-browser localStorage value bumped when someone
+     acknowledges a close, so it read differently for every account looking at
+     the same project. The first week not yet closed is the week in progress. */
+  const headerWeekNum =
+    weeksStatus?.weeks?.find((w) => !w.isClosed)?.weekNumber ??
+    weeksStatus?.totalWeeks ??
+    weekNum;
+  const headerClosedCount = weeksStatus?.closedWeeksCount ?? 0;
 
   const weekPendingClose = weeksStatus?.weeks.find(
     (w) => w.canClose,
@@ -2181,8 +2190,7 @@ const PlannerProjectWorkspace = () => {
      the lookahead assigned (or explicitly marked as needing no action), and
      every required action closed. unassignedInWeek comes from weekly-control
      and uses the same window as the backend gate. */
-  const unassignedActivityCount =
-    weeklyControlData?.unassignedInWeek || 0;
+  const unassignedActivityCount = weeklyControlData?.unassignedInWeek || 0;
 
   const weeklyActionStats = {
     total:
@@ -2298,8 +2306,8 @@ const PlannerProjectWorkspace = () => {
           }}
           projectName={project.name}
           phase={project.phase}
-          week={`Week ${weekNum}`}
-          weekDates={`${weekNum - 1} closed`}
+          week={`Week ${headerWeekNum}`}
+          weekDates={`${headerClosedCount} closed`}
           planner={planner}
           currentStep={currentStep}
           steps={steps}
@@ -4379,7 +4387,10 @@ const PlannerProjectWorkspace = () => {
                               }
                               const canComplete = canCompleteAction(action);
 
-                              if (action.status !== "Completed" && canComplete) {
+                              if (
+                                action.status !== "Completed" &&
+                                canComplete
+                              ) {
                                 handleOpenCompleteConfirm({
                                   _id: action._id,
                                   title: action.title,
@@ -4391,11 +4402,11 @@ const PlannerProjectWorkspace = () => {
                                 ? "Already completed"
                                 : action.status === "PM Override"
                                   ? "Force-closed by PM Override — cannot be completed"
-                                : isActionFromClosedWeek(action)
-                                  ? "Cannot complete action from closed week"
-                                  : !canCompleteAction(action)
-                                    ? "Only the assignee or the person who raised it can complete this action"
-                                    : "Mark as complete"
+                                  : isActionFromClosedWeek(action)
+                                    ? "Cannot complete action from closed week"
+                                    : !canCompleteAction(action)
+                                      ? "Only the assignee or the person who raised it can complete this action"
+                                      : "Mark as complete"
                             }
                             sx={{
                               width: 16,

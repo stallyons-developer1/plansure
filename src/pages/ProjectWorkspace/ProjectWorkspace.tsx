@@ -232,8 +232,26 @@ const ProjectWorkspace = () => {
     };
   } | null>(null);
   const [weeksStatus, setWeeksStatus] = useState<{
-    weeks?: Array<{ isClosed?: boolean; closedAt?: string }>;
+    totalWeeks?: number;
+    closedWeeksCount?: number;
+    weeks?: Array<{
+      weekNumber?: number;
+      isClosed?: boolean;
+      closedAt?: string;
+    }>;
   } | null>(null);
+
+  /* Same derivation as the Admin and Planner workspaces: the first week not
+     yet closed is the week in progress. weekInfo.currentWeekNumber is a
+     calendar count from the programme start, so on a project whose activities
+     have not begun it stays at 1 however many weeks have been closed — which
+     is why this header disagreed with the Admin's. */
+  const headerWeekNum =
+    weeksStatus?.weeks?.find((w) => !w.isClosed)?.weekNumber ??
+    weeksStatus?.totalWeeks ??
+    weeklyControl?.weekInfo?.currentWeekNumber ??
+    1;
+  const headerClosedCount = weeksStatus?.closedWeeksCount ?? 0;
 
   const isActionFromClosedWeek = (action: {
     createdAt?: string;
@@ -511,8 +529,7 @@ const ProjectWorkspace = () => {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  Week {weeklyControl?.weekInfo?.currentWeekNumber ?? 1}{" "}
-                  (Current Week)
+                  Week {headerWeekNum} ({headerClosedCount} closed)
                 </Typography>
               </Box>
               <Box
