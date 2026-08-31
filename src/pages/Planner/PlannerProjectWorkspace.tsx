@@ -279,6 +279,29 @@ const PlannerProjectWorkspace = () => {
       String(action.createdBy?._id || "") === userId
     );
   };
+
+  /* A PM Override is a closure, so it answers to the same ownership rule as a
+     normal one — with no admin exemption, since SRS 10.2 denies the override
+     to the Admin outright. Mirrors canForceClose on the backend. */
+  const canOverrideAction = (action: {
+    assignee?: { _id?: string } | null;
+    createdBy?: { _id?: string } | null;
+  }) => {
+    if (user?.role !== "planner") return false;
+    const userId = String(user?.id || "");
+    if (!userId) return false;
+    return (
+      String(action.assignee?._id || "") === userId ||
+      String(action.createdBy?._id || "") === userId
+    );
+  };
+
+  /* Only the open actions this planner is entitled to force-close. */
+  const isMineToOverride = (action: {
+    status: string;
+    assignee?: { _id?: string } | null;
+    createdBy?: { _id?: string } | null;
+  }) => isOverridableAction(action) && canOverrideAction(action);
   const [project, setProject] = useState<ProjectData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState(() => {
@@ -1154,7 +1177,17 @@ const PlannerProjectWorkspace = () => {
   };
 
   /* Actions still open in this week — the candidates for a PM Override. */
-  const overridableActions = projectActions.filter(isOverridableAction);
+  const overridableActions = projectActions.filter(isMineToOverride);
+
+  /* The status dropdown reaches the same force-close as the Override button,
+     so it has to obey the same rule. ActionItem carries no createdBy, so the
+     entitlement comes off the underlying record. */
+  const editingActionRecord = projectActions.find(
+    (a) => a._id === editingActionId,
+  );
+  const canOverrideEditingAction = editingActionRecord
+    ? canOverrideAction(editingActionRecord)
+    : false;
 
   /* Force-close ONE action, with its own mandatory reason. Replaces the old
      bulk "Force Close Weeks" behaviour the MS-05 review rejected (B4). */
@@ -1174,7 +1207,7 @@ const PlannerProjectWorkspace = () => {
           const refreshed = actionsRes.actions || [];
           setProjectActions(refreshed);
           // That was the last one — close rather than show an empty list.
-          if (!refreshed.some(isOverridableAction)) {
+          if (!refreshed.some(isMineToOverride)) {
             setOverrideModalOpen(false);
           }
         }
@@ -7838,7 +7871,15 @@ const PlannerProjectWorkspace = () => {
                     <MenuItem value="In Progress">In Progress</MenuItem>
                     <MenuItem value="Completed">Completed</MenuItem>
                     <MenuItem value="Cancelled">Cancelled</MenuItem>
-                    <MenuItem value="PM Override">PM Override</MenuItem>
+                    <MenuItem
+                      value="PM Override"
+                      disabled={
+                        !canOverrideEditingAction &&
+                        editingAction?.status !== "PM Override"
+                      }
+                    >
+                      PM Override
+                    </MenuItem>
                   </Select>
                 </Box>
                 <Box>
@@ -9380,7 +9421,8 @@ const PlannerProjectWorkspace = () => {
                 }}
               >
                 <Typography sx={{ color: COLORS.textMuted, fontSize: "14px" }}>
-                  No open actions to override.
+                  No open actions assigned to you. A PM Override can only be
+                  applied to an action you hold or raised.
                 </Typography>
               </Box>
             ) : (
