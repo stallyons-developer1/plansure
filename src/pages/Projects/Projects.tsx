@@ -32,6 +32,9 @@ interface Project {
   startDate: string;
   endDate?: string;
   governanceScore?: number;
+  totalActivities?: number;
+  openActions?: number;
+  progress?: number;
   createdAt: string;
 }
 
@@ -130,6 +133,9 @@ const ProjectCard = ({
   const governanceScore = project.governanceScore || 0;
   const governanceColor = governanceScore >= 70 ? COLORS.green : COLORS.amber;
   const governanceStatus = governanceScore >= 70 ? "green" : "amber";
+  const totalActivities = project.totalActivities || 0;
+  const openActions = project.openActions || 0;
+  const progress = project.progress || 0;
 
   return (
     <Card
@@ -278,7 +284,7 @@ const ProjectCard = ({
                 fontWeight: 700,
               }}
             >
-              0
+              {totalActivities}
             </Typography>
             <Typography
               sx={{
@@ -310,7 +316,7 @@ const ProjectCard = ({
                 fontWeight: 700,
               }}
             >
-              0
+              {openActions}
             </Typography>
             <Typography
               sx={{
@@ -350,12 +356,12 @@ const ProjectCard = ({
               fontWeight: 400,
             }}
           >
-            0%
+            {progress}%
           </Typography>
         </Box>
         <LinearProgress
           variant="determinate"
-          value={0}
+          value={progress}
           sx={{
             height: 6,
             borderRadius: 3,
