@@ -138,6 +138,17 @@ const AdminActions = () => {
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingAction, setEditingAction] = useState<Action | null>(null);
+
+  /* MS-05 F1: the due date and the description are the substance of an action,
+     so an Admin cannot rewrite them on one raised by someone else. Creating is
+     unaffected, and an Admin who raised the action keeps full access. */
+  const canEditActionDetails =
+    !editingAction ||
+    user?.role !== "admin" ||
+    (!!editingAction.createdBy?._id &&
+      String(editingAction.createdBy._id) === String(user?.id || ""));
+  const restrictedFieldNote =
+    "Only the planner who raised this action can change this";
   const [detailDrawerOpen, setDetailDrawerOpen] = useState(false);
   const [viewingAction, setViewingAction] = useState<Action | null>(null);
   const [saveLoading, setSaveLoading] = useState(false);
@@ -231,9 +242,7 @@ const AdminActions = () => {
         }
 
         const activeUsers = (usersRes.users || []).filter(
-          (user: User) =>
-            user.role === "planner" &&
-            user.status === "active",
+          (user: User) => user.role === "planner" && user.status === "active",
         );
         setUsers(activeUsers);
 
@@ -343,7 +352,9 @@ const AdminActions = () => {
   // PM Override is terminal: it counts as closed, never as open or overdue,
   // so Total still reconciles with Open + Closed + Overdue.
   const isTerminal = (status: string) =>
-    status === "Completed" || status === "Cancelled" || status === "PM Override";
+    status === "Completed" ||
+    status === "Cancelled" ||
+    status === "PM Override";
 
   const computedStats = {
     total: actions.length,
@@ -1512,11 +1523,11 @@ const AdminActions = () => {
                             ? "Execution has not started yet. Please start execution first."
                             : action.status === "Completed"
                               ? "Already completed"
-                                : action.status === "PM Override"
-                                  ? "Force-closed by PM Override — cannot be completed"
-                              : !canCompleteAction(action)
-                                ? "Only the assignee or the person who raised it can complete this action"
-                                : "Mark as complete"
+                              : action.status === "PM Override"
+                                ? "Force-closed by PM Override — cannot be completed"
+                                : !canCompleteAction(action)
+                                  ? "Only the assignee or the person who raised it can complete this action"
+                                  : "Mark as complete"
                         }
                         sx={{
                           width: 18,
@@ -1524,7 +1535,7 @@ const AdminActions = () => {
                           cursor:
                             !isExecutionMode() ||
                             action.status === "Completed" ||
-                            (!canCompleteAction(action))
+                            !canCompleteAction(action)
                               ? "not-allowed"
                               : "pointer",
                           opacity: !isExecutionMode()
@@ -1541,7 +1552,7 @@ const AdminActions = () => {
                           "&:hover": {
                             opacity:
                               action.status === "Completed" ||
-                              (!canCompleteAction(action))
+                              !canCompleteAction(action)
                                 ? action.status === "Completed"
                                   ? 1
                                   : 0.3
@@ -2084,6 +2095,9 @@ const AdminActions = () => {
                 onChange={(e) =>
                   setFormData({ ...formData, description: e.target.value })
                 }
+                disabled={!canEditActionDetails}
+                title={canEditActionDetails ? "" : restrictedFieldNote}
+                helperText={canEditActionDetails ? "" : restrictedFieldNote}
                 sx={{
                   "& .MuiOutlinedInput-root": {
                     bgcolor: COLORS.bgPrimary,
@@ -2374,6 +2388,9 @@ const AdminActions = () => {
                   onChange={(e) =>
                     setFormData({ ...formData, dueDate: e.target.value })
                   }
+                  disabled={!canEditActionDetails}
+                  title={canEditActionDetails ? "" : restrictedFieldNote}
+                  helperText={canEditActionDetails ? "" : restrictedFieldNote}
                   slotProps={{
                     input: {
                       endAdornment: (

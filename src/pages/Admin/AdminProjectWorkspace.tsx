@@ -703,8 +703,7 @@ const AdminProjectWorkspace = () => {
         if (response.success) {
           const activeUsers = (response.users || []).filter(
             (user: { role: string; status: string }) =>
-              user.role === "planner" &&
-              user.status === "active",
+              user.role === "planner" && user.status === "active",
           );
           setUsers(activeUsers);
         }
@@ -1227,6 +1226,20 @@ const AdminProjectWorkspace = () => {
 
   /* Actions still open in this week — the candidates for a PM Override. */
   const overridableActions = projectActions.filter(isOverridableAction);
+
+  /* MS-05 F1: the due date and the description are the substance of an action,
+     so an Admin cannot rewrite them on an action someone else raised. An
+     Admin who raised it is its owner and keeps full access. ActionItem carries
+     no createdBy, so the entitlement comes off the underlying record. */
+  const editingActionRecord = projectActions.find(
+    (a) => a._id === editingActionId,
+  );
+  const canEditActionDetails =
+    user?.role !== "admin" ||
+    (!!editingActionRecord?.createdBy?._id &&
+      String(editingActionRecord.createdBy._id) === String(user?.id || ""));
+  const restrictedFieldNote =
+    "Only the planner who raised this action can change this";
 
   /* Force-close ONE action, with its own mandatory reason. Replaces the old
      bulk "Force Close Weeks" behaviour the MS-05 review rejected (B4). */
@@ -2180,8 +2193,7 @@ const AdminProjectWorkspace = () => {
      the lookahead assigned (or explicitly marked as needing no action), and
      every required action closed. unassignedInWeek comes from weekly-control
      and uses the same window as the backend gate. */
-  const unassignedActivityCount =
-    weeklyControlData?.unassignedInWeek || 0;
+  const unassignedActivityCount = weeklyControlData?.unassignedInWeek || 0;
 
   const weeklyActionStats = {
     total:
@@ -4537,12 +4549,12 @@ const AdminProjectWorkspace = () => {
                                 ? "Already completed"
                                 : action.status === "PM Override"
                                   ? "Force-closed by PM Override — cannot be completed"
-                                : isActionFromClosedWeek(action)
-                                  ? "Cannot complete action from closed week"
-                                  : !canCompleteAction(action) &&
-                                      user?.role !== "admin"
-                                    ? "Only the assignee or the person who raised it can complete this action"
-                                    : "Mark as complete"
+                                  : isActionFromClosedWeek(action)
+                                    ? "Cannot complete action from closed week"
+                                    : !canCompleteAction(action) &&
+                                        user?.role !== "admin"
+                                      ? "Only the assignee or the person who raised it can complete this action"
+                                      : "Mark as complete"
                             }
                             sx={{
                               width: 16,
@@ -4575,7 +4587,7 @@ const AdminProjectWorkspace = () => {
                                     : 1,
                                 filter:
                                   action.status !== "Completed" &&
-                                  (canCompleteAction(action))
+                                  canCompleteAction(action)
                                     ? "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(5323%) hue-rotate(107deg) brightness(92%) contrast(88%)"
                                     : action.status === "Completed"
                                       ? "brightness(0) saturate(100%) invert(65%) sepia(52%) saturate(5323%) hue-rotate(107deg) brightness(92%) contrast(88%)"
@@ -6045,8 +6057,7 @@ const AdminProjectWorkspace = () => {
                           const disabledReason =
                             currentUnclosed?.canCloseReason ||
                             "This 2-week period has not ended yet";
-                          return (
-                            !canPmOverride ? null : (
+                          return !canPmOverride ? null : (
                             <Tooltip
                               title={!canCloseByDate ? disabledReason : ""}
                               placement="top"
@@ -6079,7 +6090,6 @@ const AdminProjectWorkspace = () => {
                                 </Button>
                               </span>
                             </Tooltip>
-                            )
                           );
                         })()}
                       </Box>
@@ -7659,6 +7669,9 @@ const AdminProjectWorkspace = () => {
                   onChange={(e) =>
                     handleEditChange("description", e.target.value)
                   }
+                  disabled={!canEditActionDetails}
+                  title={canEditActionDetails ? "" : restrictedFieldNote}
+                  helperText={canEditActionDetails ? "" : restrictedFieldNote}
                   sx={{
                     "& .MuiOutlinedInput-root": {
                       bgcolor: COLORS.bgPrimary,
@@ -7673,6 +7686,14 @@ const AdminProjectWorkspace = () => {
                     "& .MuiOutlinedInput-input": {
                       color: COLORS.textPrimary,
                       fontSize: "14px",
+                      "&.Mui-disabled": {
+                        WebkitTextFillColor: COLORS.textMuted,
+                      },
+                    },
+                    "& .MuiFormHelperText-root": {
+                      color: COLORS.textMuted,
+                      fontSize: "11px",
+                      ml: 0,
                     },
                   }}
                 />
@@ -7923,6 +7944,9 @@ const AdminProjectWorkspace = () => {
                     onChange={(e) =>
                       handleEditChange("dueDate", e.target.value)
                     }
+                    disabled={!canEditActionDetails}
+                    title={canEditActionDetails ? "" : restrictedFieldNote}
+                    helperText={canEditActionDetails ? "" : restrictedFieldNote}
                     sx={{
                       "& .MuiOutlinedInput-root": {
                         bgcolor: COLORS.bgPrimary,
@@ -7945,6 +7969,17 @@ const AdminProjectWorkspace = () => {
                           cursor: "pointer",
                           opacity: 0.6,
                         },
+                        "&.Mui-disabled": {
+                          WebkitTextFillColor: COLORS.textMuted,
+                          "&::-webkit-calendar-picker-indicator": {
+                            display: "none",
+                          },
+                        },
+                      },
+                      "& .MuiFormHelperText-root": {
+                        color: COLORS.textMuted,
+                        fontSize: "11px",
+                        ml: 0,
                       },
                     }}
                   />
