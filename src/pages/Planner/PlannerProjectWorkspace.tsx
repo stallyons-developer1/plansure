@@ -553,10 +553,6 @@ const PlannerProjectWorkspace = () => {
       localStorage.getItem(`plansure_meeting_open_${projectId}`) === "true";
     setMeetingOpenLocal(opened);
     if (opened) setCurrentStep((step) => (step < 1 ? 1 : step));
-    const pendingClose = localStorage.getItem(
-      `plansure_week_closed_ack_${projectId}`,
-    );
-    setClosedWeekAck(pendingClose ? Number(pendingClose) : null);
     const storedWeekNum = localStorage.getItem(
       `plansure_week_num_${projectId}`,
     );
@@ -564,15 +560,21 @@ const PlannerProjectWorkspace = () => {
   }, [projectId]);
 
   const handleAckClosedWeek = async () => {
-    if (projectId) {
-      localStorage.removeItem(`plansure_week_closed_ack_${projectId}`);
+    /* Recorded on the programme, not in this browser: the other accounts on
+       the project have to see the same handover (MS-05 B6/AC1). */
+    if (uploadedProgramme?._id) {
+      try {
+        await programmeAPI.acknowledgeClose(uploadedProgramme._id);
+      } catch (error) {
+        console.error("Failed to acknowledge week closure:", error);
+        return;
+      }
     }
     setClosedWeekAck(null);
     const nextWeek = weekNum + 1;
     setWeekNum(nextWeek);
     if (projectId) {
       localStorage.removeItem(`plansure_meeting_open_${projectId}`);
-      localStorage.setItem(`plansure_awaiting_upload_${projectId}`, "true");
       localStorage.setItem(`plansure_week_num_${projectId}`, String(nextWeek));
     }
     setMeetingOpenLocal(false);
@@ -719,18 +721,20 @@ const PlannerProjectWorkspace = () => {
 
   const refetchProgramme = async () => {
     if (!projectId) return;
-    if (
-      localStorage.getItem(`plansure_awaiting_upload_${projectId}`) === "true"
-    ) {
-      setUploadedProgramme(null);
-      setLookaheadData(null);
-      setWeeklyControlData(null);
-      return;
-    }
     try {
       const response = await programmeAPI.getByProject(projectId);
       if (response.success && response.programme) {
         const programme = response.programme;
+        /* Superseded by an acknowledged closure: the workspace waits for the
+           next upload rather than showing the closed week's programme. */
+        if (programme.awaitingNextUpload) {
+          setUploadedProgramme(null);
+          setLookaheadData(null);
+          setWeeklyControlData(null);
+          setClosedWeekAck(null);
+          return;
+        }
+        setClosedWeekAck(programme.pendingCloseAckWeek ?? null);
         setProgrammeAnchor(programme.lookaheadStartDate || null);
         setUploaderName(programme.uploadedBy?.name || "");
         const activities = programme.extractedData?.activities || [];
@@ -810,16 +814,16 @@ const PlannerProjectWorkspace = () => {
   useEffect(() => {
     const fetchProgramme = async () => {
       if (!projectId) return;
-      if (
-        localStorage.getItem(`plansure_awaiting_upload_${projectId}`) === "true"
-      ) {
-        setIsLoadingProgramme(false);
-        return;
-      }
       try {
         const response = await programmeAPI.getByProject(projectId);
         if (response.success && response.programme) {
           const programme = response.programme;
+          if (programme.awaitingNextUpload) {
+            setClosedWeekAck(null);
+            setIsLoadingProgramme(false);
+            return;
+          }
+          setClosedWeekAck(programme.pendingCloseAckWeek ?? null);
           setProgrammeAnchor(programme.lookaheadStartDate || null);
           // Also set here: this is the load path that populates the workspace,
           // and without it the Owner column fell back to "Unknown".
@@ -1040,13 +1044,9 @@ const PlannerProjectWorkspace = () => {
           await refetchProgramme();
         }
 
-        if (projectId) {
-          localStorage.setItem(
-            `plansure_week_closed_ack_${projectId}`,
-            String(weekNum),
-          );
-        }
-        setClosedWeekAck(weekNum);
+        // The refetch above carries pendingCloseAckWeek; set it here too so
+        // the closer sees the prompt without waiting for another round trip.
+        setClosedWeekAck(weekNumber);
 
         if (response1.isLastWeek || response2.isLastWeek) {
           setCycleStage("execution");
@@ -1997,9 +1997,6 @@ const PlannerProjectWorkspace = () => {
       );
 
       if (response.success) {
-        if (projectId) {
-          localStorage.removeItem(`plansure_awaiting_upload_${projectId}`);
-        }
         const programme = response.programme;
         setProgrammeAnchor(programme.lookaheadStartDate || null);
         // Carried through from the upload response, otherwise the Owner column

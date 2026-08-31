@@ -156,6 +156,15 @@ export const programmeAPI = {
     return response.data;
   },
 
+  /* Move the project on from a closed week. Server-side because every account
+     on the project has to see the same handover, not just whoever clicked. */
+  acknowledgeClose: async (programmeId: string) => {
+    const response = await api.post(
+      `/programmes/${programmeId}/acknowledge-close`,
+    );
+    return response.data;
+  },
+
   getProjectHistory: async (projectId: string) => {
     const response = await api.get(`/programmes/project/${projectId}/history`);
     return response.data;

@@ -328,6 +328,15 @@ const ProjectWorkspace = () => {
         const response = await programmeAPI.getByProject(projectId);
         if (response.success && response.programme) {
           const programme = response.programme;
+          /* The cycle has moved past this programme and the next one has not
+             been uploaded yet. Showing its activities would present a closed
+             week's data as current — the defect QA raised, where every account
+             except the one that closed the week kept seeing the old data. */
+          if (programme.awaitingNextUpload) {
+            setActivities([]);
+            setProgrammeName("");
+            return;
+          }
           const activitiesData = programme.extractedData?.activities || [];
 
           setActivities(activitiesData);
