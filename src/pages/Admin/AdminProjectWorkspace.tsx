@@ -57,6 +57,7 @@ interface ProjectData {
   status: string;
   createdBy?: { name: string; email: string };
   team?: { user: { name: string; email: string }; role: string }[];
+  meetingOpen?: boolean;
 }
 
 const defaultDashboardData = {
@@ -303,7 +304,6 @@ const AdminProjectWorkspace = () => {
   const [meetingOpenLocal, setMeetingOpenLocal] = useState(false);
   const [closedWeekAck, setClosedWeekAck] = useState<number | null>(null);
   const [programmeAnchor, setProgrammeAnchor] = useState<string | null>(null);
-  const [weekNum, setWeekNum] = useState(1);
   const [ragFilter, setRagFilter] = useState("all");
   const [weekFilter, setWeekFilter] = useState<number | null>(null);
   const [activitiesPage, setActivitiesPage] = useState(1);
@@ -337,6 +337,13 @@ const AdminProjectWorkspace = () => {
   const [isWeekClosed, setIsWeekClosed] = useState(false);
   const [savedOverrideReason, setSavedOverrideReason] = useState("");
   const [lockedViewWeek, setLockedViewWeek] = useState<number | null>(null);
+  /* How many weeks the superseded programme had closed. weeks-status is only
+     fetched for a live programme, so once the cycle moves on there is nothing
+     server-side left for the header to read and it fell back to the per-browser
+     counter — which is why two accounts showed different week numbers. */
+  const [supersededClosedCount, setSupersededClosedCount] = useState<
+    number | null
+  >(null);
   const [weeksStatus, setWeeksStatus] = useState<{
     totalWeeks: number;
     currentWeekNumber: number;
@@ -548,18 +555,6 @@ const AdminProjectWorkspace = () => {
     else if (tabParam === "open-meeting") setActiveTab(6);
   }, [location.search]);
 
-  useEffect(() => {
-    if (!projectId) return;
-    const opened =
-      localStorage.getItem(`plansure_meeting_open_${projectId}`) === "true";
-    setMeetingOpenLocal(opened);
-    if (opened) setCurrentStep((step) => (step < 1 ? 1 : step));
-    const storedWeekNum = localStorage.getItem(
-      `plansure_week_num_${projectId}`,
-    );
-    setWeekNum(storedWeekNum ? Number(storedWeekNum) : 1);
-  }, [projectId]);
-
   const handleAckClosedWeek = async () => {
     /* Recorded on the programme, not in this browser: the other accounts on
        the project have to see the same handover (MS-05 B6/AC1). */
@@ -572,12 +567,8 @@ const AdminProjectWorkspace = () => {
       }
     }
     setClosedWeekAck(null);
-    const nextWeek = weekNum + 1;
-    setWeekNum(nextWeek);
-    if (projectId) {
-      localStorage.removeItem(`plansure_meeting_open_${projectId}`);
-      localStorage.setItem(`plansure_week_num_${projectId}`, String(nextWeek));
-    }
+    /* No local week counter to bump: acknowledge-close records the handover
+       and the header reads it back from the server. */
     setMeetingOpenLocal(false);
     setCurrentStep(0);
     setCycleStage("draft");
@@ -688,6 +679,12 @@ const AdminProjectWorkspace = () => {
         const response = await projectAPI.getById(projectId);
         if (response.success) {
           setProject(response.project);
+          /* Seeded from the project so every account opens on the same stage.
+             This used to come from localStorage, so whoever opened the meeting
+             saw one stage and everyone else saw another. */
+          const opened = !!response.project?.meetingOpen;
+          setMeetingOpenLocal(opened);
+          if (opened) setCurrentStep((step) => (step < 1 ? 1 : step));
         }
       } catch (error) {
         console.error("Failed to fetch project:", error);
@@ -729,8 +726,10 @@ const AdminProjectWorkspace = () => {
           setLookaheadData(null);
           setWeeklyControlData(null);
           setClosedWeekAck(null);
+          setSupersededClosedCount(programme.closedWeeks?.length ?? 0);
           return;
         }
+        setSupersededClosedCount(null);
         setClosedWeekAck(programme.pendingCloseAckWeek ?? null);
         setProgrammeAnchor(programme.lookaheadStartDate || null);
         setUploaderName(programme.uploadedBy?.name || "");
@@ -818,9 +817,11 @@ const AdminProjectWorkspace = () => {
           const programme = response.programme;
           if (programme.awaitingNextUpload) {
             setClosedWeekAck(null);
+            setSupersededClosedCount(programme.closedWeeks?.length ?? 0);
             setIsLoadingProgramme(false);
             return;
           }
+          setSupersededClosedCount(null);
           setClosedWeekAck(programme.pendingCloseAckWeek ?? null);
           setProgrammeAnchor(programme.lookaheadStartDate || null);
           // Also set here: this is the load path that populates the workspace,
@@ -1006,15 +1007,17 @@ const AdminProjectWorkspace = () => {
     }
   }, [weeksStatus?.closedWeeksCount, uploadedProgramme?._id, lockedViewWeek]);
 
-  /* The header week comes from the server's week ledger, not from the local
-     counter. weekNum is a per-browser localStorage value bumped when someone
-     acknowledges a close, so it read differently for every account looking at
-     the same project. The first week not yet closed is the week in progress. */
+  /* The header week comes from the server's week ledger. The first week not
+     yet closed is the week in progress; once the cycle has moved on and the
+     next programme is not uploaded, the superseded programme's closed-week
+     count carries it. Falls back to 1 only on a project with no programme at
+     all, where every account agrees anyway. */
   const headerWeekNum =
     weeksStatus?.weeks?.find((w) => !w.isClosed)?.weekNumber ??
     weeksStatus?.totalWeeks ??
-    weekNum;
-  const headerClosedCount = weeksStatus?.closedWeeksCount ?? 0;
+    (supersededClosedCount !== null ? supersededClosedCount + 1 : 1);
+  const headerClosedCount =
+    weeksStatus?.closedWeeksCount ?? supersededClosedCount ?? 0;
 
   const weekPendingClose = weeksStatus?.weeks.find(
     (w) => w.canClose,
@@ -1201,10 +1204,11 @@ const AdminProjectWorkspace = () => {
             setCycleStage("meetingOpen");
             setMeetingOpenLocal(true);
             if (projectId) {
-              localStorage.setItem(
-                `plansure_meeting_open_${projectId}`,
-                "true",
-              );
+              projectAPI
+                .setMeetingOpen(projectId, true)
+                .catch((err) =>
+                  console.error("Failed to record meeting open:", err),
+                );
             }
           } else if (cycleStage === "meetingOpen") {
             setCycleStage("execution");
@@ -1380,8 +1384,18 @@ const AdminProjectWorkspace = () => {
 
   const handleOpenMeeting = async () => {
     setMeetingOpenLocal(true);
+    /* Awaited: this is the only record of the meeting until a programme is
+       uploaded, so a silent failure would leave the other accounts showing
+       the cycle as not yet started. */
     if (projectId) {
-      localStorage.setItem(`plansure_meeting_open_${projectId}`, "true");
+      try {
+        await projectAPI.setMeetingOpen(projectId, true);
+        setProject((prev) => (prev ? { ...prev, meetingOpen: true } : prev));
+      } catch (error) {
+        console.error("Failed to record meeting open:", error);
+        setMeetingOpenLocal(false);
+        return;
+      }
     }
     setCurrentStep((step) => (step < 1 ? 1 : step));
     if (uploadedProgramme?._id && cycleStage === "draft") {
@@ -4711,7 +4725,7 @@ const AdminProjectWorkspace = () => {
                       {/* Follows the header's week counter so it advances when
                           a week completes. A locked historical view keeps its
                           own real week number. */}
-                      Week {lockedViewWeek ?? weekNum} Data
+                      Week {lockedViewWeek ?? headerWeekNum} Data
                     </Typography>
                     <Typography
                       sx={{ color: COLORS.textSecondary, fontSize: "12px" }}
@@ -8081,11 +8095,12 @@ const AdminProjectWorkspace = () => {
                       fontSize: "12px",
                       fontWeight: 500,
                       mb: 0.5,
-                      mt: 2,
                     }}
                   >
                     Owner
                   </Typography>
+                  {/* Padding, font size and line height match the Select
+                      beside it, so the two boxes are the same height. */}
                   <Box
                     sx={{
                       bgcolor: COLORS.bgPrimary,
@@ -8788,7 +8803,7 @@ const AdminProjectWorkspace = () => {
               </Box>
             )}
             <Box sx={{ display: "flex", flexDirection: "column", gap: 0 }}>
-              {/* Activity Name (Read-only) */}
+              {/* Activity (Read-only) */}
               <Box>
                 <Typography
                   sx={{
@@ -9247,7 +9262,6 @@ const AdminProjectWorkspace = () => {
                       fontSize: "12px",
                       fontWeight: 500,
                       mb: 0.5,
-                      mt: 2,
                     }}
                   >
                     Owner

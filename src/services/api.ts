@@ -106,6 +106,14 @@ export const projectAPI = {
     return response.data;
   },
 
+  /* Whether the planning meeting for the current cycle is open. Server-side
+     because it is set before a programme exists, and every account on the
+     project has to see the same stage. */
+  setMeetingOpen: async (id: string, open: boolean) => {
+    const response = await api.patch(`/projects/${id}/meeting-open`, { open });
+    return response.data;
+  },
+
   create: async (data: {
     name: string;
     phase: string;
