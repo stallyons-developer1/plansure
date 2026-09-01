@@ -27,7 +27,15 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    const isAuthEndpoint = error.config?.url?.includes("/auth/login");
+    const CREDENTIAL_ENDPOINTS = [
+      "/auth/login",
+      "/auth/password",
+      "/auth/forgot-password",
+      "/auth/reset-password",
+    ];
+    const isAuthEndpoint = CREDENTIAL_ENDPOINTS.some((path) =>
+      error.config?.url?.includes(path),
+    );
 
     if (error.response?.status === 401 && !isAuthEndpoint) {
       localStorage.removeItem("plansure_token");
