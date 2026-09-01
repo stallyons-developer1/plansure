@@ -3,6 +3,8 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
 
 const Login = lazy(() => import("./pages/Login/Login"));
+const ForgotPassword = lazy(() => import("./pages/Login/ForgotPassword"));
+const ResetPassword = lazy(() => import("./pages/Login/ResetPassword"));
 const Dashboard = lazy(() => import("./pages/Dashboard/Dashboard"));
 const Projects = lazy(() => import("./pages/Projects/Projects"));
 const ProjectWorkspace = lazy(
@@ -120,6 +122,20 @@ function App() {
             ) : (
               <Login />
             )
+          }
+        />
+
+        <Route
+          path="/forgot-password"
+          element={
+            isAuthenticated ? <Navigate to="/" replace /> : <ForgotPassword />
+          }
+        />
+
+        <Route
+          path="/reset-password/:token"
+          element={
+            isAuthenticated ? <Navigate to="/" replace /> : <ResetPassword />
           }
         />
 

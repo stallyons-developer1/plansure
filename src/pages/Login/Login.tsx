@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link as RouterLink } from "react-router-dom";
 import {
   Box,
   Card,
@@ -12,6 +12,7 @@ import {
   IconButton,
   CircularProgress,
   Collapse,
+  Link,
 } from "@mui/material";
 import { Visibility, VisibilityOff } from "@mui/icons-material";
 import { useAuth } from "../../context/AuthContext";
@@ -292,30 +293,51 @@ const Login = () => {
               />
             </Box>
 
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  disabled={isLoading}
-                  size="small"
-                  sx={{
-                    color: COLORS.borderLight,
-                    "&.Mui-checked": {
-                      color: COLORS.blue,
-                    },
-                  }}
-                />
-              }
-              label="Remember me"
+            <Box
               sx={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
                 mb: 2,
-                "& .MuiFormControlLabel-label": {
-                  fontSize: 14,
-                  color: COLORS.textSecondary,
-                },
               }}
-            />
+            >
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    disabled={isLoading}
+                    size="small"
+                    sx={{
+                      color: COLORS.borderLight,
+                      "&.Mui-checked": {
+                        color: COLORS.blue,
+                      },
+                    }}
+                  />
+                }
+                label="Remember me"
+                sx={{
+                  mr: 0,
+                  "& .MuiFormControlLabel-label": {
+                    fontSize: 14,
+                    color: COLORS.textSecondary,
+                  },
+                }}
+              />
+              <Link
+                component={RouterLink}
+                to="/forgot-password"
+                underline="none"
+                sx={{
+                  color: COLORS.blue,
+                  fontSize: 14,
+                  "&:hover": { textDecoration: "underline" },
+                }}
+              >
+                Forgot password?
+              </Link>
+            </Box>
 
             <Button
               type="submit"
