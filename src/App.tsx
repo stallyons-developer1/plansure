@@ -419,6 +419,27 @@ function App() {
         />
 
         <Route path="/" element={<Navigate to="/login" replace />} />
+
+        {/* Without this an unrecognised URL matches nothing and React renders
+            an empty document — a blank screen with no way back. Signed-in
+            visitors land on their own dashboard, everyone else on login. */}
+        <Route
+          path="*"
+          element={
+            <Navigate
+              to={
+                !isAuthenticated
+                  ? "/login"
+                  : user?.role === "admin"
+                    ? "/admin"
+                    : user?.role === "planner"
+                      ? "/planner"
+                      : "/dashboard"
+              }
+              replace
+            />
+          }
+        />
       </Routes>
     </Suspense>
   );
