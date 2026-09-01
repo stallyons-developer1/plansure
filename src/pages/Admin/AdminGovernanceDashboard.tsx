@@ -302,6 +302,7 @@ interface HistoricalWeek {
     red: number;
     actionsCompleted: number;
     actionsTotal: number;
+    actionsOverridden?: number;
   };
   closeType?: string;
   notes?: string;
@@ -512,10 +513,10 @@ const AdminGovernanceDashboard = () => {
     const fetchExplorerWeeks = async () => {
       try {
         setExplorerLoading(true);
-        const response = await dashboardAPI.getGovernance(
-          explorerProjectId,
-          { startDate, endDate },
-        );
+        const response = await dashboardAPI.getGovernance(explorerProjectId, {
+          startDate,
+          endDate,
+        });
         if (cancelled) return;
         setExplorerWeeks(response.governance?.historicalWeeks || []);
       } catch (error) {
@@ -1978,7 +1979,8 @@ const AdminGovernanceDashboard = () => {
                     display: "grid",
                     gridTemplateColumns: {
                       xs: "1fr 1fr",
-                      sm: "1fr 1fr 1fr 1fr",
+                      sm: "repeat(3, 1fr)",
+                      md: "repeat(5, 1fr)",
                     },
                     gap: 2,
                     mb: 3,
@@ -1999,6 +2001,15 @@ const AdminGovernanceDashboard = () => {
                       label: "Actions Closed",
                       value: String(
                         selectedWeekData.stats?.actionsCompleted || 0,
+                      ),
+                    },
+                    {
+                      /* Force-closed, not delivered. Sits next to Actions
+                         Closed because the two together say how the week was
+                         actually brought to a close. */
+                      label: "Actions Overridden",
+                      value: String(
+                        selectedWeekData.stats?.actionsOverridden || 0,
                       ),
                     },
                     {
