@@ -231,6 +231,10 @@ const ProjectWorkspace = () => {
       closedWeeksCount?: number;
     };
   } | null>(null);
+  /* How many weeks the superseded programme had closed — see headerWeekNum. */
+  const [supersededClosedCount, setSupersededClosedCount] = useState<
+    number | null
+  >(null);
   const [weeksStatus, setWeeksStatus] = useState<{
     totalWeeks?: number;
     closedWeeksCount?: number;
@@ -242,16 +246,22 @@ const ProjectWorkspace = () => {
   } | null>(null);
 
   /* Same derivation as the Admin and Planner workspaces: the first week not
-     yet closed is the week in progress. weekInfo.currentWeekNumber is a
-     calendar count from the programme start, so on a project whose activities
-     have not begun it stays at 1 however many weeks have been closed — which
-     is why this header disagreed with the Admin's. */
+     yet closed is the week in progress.
+
+     weeks-status is only fetched for a live programme, so once the cycle has
+     moved on and the next programme is not uploaded there is nothing left to
+     read and the count carries it instead. weekInfo.currentWeekNumber is a
+     calendar count from the programme start, which on a project whose
+     activities have not begun stays at 1 however many weeks are closed — it
+     is a last resort, not the source of truth. */
   const headerWeekNum =
     weeksStatus?.weeks?.find((w) => !w.isClosed)?.weekNumber ??
     weeksStatus?.totalWeeks ??
-    weeklyControl?.weekInfo?.currentWeekNumber ??
-    1;
-  const headerClosedCount = weeksStatus?.closedWeeksCount ?? 0;
+    (supersededClosedCount !== null
+      ? supersededClosedCount + 1
+      : (weeklyControl?.weekInfo?.currentWeekNumber ?? 1));
+  const headerClosedCount =
+    weeksStatus?.closedWeeksCount ?? supersededClosedCount ?? 0;
 
   const isActionFromClosedWeek = (action: {
     createdAt?: string;
@@ -279,8 +289,8 @@ const ProjectWorkspace = () => {
     return actionDate < new Date(mostRecentClosure.closedAt);
   };
   const steps = [
-    "Draft",
-    "Meeting Open",
+    "Open Meeting",
+    "Upload a program",
     "Execution",
     "Close-Out Eligible",
     "Closed",
@@ -335,8 +345,10 @@ const ProjectWorkspace = () => {
           if (programme.awaitingNextUpload) {
             setActivities([]);
             setProgrammeName("");
+            setSupersededClosedCount(programme.closedWeeks?.length ?? 0);
             return;
           }
+          setSupersededClosedCount(null);
           const activitiesData = programme.extractedData?.activities || [];
 
           setActivities(activitiesData);
