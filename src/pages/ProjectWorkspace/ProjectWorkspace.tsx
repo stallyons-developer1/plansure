@@ -818,7 +818,10 @@ const ProjectWorkspace = () => {
                       (a) => a.activityStatus === "At Risk",
                     ).length;
                     const completeCount = in6.filter(
-                      (a) => a.activityStatus === "Complete",
+                      (a) =>
+                        a.activityStatus === "Complete" ||
+                        a.activityStatus === "Completed" ||
+                        a.ragStatus === "Blue",
                     ).length;
                     const blockedCount = in6.filter(
                       (a) =>
