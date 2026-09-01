@@ -6588,18 +6588,21 @@ const AdminProjectWorkspace = () => {
                       mb: 2,
                     }}
                   >
-                    {!uploadedProgramme?._id
-                      ? "Upload a programme for this week before it can be marked Close-Out Eligible."
-                      : uploadedProgramme?.cycleStatus === "Close-Out Eligible"
-                        ? "This week is Close-Out Eligible. It can now be closed and locked from Weekly Control."
-                        : unassignedActivityCount > 0 &&
-                            weeklyActionStats.openRequired > 0
-                          ? `${unassignedActivityCount} activit${unassignedActivityCount === 1 ? "y" : "ies"} still unassigned and ${weeklyActionStats.openRequired} required action(s) still open.`
-                          : unassignedActivityCount > 0
-                            ? `${unassignedActivityCount} activit${unassignedActivityCount === 1 ? "y is" : "ies are"} still unassigned. Assign every activity to mark this week Close-Out Eligible.`
-                            : weeklyActionStats.openRequired > 0
-                              ? `${weeklyActionStats.openRequired} required action(s) still open. Complete them to mark this week Close-Out Eligible.`
-                              : "Mark the week Close-Out Eligible to enable closing."}
+                    {user?.role !== "planner"
+                      ? "Only the Planner can mark a week Close-Out Eligible."
+                      : !uploadedProgramme?._id
+                        ? "Upload a programme for this week before it can be marked Close-Out Eligible."
+                        : uploadedProgramme?.cycleStatus ===
+                            "Close-Out Eligible"
+                          ? "This week is Close-Out Eligible. It can now be closed and locked from Weekly Control."
+                          : unassignedActivityCount > 0 &&
+                              weeklyActionStats.openRequired > 0
+                            ? `${unassignedActivityCount} activit${unassignedActivityCount === 1 ? "y" : "ies"} still unassigned and ${weeklyActionStats.openRequired} required action(s) still open.`
+                            : unassignedActivityCount > 0
+                              ? `${unassignedActivityCount} activit${unassignedActivityCount === 1 ? "y is" : "ies are"} still unassigned. Assign every activity to mark this week Close-Out Eligible.`
+                              : weeklyActionStats.openRequired > 0
+                                ? `${weeklyActionStats.openRequired} required action(s) still open. Complete them to mark this week Close-Out Eligible.`
+                                : "Mark the week Close-Out Eligible to enable closing."}
                   </Typography>
 
                   {uploadedProgramme?.cycleStatus === "Close-Out Eligible" ? (
@@ -6629,6 +6632,7 @@ const AdminProjectWorkspace = () => {
                     <Button
                       onClick={handleMarkCloseOutEligible}
                       disabled={
+                        user?.role !== "planner" ||
                         !uploadedProgramme?._id ||
                         markingCloseOut ||
                         weeklyActionStats.openRequired > 0 ||
