@@ -5892,8 +5892,8 @@ const AdminProjectWorkspace = () => {
                         </Box>
                       </Box>
 
-                      {/* Stage 3 -> Stage 4 is an explicit PM decision taken in
-                          Closure & Export; this just points there. */}
+                      {/* Stage 3 -> Stage 4 is an explicit Planner decision.
+                          Stated, not linked: the Admin cannot take it. */}
                       {!weeklyControlData?.isProjectEnded && (
                         <Box
                           sx={{
@@ -5914,19 +5914,8 @@ const AdminProjectWorkspace = () => {
                               fontSize: "12px",
                             }}
                           >
-                            Mark the week Close-Out Eligible in{" "}
-                            <Box
-                              component="span"
-                              onClick={() => setActiveTab(5)}
-                              sx={{
-                                color: COLORS.blue,
-                                cursor: "pointer",
-                                textDecoration: "underline",
-                              }}
-                            >
-                              Closure &amp; Export
-                            </Box>{" "}
-                            to enable closing.
+                            Close Week will be enabled once the Planner marks
+                            this week as eligible for close-out.
                           </Typography>
                         </Box>
                       )}
@@ -6571,118 +6560,124 @@ const AdminProjectWorkspace = () => {
                 </Box>
 
                 {/* Stage 3 -> Stage 4. An explicit governance decision by the
-                    PM, no longer a side effect of the Weekly Plan download. */}
-                <Box
-                  sx={{
-                    bgcolor: COLORS.bgSecondary,
-                    border: `1px solid ${
-                      uploadedProgramme?.cycleStatus === "Close-Out Eligible"
-                        ? COLORS.blue
-                        : COLORS.border
-                    }`,
-                    borderRadius: "12px",
-                    p: 3,
-                    mb: 3,
-                  }}
-                >
-                  <Typography
-                    sx={{
-                      color: COLORS.textPrimary,
-                      fontSize: "16px",
-                      fontWeight: 600,
-                      mb: 0.5,
-                    }}
-                  >
-                    Close-Out
-                  </Typography>
-                  <Typography
-                    sx={{
-                      color: COLORS.textSecondary,
-                      fontSize: "13px",
-                      mb: 2,
-                    }}
-                  >
-                    {user?.role !== "planner"
-                      ? "Only the Planner can mark a week Close-Out Eligible."
-                      : !uploadedProgramme?._id
-                        ? "Upload a programme for this week before it can be marked Close-Out Eligible."
-                        : uploadedProgramme?.cycleStatus ===
-                            "Close-Out Eligible"
-                          ? "This week is Close-Out Eligible. It can now be closed and locked from Weekly Control."
-                          : unassignedActivityCount > 0 &&
-                              weeklyActionStats.openRequired > 0
-                            ? `${unassignedActivityCount} activit${unassignedActivityCount === 1 ? "y" : "ies"} still unassigned and ${weeklyActionStats.openRequired} required action(s) still open.`
-                            : unassignedActivityCount > 0
-                              ? `${unassignedActivityCount} activit${unassignedActivityCount === 1 ? "y is" : "ies are"} still unassigned. Assign every activity to mark this week Close-Out Eligible.`
-                              : weeklyActionStats.openRequired > 0
-                                ? `${weeklyActionStats.openRequired} required action(s) still open. Complete them to mark this week Close-Out Eligible.`
-                                : "Mark the week Close-Out Eligible to enable closing."}
-                  </Typography>
+                    PM, no longer a side effect of the Weekly Plan download.
 
-                  {uploadedProgramme?.cycleStatus === "Close-Out Eligible" ? (
-                    <Box
+                    Hidden on the Admin side for now: an Admin cannot mark a
+                    week Close-Out Eligible, so this card only ever showed a
+                    disabled control. Restore by dropping the guard below. */}
+                {user?.role === "planner" && (
+                  <Box
+                    sx={{
+                      bgcolor: COLORS.bgSecondary,
+                      border: `1px solid ${
+                        uploadedProgramme?.cycleStatus === "Close-Out Eligible"
+                          ? COLORS.blue
+                          : COLORS.border
+                      }`,
+                      borderRadius: "12px",
+                      p: 3,
+                      mb: 3,
+                    }}
+                  >
+                    <Typography
                       sx={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 1,
-                        bgcolor: "rgba(59, 130, 246, 0.1)",
-                        border: `1px solid ${COLORS.blue}`,
-                        borderRadius: "8px",
-                        px: 2,
-                        py: 1,
+                        color: COLORS.textPrimary,
+                        fontSize: "16px",
+                        fontWeight: 600,
+                        mb: 0.5,
                       }}
                     >
-                      <Typography
+                      Close-Out
+                    </Typography>
+                    <Typography
+                      sx={{
+                        color: COLORS.textSecondary,
+                        fontSize: "13px",
+                        mb: 2,
+                      }}
+                    >
+                      {user?.role !== "planner"
+                        ? "Only the Planner can mark a week Close-Out Eligible."
+                        : !uploadedProgramme?._id
+                          ? "Upload a programme for this week before it can be marked Close-Out Eligible."
+                          : uploadedProgramme?.cycleStatus ===
+                              "Close-Out Eligible"
+                            ? "This week is Close-Out Eligible. It can now be closed and locked from Weekly Control."
+                            : unassignedActivityCount > 0 &&
+                                weeklyActionStats.openRequired > 0
+                              ? `${unassignedActivityCount} activit${unassignedActivityCount === 1 ? "y" : "ies"} still unassigned and ${weeklyActionStats.openRequired} required action(s) still open.`
+                              : unassignedActivityCount > 0
+                                ? `${unassignedActivityCount} activit${unassignedActivityCount === 1 ? "y is" : "ies are"} still unassigned. Assign every activity to mark this week Close-Out Eligible.`
+                                : weeklyActionStats.openRequired > 0
+                                  ? `${weeklyActionStats.openRequired} required action(s) still open. Complete them to mark this week Close-Out Eligible.`
+                                  : "Mark the week Close-Out Eligible to enable closing."}
+                    </Typography>
+
+                    {uploadedProgramme?.cycleStatus === "Close-Out Eligible" ? (
+                      <Box
                         sx={{
-                          color: COLORS.blue,
-                          fontSize: "13px",
-                          fontWeight: 600,
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 1,
+                          bgcolor: "rgba(59, 130, 246, 0.1)",
+                          border: `1px solid ${COLORS.blue}`,
+                          borderRadius: "8px",
+                          px: 2,
+                          py: 1,
                         }}
                       >
-                        ✓ Close-Out Eligible
-                      </Typography>
-                    </Box>
-                  ) : (
-                    <Button
-                      onClick={handleMarkCloseOutEligible}
-                      disabled={
-                        user?.role !== "planner" ||
-                        !uploadedProgramme?._id ||
-                        markingCloseOut ||
-                        weeklyActionStats.openRequired > 0 ||
-                        unassignedActivityCount > 0 ||
-                        weeklyControlData?.isProjectEnded
-                      }
-                      startIcon={
-                        markingCloseOut ? (
-                          <CircularProgress
-                            size={14}
-                            sx={{ color: "inherit" }}
-                          />
-                        ) : null
-                      }
-                      sx={{
-                        bgcolor: COLORS.blue,
-                        color: "#fff",
-                        textTransform: "none",
-                        px: 3,
-                        py: 1.25,
-                        borderRadius: "8px",
-                        fontSize: "13px",
-                        fontWeight: 500,
-                        "&:hover": { bgcolor: COLORS.blueHover },
-                        "&.Mui-disabled": {
-                          bgcolor: COLORS.disabledBlue,
+                        <Typography
+                          sx={{
+                            color: COLORS.blue,
+                            fontSize: "13px",
+                            fontWeight: 600,
+                          }}
+                        >
+                          ✓ Close-Out Eligible
+                        </Typography>
+                      </Box>
+                    ) : (
+                      <Button
+                        onClick={handleMarkCloseOutEligible}
+                        disabled={
+                          user?.role !== "planner" ||
+                          !uploadedProgramme?._id ||
+                          markingCloseOut ||
+                          weeklyActionStats.openRequired > 0 ||
+                          unassignedActivityCount > 0 ||
+                          weeklyControlData?.isProjectEnded
+                        }
+                        startIcon={
+                          markingCloseOut ? (
+                            <CircularProgress
+                              size={14}
+                              sx={{ color: "inherit" }}
+                            />
+                          ) : null
+                        }
+                        sx={{
+                          bgcolor: COLORS.blue,
                           color: "#fff",
-                        },
-                      }}
-                    >
-                      {markingCloseOut
-                        ? "Marking..."
-                        : "Mark Close-Out Eligible"}
-                    </Button>
-                  )}
-                </Box>
+                          textTransform: "none",
+                          px: 3,
+                          py: 1.25,
+                          borderRadius: "8px",
+                          fontSize: "13px",
+                          fontWeight: 500,
+                          "&:hover": { bgcolor: COLORS.blueHover },
+                          "&.Mui-disabled": {
+                            bgcolor: COLORS.disabledBlue,
+                            color: "#fff",
+                          },
+                        }}
+                      >
+                        {markingCloseOut
+                          ? "Marking..."
+                          : "Mark Close-Out Eligible"}
+                      </Button>
+                    )}
+                  </Box>
+                )}
 
                 <Box
                   sx={{
