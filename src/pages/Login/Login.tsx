@@ -335,7 +335,7 @@ const Login = () => {
                   "&:hover": { textDecoration: "underline" },
                 }}
               >
-                Forgot password?
+                {/* Forgot password? */}
               </Link>
             </Box>
 
