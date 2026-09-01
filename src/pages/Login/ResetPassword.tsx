@@ -51,6 +51,7 @@ const ResetPassword = () => {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
@@ -113,15 +114,19 @@ const ResetPassword = () => {
     }
   };
 
-  const passwordToggle = (
+  const visibilityToggle = (
+    shown: boolean,
+    toggle: React.Dispatch<React.SetStateAction<boolean>>,
+  ) => (
     <InputAdornment position="end">
       <IconButton
-        onClick={() => setShowPassword((shown) => !shown)}
+        onClick={() => toggle((current) => !current)}
         edge="end"
         disabled={isLoading}
+        aria-label={shown ? "Hide password" : "Show password"}
         sx={{ color: COLORS.textMuted }}
       >
-        {showPassword ? (
+        {shown ? (
           <VisibilityOff fontSize="small" />
         ) : (
           <Visibility fontSize="small" />
@@ -208,7 +213,7 @@ const ResetPassword = () => {
 
   return (
     <AuthShell
-      title="Set a new password"
+      title="Reset Password"
       subtitle={accountEmail ? `for ${accountEmail}` : "Choose a new password"}
     >
       <Collapse in={!!error}>
@@ -245,7 +250,11 @@ const ResetPassword = () => {
             disabled={isLoading}
             error={!!fieldErrors.password}
             helperText={fieldErrors.password || "At least 6 characters"}
-            slotProps={{ input: { endAdornment: passwordToggle } }}
+            slotProps={{
+              input: {
+                endAdornment: visibilityToggle(showPassword, setShowPassword),
+              },
+            }}
             sx={{
               ...authInputStyles,
               "& .MuiFormHelperText-root": {
@@ -258,11 +267,11 @@ const ResetPassword = () => {
           />
         </Box>
 
-        <Box sx={{ mb: 1 }}>
+        <Box sx={{ mt: 2, mb: 1 }}>
           <TextField
             fullWidth
             label="Confirm new password"
-            type={showPassword ? "text" : "password"}
+            type={showConfirmPassword ? "text" : "password"}
             value={confirmPassword}
             onChange={(e) => {
               setConfirmPassword(e.target.value);
@@ -272,6 +281,14 @@ const ResetPassword = () => {
             disabled={isLoading}
             error={!!fieldErrors.confirmPassword}
             helperText={fieldErrors.confirmPassword || " "}
+            slotProps={{
+              input: {
+                endAdornment: visibilityToggle(
+                  showConfirmPassword,
+                  setShowConfirmPassword,
+                ),
+              },
+            }}
             sx={authInputStyles}
           />
         </Box>
