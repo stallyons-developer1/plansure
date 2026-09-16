@@ -6526,7 +6526,9 @@ const PlannerProjectWorkspace = () => {
                       mb: 0.5,
                     }}
                   >
-                    Close-Out
+                    {canConfirmProgrammeUpdate
+                      ? "Confirm Programme Update"
+                      : "Close-Out"}
                   </Typography>
                   <Typography
                     sx={{
@@ -6536,11 +6538,9 @@ const PlannerProjectWorkspace = () => {
                     }}
                   >
                     {canConfirmProgrammeUpdate
-                      ? !todoDownloaded
-                        ? "Download the Planner To-Do first, then confirm the programme update."
-                        : programmeUpdateConfirmed
-                          ? "Programme update confirmed. The PM can now mark this week Close-Out Eligible."
-                          : "Confirm the programme update to let the PM mark this week Close-Out Eligible."
+                      ? programmeUpdateConfirmed
+                        ? "Programme update confirmed. The PM can now mark this week Close-Out Eligible."
+                        : "Download the Planner To-Do file, then confirm the programme update to enable the next close-out step for the PM."
                       : user?.role !== "admin"
                         ? "Only the PM can mark a week Close-Out Eligible."
                         : !programmeUpdateConfirmed
@@ -6611,9 +6611,7 @@ const PlannerProjectWorkspace = () => {
                         },
                       }}
                     >
-                      {programmeUpdateConfirmed
-                        ? "Programme Update Confirmed"
-                        : "Confirm Programme Update"}
+                      {programmeUpdateConfirmed ? "Confirmed" : "Confirm"}
                     </Button>
                   ) : (
                     <Button
@@ -6908,7 +6906,8 @@ const PlannerProjectWorkspace = () => {
                           onClick={handleExportPlannerTodo}
                           disabled={
                             isExporting === "todo" ||
-                            exportGatingStatus.todoGated
+                            exportGatingStatus.todoGated ||
+                            weeklyActionStats.openRequired > 0
                           }
                           startIcon={
                             isExporting === "todo" ? (
