@@ -5727,8 +5727,8 @@ const PlannerProjectWorkspace = () => {
                         </Box>
                       </Box>
 
-                      {/* Stage 3 -> Stage 4 is an explicit PM decision taken in
-                          Closure & Export; this just points there. */}
+                      {/* Stage 3 -> Stage 4 is the PM's decision. Stated, not
+                          linked: the Planner cannot take it. */}
                       {!weeklyControlData?.isProjectEnded && (
                         <Box
                           sx={{
@@ -5749,19 +5749,8 @@ const PlannerProjectWorkspace = () => {
                               fontSize: "12px",
                             }}
                           >
-                            Mark the week Close-Out Eligible in{" "}
-                            <Box
-                              component="span"
-                              onClick={() => setActiveTab(5)}
-                              sx={{
-                                color: COLORS.blue,
-                                cursor: "pointer",
-                                textDecoration: "underline",
-                              }}
-                            >
-                              Closure &amp; Export
-                            </Box>{" "}
-                            to enable closing.
+                            Close Week will be enabled once the PM marks this
+                            week as eligible for close-out.
                           </Typography>
                         </Box>
                       )}
