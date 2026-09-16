@@ -546,6 +546,7 @@ const PlannerProjectWorkspace = () => {
   }, [location.search]);
 
   const handleAckClosedWeek = async () => {
+    if (!canRunWeekClosure) return;
     /* Recorded on the programme, not in this browser: the other accounts on
        the project have to see the same handover (MS-05 B6/AC1). */
     if (uploadedProgramme?._id) {
@@ -1004,7 +1005,7 @@ const PlannerProjectWorkspace = () => {
     weekNumber: number,
     closeType: string = "Normal Close",
   ) => {
-    if (!uploadedProgramme?._id) return;
+    if (!uploadedProgramme?._id || !canRunWeekClosure) return;
     setClosingWeek(weekNumber);
     try {
       const response1: {
@@ -1249,7 +1250,8 @@ const PlannerProjectWorkspace = () => {
   /* Stage 3 -> Stage 4. This is a deliberate governance decision by the PM,
      so it gets its own control rather than riding on the Weekly Plan download. */
   const handleMarkCloseOutEligible = async () => {
-    if (!uploadedProgramme?._id || markingCloseOut) return;
+    if (!uploadedProgramme?._id || markingCloseOut || !canRunWeekClosure)
+      return;
 
     setMarkingCloseOut(true);
     try {
@@ -5583,6 +5585,12 @@ const PlannerProjectWorkspace = () => {
                   <Box sx={{ display: "flex", gap: 2 }}>
                     <Button
                       onClick={handleFinalClose}
+                      disabled={!canRunWeekClosure}
+                      title={
+                        canRunWeekClosure
+                          ? ""
+                          : "Only the PM can close and lock a week."
+                      }
                       sx={{
                         bgcolor: COLORS.green,
                         color: "#fff",
@@ -5593,6 +5601,10 @@ const PlannerProjectWorkspace = () => {
                         fontSize: "13px",
                         fontWeight: 500,
                         "&:hover": { bgcolor: "#16a34a" },
+                        "&.Mui-disabled": {
+                          bgcolor: COLORS.bgTertiary,
+                          color: COLORS.textMuted,
+                        },
                       }}
                     >
                       Close & Lock Week
