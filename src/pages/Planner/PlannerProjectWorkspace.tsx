@@ -2067,6 +2067,16 @@ const PlannerProjectWorkspace = () => {
       window.URL.revokeObjectURL(url);
 
       setClosureChecklist((prev) => ({ ...prev, todoGenerated: true }));
+      setUploadedProgramme((prev) =>
+        prev
+          ? {
+              ...prev,
+              plannerTodoGenerated: true,
+              programmeUpdateConfirmedAt: null,
+              programmeUpdateNote: "",
+            }
+          : prev,
+      );
     } catch (error) {
       console.error("Error exporting planner todo:", error);
     } finally {
