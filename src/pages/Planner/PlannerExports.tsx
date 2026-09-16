@@ -91,12 +91,15 @@ const PlannerExports = () => {
   const greenColor = COLORS.green;
   const greenBg = "rgba(34, 197, 94, 0.15)";
 
-  const isExportAllowed = [
-    "Execution",
-    "Close-Out Eligible",
-    "Approved",
-    "Closed",
-  ].includes(gatingStatus.cycleStatus);
+  const EXPORT_READY_STATUSES = ["Close-Out Eligible", "Closed"];
+
+  /* Mirrors EXPORT_READY_STATUSES on the server, which now refuses these
+     downloads outright rather than relying on the button being hidden.
+     "Execution" is gone: the outputs belong to the close-out, not to the week
+     being worked. "Approved" was never a cycleStatus value. */
+  const isExportAllowed = EXPORT_READY_STATUSES.includes(
+    gatingStatus.cycleStatus,
+  );
   const statusColor = isExportAllowed ? greenColor : amberColor;
   const statusBg = isExportAllowed ? greenBg : amberBg;
 
@@ -170,12 +173,7 @@ const PlannerExports = () => {
           }
 
           setGatingStatus({
-            isGated: ![
-              "Execution",
-              "Close-Out Eligible",
-              "Approved",
-              "Closed",
-            ].includes(cycleStatus),
+            isGated: !EXPORT_READY_STATUSES.includes(cycleStatus),
             cycleStatus,
             currentWeek,
           });
@@ -563,14 +561,14 @@ const PlannerExports = () => {
                   </>
                 ) : (
                   <>
-                    Exports are gated — WeekCycle must be in{" "}
+                    Exports are gated — the week must be marked{" "}
                     <Typography
                       component="span"
                       sx={{ color: COLORS.blue, fontSize: "14px" }}
                     >
-                      Execution
+                      Close-Out Eligible
                     </Typography>{" "}
-                    or higher state. Current cycle is in{" "}
+                    first. Current cycle is in{" "}
                     <Typography
                       component="span"
                       sx={{ color: COLORS.blue, fontSize: "14px" }}

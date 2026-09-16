@@ -281,24 +281,15 @@ const PlannerProjectWorkspace = () => {
     );
   };
 
-  /* Strictly the planner the action is assigned to — tighter than a normal
-     closure, which also admits whoever raised it, and with no admin exemption
-     since SRS 10.2 denies the override to the Admin outright. Mirrors
-     canForceClose on the backend. */
-  const canOverrideAction = (action: {
-    assignee?: { _id?: string } | null;
-  }) => {
-    if (user?.role !== "planner") return false;
-    const userId = String(user?.id || "");
-    if (!userId) return false;
-    return String(action.assignee?._id || "") === userId;
-  };
+  /* PM Override belongs to the PM, and the client's PM is the Admin account.
+     A force-close is taken over somebody else's work, so unlike a normal
+     closure it is not bound to the assignee. Mirrors canForceClose on the
+     backend, and canPmOverride in the Admin workspace. */
+  const canPmOverride = user?.role === "admin";
 
-  /* Only the open actions this planner is entitled to force-close. */
-  const isMineToOverride = (action: {
-    status: string;
-    assignee?: { _id?: string } | null;
-  }) => isOverridableAction(action) && canOverrideAction(action);
+  /* The open actions the PM may force-close. */
+  const isMineToOverride = (action: { status: string }) =>
+    isOverridableAction(action) && canPmOverride;
   const [project, setProject] = useState<ProjectData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState(() => {
@@ -999,6 +990,12 @@ const PlannerProjectWorkspace = () => {
   const headerClosedCount =
     weeksStatus?.closedWeeksCount ?? supersededClosedCount ?? 0;
 
+  /* Closing a week, locking it and moving the project on are PM decisions,
+     and the client's PM is the Admin account. The API refuses these for
+     anyone else, so the controls are withheld here rather than failing on
+     click. */
+  const canRunWeekClosure = user?.role === "admin";
+
   const weekPendingClose = weeksStatus?.weeks.find(
     (w) => w.canClose,
   )?.weekNumber;
@@ -1194,9 +1191,7 @@ const PlannerProjectWorkspace = () => {
   const editingActionRecord = projectActions.find(
     (a) => a._id === editingActionId,
   );
-  const canOverrideEditingAction = editingActionRecord
-    ? canOverrideAction(editingActionRecord)
-    : false;
+  const canOverrideEditingAction = !!editingActionRecord && canPmOverride;
 
   /* Force-close ONE action, with its own mandatory reason. Replaces the old
      bulk "Force Close Weeks" behaviour the MS-05 review rejected (B4). */
@@ -1833,12 +1828,9 @@ const PlannerProjectWorkspace = () => {
   useEffect(() => {
     if (weeklyControlData && uploadedProgramme) {
       const cycleStatus = weeklyControlData.stats?.cycleStatus || "Draft";
-      const ungatedStatuses = [
-        "Execution",
-        "Close-Out Eligible",
-        "Approved",
-        "Closed",
-      ];
+      /* Mirrors EXPORT_READY_STATUSES on the server. The outputs belong to
+         the close-out, so Execution no longer opens them. */
+      const ungatedStatuses = ["Close-Out Eligible", "Closed"];
       const isGated = !ungatedStatuses.includes(cycleStatus);
 
       setExportGatingStatus({
@@ -5780,6 +5772,7 @@ const PlannerProjectWorkspace = () => {
                             handleCloseSpecificWeek(weekPendingClose);
                         }}
                         disabled={
+                          !canRunWeekClosure ||
                           closingWeek !== null ||
                           !weekPendingClose ||
                           uploadedProgramme?.cycleStatus !==
@@ -5921,7 +5914,7 @@ const PlannerProjectWorkspace = () => {
                           const disabledReason =
                             currentUnclosed?.canCloseReason ||
                             "This 2-week period has not ended yet";
-                          return (
+                          return !canPmOverride ? null : (
                             <Tooltip
                               title={!canCloseByDate ? disabledReason : ""}
                               placement="top"
@@ -6130,7 +6123,9 @@ const PlannerProjectWorkspace = () => {
                       </Box>
                       <Button
                         onClick={() => handleCloseSpecificWeek(week.weekNumber)}
-                        disabled={closingWeek === week.weekNumber}
+                        disabled={
+                          !canRunWeekClosure || closingWeek === week.weekNumber
+                        }
                         sx={{
                           bgcolor: COLORS.green,
                           color: "#fff",
@@ -6441,8 +6436,8 @@ const PlannerProjectWorkspace = () => {
                       mb: 2,
                     }}
                   >
-                    {user?.role !== "planner"
-                      ? "Only the Planner can mark a week Close-Out Eligible."
+                    {user?.role !== "admin"
+                      ? "Only the PM can mark a week Close-Out Eligible."
                       : !uploadedProgramme?._id
                         ? "Upload a programme for this week before it can be marked Close-Out Eligible."
                         : uploadedProgramme?.cycleStatus ===
@@ -6485,7 +6480,7 @@ const PlannerProjectWorkspace = () => {
                     <Button
                       onClick={handleMarkCloseOutEligible}
                       disabled={
-                        user?.role !== "planner" ||
+                        user?.role !== "admin" ||
                         !uploadedProgramme?._id ||
                         markingCloseOut ||
                         weeklyActionStats.openRequired > 0 ||
@@ -6911,6 +6906,7 @@ const PlannerProjectWorkspace = () => {
                               Go to Actions
                             </Button>
                             {(() => {
+                              if (!canPmOverride) return null;
                               const currentUnclosed = weeksStatus?.weeks?.find(
                                 (w) => !w.isClosed,
                               );
@@ -7208,7 +7204,10 @@ const PlannerProjectWorkspace = () => {
                                 onClick={() =>
                                   handleCloseSpecificWeek(week.weekNumber)
                                 }
-                                disabled={closingWeek === week.weekNumber}
+                                disabled={
+                                  !canRunWeekClosure ||
+                                  closingWeek === week.weekNumber
+                                }
                                 size="small"
                                 sx={{
                                   bgcolor: COLORS.green,
@@ -8188,10 +8187,16 @@ const PlannerProjectWorkspace = () => {
                     Week {closedWeekAck} is closed and locked.{" "}
                     {isLast
                       ? "The programme is now fully closed."
-                      : "Move to the next week to continue."}
+                      : canRunWeekClosure
+                        ? "Move to the next week to continue."
+                        : "The PM will move the project on to the next week."}
                   </Typography>
                   <Button
-                    onClick={handleAckClosedWeek}
+                    onClick={
+                      canRunWeekClosure
+                        ? handleAckClosedWeek
+                        : () => setClosedWeekAck(null)
+                    }
                     fullWidth
                     sx={{
                       bgcolor: COLORS.blue,
@@ -8204,9 +8209,11 @@ const PlannerProjectWorkspace = () => {
                       "&:hover": { bgcolor: COLORS.blueHover },
                     }}
                   >
-                    {isLast
-                      ? "Done"
-                      : `Move to Week ${(closedWeekAck ?? 0) + 1}`}
+                    {!canRunWeekClosure
+                      ? "Close"
+                      : isLast
+                        ? "Done"
+                        : `Move to Week ${(closedWeekAck ?? 0) + 1}`}
                   </Button>
                 </>
               );
@@ -9403,7 +9410,7 @@ const PlannerProjectWorkspace = () => {
         {/* PM Override — force-close individual actions, each with its own
             mandatory reason. Never closes actions in bulk (MS-05 B4). */}
         <Dialog
-          open={overrideModalOpen}
+          open={overrideModalOpen && canPmOverride}
           onClose={() => setOverrideModalOpen(false)}
           maxWidth="md"
           fullWidth

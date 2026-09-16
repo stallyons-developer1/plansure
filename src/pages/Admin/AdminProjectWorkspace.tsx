@@ -264,11 +264,10 @@ const AdminProjectWorkspace = () => {
      whoever raised it — a planner who assigns work to another planner still
      owns the outcome and needs to be able to close it out. Mirrors the same
      rule on PATCH /actions/:id/complete. */
-  /* PM Override belongs to the Planner. SRS §10.2 lists "PM override close" as
-     Planner: Yes, Admin: No — there is no separate PM role, the Planner holds
-     that authority. The API enforces it; this keeps the controls off a screen
-     that cannot use them. */
-  const canPmOverride = user?.role === "planner";
+  /* PM Override belongs to the PM, and the client's PM is the Admin account.
+     The API enforces it; this keeps the controls off a screen that cannot use
+     them. */
+  const canPmOverride = user?.role === "admin";
 
   const canCompleteAction = (action: {
     status?: string;
@@ -1018,6 +1017,12 @@ const AdminProjectWorkspace = () => {
     (supersededClosedCount !== null ? supersededClosedCount + 1 : 1);
   const headerClosedCount =
     weeksStatus?.closedWeeksCount ?? supersededClosedCount ?? 0;
+
+  /* Closing a week, locking it and moving the project on are PM decisions,
+     and the client's PM is the Admin account. The API refuses these for
+     anyone else, so the controls are withheld here rather than failing on
+     click. */
+  const canRunWeekClosure = user?.role === "admin";
 
   const weekPendingClose = weeksStatus?.weeks.find(
     (w) => w.canClose,
@@ -1875,12 +1880,9 @@ const AdminProjectWorkspace = () => {
   useEffect(() => {
     if (weeklyControlData && uploadedProgramme) {
       const cycleStatus = uploadedProgramme.cycleStatus || "Draft";
-      const ungatedStatuses = [
-        "Execution",
-        "Close-Out Eligible",
-        "Approved",
-        "Closed",
-      ];
+      /* Mirrors EXPORT_READY_STATUSES on the server. The outputs belong to
+         the close-out, so Execution no longer opens them. */
+      const ungatedStatuses = ["Close-Out Eligible", "Closed"];
       const isGated = !ungatedStatuses.includes(cycleStatus);
 
       setExportGatingStatus({
@@ -5926,6 +5928,7 @@ const AdminProjectWorkspace = () => {
                             handleCloseSpecificWeek(weekPendingClose);
                         }}
                         disabled={
+                          !canRunWeekClosure ||
                           closingWeek !== null ||
                           !weekPendingClose ||
                           uploadedProgramme?.cycleStatus !==
@@ -6276,7 +6279,9 @@ const AdminProjectWorkspace = () => {
                       </Box>
                       <Button
                         onClick={() => handleCloseSpecificWeek(week.weekNumber)}
-                        disabled={closingWeek === week.weekNumber}
+                        disabled={
+                          !canRunWeekClosure || closingWeek === week.weekNumber
+                        }
                         sx={{
                           bgcolor: COLORS.green,
                           color: "#fff",
@@ -6565,7 +6570,7 @@ const AdminProjectWorkspace = () => {
                     Hidden on the Admin side for now: an Admin cannot mark a
                     week Close-Out Eligible, so this card only ever showed a
                     disabled control. Restore by dropping the guard below. */}
-                {user?.role === "planner" && (
+                {user?.role === "admin" && (
                   <Box
                     sx={{
                       bgcolor: COLORS.bgSecondary,
@@ -6596,8 +6601,8 @@ const AdminProjectWorkspace = () => {
                         mb: 2,
                       }}
                     >
-                      {user?.role !== "planner"
-                        ? "Only the Planner can mark a week Close-Out Eligible."
+                      {user?.role !== "admin"
+                        ? "Only the PM can mark a week Close-Out Eligible."
                         : !uploadedProgramme?._id
                           ? "Upload a programme for this week before it can be marked Close-Out Eligible."
                           : uploadedProgramme?.cycleStatus ===
@@ -6640,7 +6645,7 @@ const AdminProjectWorkspace = () => {
                       <Button
                         onClick={handleMarkCloseOutEligible}
                         disabled={
-                          user?.role !== "planner" ||
+                          user?.role !== "admin" ||
                           !uploadedProgramme?._id ||
                           markingCloseOut ||
                           weeklyActionStats.openRequired > 0 ||
@@ -7365,7 +7370,10 @@ const AdminProjectWorkspace = () => {
                                 onClick={() =>
                                   handleCloseSpecificWeek(week.weekNumber)
                                 }
-                                disabled={closingWeek === week.weekNumber}
+                                disabled={
+                                  !canRunWeekClosure ||
+                                  closingWeek === week.weekNumber
+                                }
                                 size="small"
                                 sx={{
                                   bgcolor: COLORS.green,
@@ -8366,10 +8374,16 @@ const AdminProjectWorkspace = () => {
                     Week {closedWeekAck} is closed and locked.{" "}
                     {isLast
                       ? "The programme is now fully closed."
-                      : "Move to the next week to continue."}
+                      : canRunWeekClosure
+                        ? "Move to the next week to continue."
+                        : "The PM will move the project on to the next week."}
                   </Typography>
                   <Button
-                    onClick={handleAckClosedWeek}
+                    onClick={
+                      canRunWeekClosure
+                        ? handleAckClosedWeek
+                        : () => setClosedWeekAck(null)
+                    }
                     fullWidth
                     sx={{
                       bgcolor: COLORS.blue,
@@ -8382,9 +8396,11 @@ const AdminProjectWorkspace = () => {
                       "&:hover": { bgcolor: COLORS.blueHover },
                     }}
                   >
-                    {isLast
-                      ? "Done"
-                      : `Move to Week ${(closedWeekAck ?? 0) + 1}`}
+                    {!canRunWeekClosure
+                      ? "Close"
+                      : isLast
+                        ? "Done"
+                        : `Move to Week ${(closedWeekAck ?? 0) + 1}`}
                   </Button>
                 </>
               );
@@ -9616,7 +9632,7 @@ const AdminProjectWorkspace = () => {
         {/* PM Override — force-close individual actions, each with its own
             mandatory reason. Never closes actions in bulk (MS-05 B4). */}
         <Dialog
-          open={overrideModalOpen}
+          open={overrideModalOpen && canPmOverride}
           onClose={() => setOverrideModalOpen(false)}
           maxWidth="md"
           fullWidth
