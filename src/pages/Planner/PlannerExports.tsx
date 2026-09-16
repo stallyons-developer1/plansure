@@ -91,15 +91,24 @@ const PlannerExports = () => {
   const greenColor = COLORS.green;
   const greenBg = "rgba(34, 197, 94, 0.15)";
 
-  const EXPORT_READY_STATUSES = ["Close-Out Eligible", "Closed"];
+  /* The Planner To-Do opens in Execution — the Planner works from it before
+     confirming the programme update. The Weekly Plan is the closing record, so
+     it waits for the PM's Close-Out Eligible decision. Mirrors
+     TODO_READY_STATUSES / WEEKLY_PLAN_READY_STATUSES on the server. */
+  const TODO_READY_STATUSES = ["Execution", "Close-Out Eligible", "Closed"];
+  const WEEKLY_PLAN_READY_STATUSES = ["Close-Out Eligible", "Closed"];
 
   /* Mirrors EXPORT_READY_STATUSES on the server, which now refuses these
      downloads outright rather than relying on the button being hidden.
      "Execution" is gone: the outputs belong to the close-out, not to the week
      being worked. "Approved" was never a cycleStatus value. */
-  const isExportAllowed = EXPORT_READY_STATUSES.includes(
+  const isTodoAllowed = TODO_READY_STATUSES.includes(gatingStatus.cycleStatus);
+  const isWeeklyPlanAllowed = WEEKLY_PLAN_READY_STATUSES.includes(
     gatingStatus.cycleStatus,
   );
+  /* The page-level banner speaks for both, so it only reads "gated" while
+     neither is available. */
+  const isExportAllowed = isTodoAllowed || isWeeklyPlanAllowed;
   const statusColor = isExportAllowed ? greenColor : amberColor;
   const statusBg = isExportAllowed ? greenBg : amberBg;
 
@@ -173,7 +182,7 @@ const PlannerExports = () => {
           }
 
           setGatingStatus({
-            isGated: !EXPORT_READY_STATUSES.includes(cycleStatus),
+            isGated: !TODO_READY_STATUSES.includes(cycleStatus),
             cycleStatus,
             currentWeek,
           });
@@ -267,7 +276,7 @@ const PlannerExports = () => {
   };
 
   const handleExportWeeklyPlan = async () => {
-    if (!isExportAllowed || !programmeId) return;
+    if (!isWeeklyPlanAllowed || !programmeId) return;
 
     try {
       setExporting("weekly");
@@ -292,7 +301,7 @@ const PlannerExports = () => {
   };
 
   const handleExportPlannerTodo = async () => {
-    if (!isExportAllowed || !programmeId) return;
+    if (!isTodoAllowed || !programmeId) return;
 
     try {
       setExporting("todo");
@@ -561,12 +570,12 @@ const PlannerExports = () => {
                   </>
                 ) : (
                   <>
-                    Exports are gated — the week must be marked{" "}
+                    Exports are gated — the week must reach{" "}
                     <Typography
                       component="span"
                       sx={{ color: COLORS.blue, fontSize: "14px" }}
                     >
-                      Close-Out Eligible
+                      Execution
                     </Typography>{" "}
                     first. Current cycle is in{" "}
                     <Typography

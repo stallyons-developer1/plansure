@@ -374,8 +374,14 @@ const PlannerProjectWorkspace = () => {
   } | null>(null);
   const [closingWeek, setClosingWeek] = useState<number | null>(null);
 
+  /* The two outputs are gated differently — the Planner To-Do opens in
+     Execution because the Planner works from it before confirming, the Weekly
+     Plan only at Close-Out Eligible because it is the closing record.
+     Mirrors TODO_READY_STATUSES / WEEKLY_PLAN_READY_STATUSES on the server. */
   const [exportGatingStatus, setExportGatingStatus] = useState({
     isGated: true,
+    todoGated: true,
+    weeklyPlanGated: true,
     cycleStatus: "Execution",
   });
   const [exportCounts, setExportCounts] = useState({
@@ -1904,13 +1910,17 @@ const PlannerProjectWorkspace = () => {
   useEffect(() => {
     if (weeklyControlData && uploadedProgramme) {
       const cycleStatus = weeklyControlData.stats?.cycleStatus || "Draft";
-      /* Mirrors EXPORT_READY_STATUSES on the server. The outputs belong to
-         the close-out, so Execution no longer opens them. */
-      const ungatedStatuses = ["Close-Out Eligible", "Closed"];
-      const isGated = !ungatedStatuses.includes(cycleStatus);
+      const todoGated = !["Execution", "Close-Out Eligible", "Closed"].includes(
+        cycleStatus,
+      );
+      const weeklyPlanGated = !["Close-Out Eligible", "Closed"].includes(
+        cycleStatus,
+      );
 
       setExportGatingStatus({
-        isGated,
+        isGated: todoGated && weeklyPlanGated,
+        todoGated,
+        weeklyPlanGated,
         cycleStatus,
       });
 
@@ -6673,12 +6683,12 @@ const PlannerProjectWorkspace = () => {
                       </Typography>
                       <Box
                         sx={{
-                          bgcolor: exportGatingStatus.isGated
+                          bgcolor: exportGatingStatus.weeklyPlanGated
                             ? "rgba(239, 68, 68, 0.15)"
                             : weeklyActionStats.openRequired > 0
                               ? "rgba(245, 158, 11, 0.15)"
                               : "rgba(34, 197, 94, 0.15)",
-                          color: exportGatingStatus.isGated
+                          color: exportGatingStatus.weeklyPlanGated
                             ? COLORS.red
                             : weeklyActionStats.openRequired > 0
                               ? COLORS.amber
@@ -6693,7 +6703,7 @@ const PlannerProjectWorkspace = () => {
                           alignItems: "center",
                         }}
                       >
-                        {exportGatingStatus.isGated
+                        {exportGatingStatus.weeklyPlanGated
                           ? "Gated"
                           : weeklyActionStats.openRequired > 0
                             ? "Pending"
@@ -6718,8 +6728,8 @@ const PlannerProjectWorkspace = () => {
                     </Typography>
                     <Tooltip
                       title={
-                        exportGatingStatus.isGated
-                          ? `Exports are gated. The WeekCycle must be in Execution state. Current cycle is in ${exportGatingStatus.cycleStatus}.`
+                        exportGatingStatus.weeklyPlanGated
+                          ? `Not yet available — the current cycle is in ${exportGatingStatus.cycleStatus}.`
                           : weeklyActionStats.openRequired > 0
                             ? `${weeklyActionStats.openRequired} required action(s) pending. Complete all required actions to download Weekly Plan.`
                             : exportCounts.weeklyPlanTotal === 0
@@ -6749,7 +6759,7 @@ const PlannerProjectWorkspace = () => {
                           disabled={
                             isExporting === "weekly" ||
                             exportCounts.weeklyPlanTotal === 0 ||
-                            exportGatingStatus.isGated ||
+                            exportGatingStatus.weeklyPlanGated ||
                             weeklyActionStats.openRequired > 0
                           }
                           startIcon={
@@ -6762,7 +6772,7 @@ const PlannerProjectWorkspace = () => {
                           }
                           sx={{
                             bgcolor:
-                              exportGatingStatus.isGated ||
+                              exportGatingStatus.weeklyPlanGated ||
                               weeklyActionStats.openRequired > 0
                                 ? COLORS.disabledBlue
                                 : COLORS.green,
@@ -6774,7 +6784,7 @@ const PlannerProjectWorkspace = () => {
                             fontWeight: 500,
                             "&:hover": {
                               bgcolor:
-                                exportGatingStatus.isGated ||
+                                exportGatingStatus.weeklyPlanGated ||
                                 weeklyActionStats.openRequired > 0
                                   ? COLORS.disabledBlue
                                   : "#16a34a",
@@ -6820,10 +6830,10 @@ const PlannerProjectWorkspace = () => {
                       </Typography>
                       <Box
                         sx={{
-                          bgcolor: exportGatingStatus.isGated
+                          bgcolor: exportGatingStatus.todoGated
                             ? "rgba(239, 68, 68, 0.15)"
                             : "rgba(34, 197, 94, 0.15)",
-                          color: exportGatingStatus.isGated
+                          color: exportGatingStatus.todoGated
                             ? COLORS.red
                             : COLORS.green,
                           px: 1.5,
@@ -6836,7 +6846,7 @@ const PlannerProjectWorkspace = () => {
                           alignItems: "center",
                         }}
                       >
-                        {exportGatingStatus.isGated ? "Gated" : "Ready"}
+                        {exportGatingStatus.todoGated ? "Gated" : "Ready"}
                       </Box>
                     </Box>
                     <Typography
@@ -6846,18 +6856,24 @@ const PlannerProjectWorkspace = () => {
                         mb: 0.5,
                       }}
                     >
-                      Outstanding actions and planner follow-on items.
+                      Closure narratives and any outstanding follow-on items.
                     </Typography>
                     <Typography
                       sx={{ color: COLORS.textMuted, fontSize: "12px", mb: 2 }}
                     >
-                      {exportCounts.outstandingActions} outstanding{" "}
-                      {exportCounts.outstandingActions === 1 ? "item" : "items"}
+                      {exportCounts.outstandingActions +
+                        exportCounts.completedActions}{" "}
+                      {exportCounts.outstandingActions +
+                        exportCounts.completedActions ===
+                      1
+                        ? "action"
+                        : "actions"}{" "}
+                      · {exportCounts.outstandingActions} outstanding
                     </Typography>
                     <Tooltip
                       title={
-                        exportGatingStatus.isGated
-                          ? `Exports are gated. The WeekCycle must be in Execution state. Current cycle is in ${exportGatingStatus.cycleStatus}.`
+                        exportGatingStatus.todoGated
+                          ? `Not yet available — the current cycle is in ${exportGatingStatus.cycleStatus}.`
                           : ""
                       }
                       placement="top"
@@ -6881,7 +6897,8 @@ const PlannerProjectWorkspace = () => {
                           fullWidth
                           onClick={handleExportPlannerTodo}
                           disabled={
-                            isExporting === "todo" || exportGatingStatus.isGated
+                            isExporting === "todo" ||
+                            exportGatingStatus.todoGated
                           }
                           startIcon={
                             isExporting === "todo" ? (
@@ -6892,7 +6909,7 @@ const PlannerProjectWorkspace = () => {
                             ) : null
                           }
                           sx={{
-                            bgcolor: exportGatingStatus.isGated
+                            bgcolor: exportGatingStatus.todoGated
                               ? COLORS.disabledBlue
                               : COLORS.blue,
                             color: "#fff",
@@ -6902,7 +6919,7 @@ const PlannerProjectWorkspace = () => {
                             fontSize: "13px",
                             fontWeight: 500,
                             "&:hover": {
-                              bgcolor: exportGatingStatus.isGated
+                              bgcolor: exportGatingStatus.todoGated
                                 ? COLORS.disabledBlue
                                 : "#2563eb",
                             },
@@ -6921,7 +6938,8 @@ const PlannerProjectWorkspace = () => {
                   </Box>
                 </Box>
 
-                {exportGatingStatus.isGated && (
+                {(exportGatingStatus.todoGated ||
+                  exportGatingStatus.weeklyPlanGated) && (
                   <Box
                     sx={{
                       bgcolor: "#2D2A24",
@@ -6948,9 +6966,9 @@ const PlannerProjectWorkspace = () => {
                         mb: weeklyActionStats.openRequired > 0 ? 2 : 0,
                       }}
                     >
-                      The WeekCycle must be in execution state. Current cycle is
-                      in {exportGatingStatus.cycleStatus}. Close all required
-                      actions for green activities to unlock exports.
+                      {exportGatingStatus.todoGated
+                        ? `The Planner To-Do opens once the week reaches Execution. Current cycle is in ${exportGatingStatus.cycleStatus}.`
+                        : `The Weekly Plan opens once the week is marked Close-Out Eligible. Current cycle is in ${exportGatingStatus.cycleStatus}.`}
                     </Typography>
 
                     {/* Show PM Override option if there are open required actions */}
