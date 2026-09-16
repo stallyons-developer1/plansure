@@ -421,6 +421,12 @@ const AdminProjectWorkspace = () => {
 
   const [reassignModalOpen, setReassignModalOpen] = useState(false);
   const [markingCloseOut, setMarkingCloseOut] = useState(false);
+  /* MS-05 point 3: the Planner's confirmation that the programme has been
+     updated from the Planner To-Do. */
+  const [confirmUpdateOpen, setConfirmUpdateOpen] = useState(false);
+  const [confirmUpdateNote, setConfirmUpdateNote] = useState("");
+  const [confirmingUpdate, setConfirmingUpdate] = useState(false);
+  const [confirmUpdateError, setConfirmUpdateError] = useState("");
   const [toastOpen, setToastOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
   const [toastSeverity, setToastSeverity] = useState<"success" | "warning">(
@@ -446,6 +452,10 @@ const AdminProjectWorkspace = () => {
     cycleStatus: string;
     isLocked: boolean;
     overrideReason?: string;
+    /* MS-05 point 3: the Planner's confirmation gate. */
+    plannerTodoGenerated?: boolean;
+    programmeUpdateConfirmedAt?: string | null;
+    programmeUpdateNote?: string;
     summary: {
       green: number;
       amber: number;
@@ -751,6 +761,10 @@ const AdminProjectWorkspace = () => {
             programme.extractedData?.totalActivities || activities.length,
           cycleStatus: programmeStatus,
           isLocked: programme.isLocked || false,
+          plannerTodoGenerated: programme.plannerTodoGenerated || false,
+          programmeUpdateConfirmedAt:
+            programme.programmeUpdateConfirmedAt || null,
+          programmeUpdateNote: programme.programmeUpdateNote || "",
           overrideReason: programme.overrideReason || "",
           summary: {
             green: summary.green || 0,
@@ -845,6 +859,10 @@ const AdminProjectWorkspace = () => {
               programme.extractedData?.totalActivities || activities.length,
             cycleStatus: programmeStatus,
             isLocked: programme.isLocked || false,
+            plannerTodoGenerated: programme.plannerTodoGenerated || false,
+            programmeUpdateConfirmedAt:
+              programme.programmeUpdateConfirmedAt || null,
+            programmeUpdateNote: programme.programmeUpdateNote || "",
             overrideReason: programme.overrideReason || "",
             summary: {
               green: summary.green || 0,
@@ -1316,6 +1334,62 @@ const AdminProjectWorkspace = () => {
 
   /* Stage 3 -> Stage 4. This is a deliberate governance decision by the PM,
      so it gets its own control rather than riding on the Weekly Plan download. */
+  const programmeUpdateConfirmed =
+    !!uploadedProgramme?.programmeUpdateConfirmedAt;
+  const todoDownloaded = !!uploadedProgramme?.plannerTodoGenerated;
+  /* The Planner gives this confirmation; it is their assertion about their own
+     work, so it sits where their Mark Close-Out Eligible button used to be. */
+  const canConfirmProgrammeUpdate = user?.role === "planner";
+
+  const handleConfirmProgrammeUpdate = async () => {
+    if (!uploadedProgramme?._id || confirmingUpdate) return;
+    const note = confirmUpdateNote.trim();
+    if (note.length < 10) return;
+
+    setConfirmingUpdate(true);
+    setConfirmUpdateError("");
+    try {
+      const response = await programmeAPI.confirmProgrammeUpdate(
+        uploadedProgramme._id,
+        note,
+      );
+      if (response?.success) {
+        setUploadedProgramme((prev) =>
+          prev
+            ? {
+                ...prev,
+                programmeUpdateConfirmedAt:
+                  response.programmeUpdateConfirmedAt ||
+                  new Date().toISOString(),
+                programmeUpdateNote: note,
+              }
+            : prev,
+        );
+        setConfirmUpdateOpen(false);
+        setConfirmUpdateNote("");
+        setToastSeverity("success");
+        setToastMessage("Programme update confirmed.");
+        setToastOpen(true);
+      }
+    } catch (error: unknown) {
+      const err = error as {
+        response?: {
+          data?: {
+            message?: string;
+            errors?: Array<{ field: string; message: string }>;
+          };
+        };
+      };
+      setConfirmUpdateError(
+        err.response?.data?.errors?.[0]?.message ||
+          err.response?.data?.message ||
+          "Could not confirm the programme update.",
+      );
+    } finally {
+      setConfirmingUpdate(false);
+    }
+  };
+
   const handleMarkCloseOutEligible = async () => {
     if (!uploadedProgramme?._id || markingCloseOut || !canRunWeekClosure)
       return;
@@ -6624,21 +6698,29 @@ const AdminProjectWorkspace = () => {
                         mb: 2,
                       }}
                     >
-                      {user?.role !== "admin"
-                        ? "Only the PM can mark a week Close-Out Eligible."
-                        : !uploadedProgramme?._id
-                          ? "Upload a programme for this week before it can be marked Close-Out Eligible."
-                          : uploadedProgramme?.cycleStatus ===
-                              "Close-Out Eligible"
-                            ? "This week is Close-Out Eligible. It can now be closed and locked from Weekly Control."
-                            : unassignedActivityCount > 0 &&
-                                weeklyActionStats.openRequired > 0
-                              ? `${unassignedActivityCount} activit${unassignedActivityCount === 1 ? "y" : "ies"} still unassigned and ${weeklyActionStats.openRequired} required action(s) still open.`
-                              : unassignedActivityCount > 0
-                                ? `${unassignedActivityCount} activit${unassignedActivityCount === 1 ? "y is" : "ies are"} still unassigned. Assign every activity to mark this week Close-Out Eligible.`
-                                : weeklyActionStats.openRequired > 0
-                                  ? `${weeklyActionStats.openRequired} required action(s) still open. Complete them to mark this week Close-Out Eligible.`
-                                  : "Mark the week Close-Out Eligible to enable closing."}
+                      {canConfirmProgrammeUpdate
+                        ? !todoDownloaded
+                          ? "Download the Planner To-Do first, then confirm the programme update."
+                          : programmeUpdateConfirmed
+                            ? "Programme update confirmed. The PM can now mark this week Close-Out Eligible."
+                            : "Confirm the programme update to let the PM mark this week Close-Out Eligible."
+                        : user?.role !== "admin"
+                          ? "Only the PM can mark a week Close-Out Eligible."
+                          : !programmeUpdateConfirmed
+                            ? "Waiting for the Planner to confirm the programme update."
+                            : !uploadedProgramme?._id
+                              ? "Upload a programme for this week before it can be marked Close-Out Eligible."
+                              : uploadedProgramme?.cycleStatus ===
+                                  "Close-Out Eligible"
+                                ? "This week is Close-Out Eligible. It can now be closed and locked from Weekly Control."
+                                : unassignedActivityCount > 0 &&
+                                    weeklyActionStats.openRequired > 0
+                                  ? `${unassignedActivityCount} activit${unassignedActivityCount === 1 ? "y" : "ies"} still unassigned and ${weeklyActionStats.openRequired} required action(s) still open.`
+                                  : unassignedActivityCount > 0
+                                    ? `${unassignedActivityCount} activit${unassignedActivityCount === 1 ? "y is" : "ies are"} still unassigned. Assign every activity to mark this week Close-Out Eligible.`
+                                    : weeklyActionStats.openRequired > 0
+                                      ? `${weeklyActionStats.openRequired} required action(s) still open. Complete them to mark this week Close-Out Eligible.`
+                                      : "Mark the week Close-Out Eligible to enable closing."}
                     </Typography>
 
                     {uploadedProgramme?.cycleStatus === "Close-Out Eligible" ? (
@@ -6664,12 +6746,45 @@ const AdminProjectWorkspace = () => {
                           ✓ Close-Out Eligible
                         </Typography>
                       </Box>
+                    ) : canConfirmProgrammeUpdate ? (
+                      <Button
+                        onClick={() => {
+                          setConfirmUpdateError("");
+                          setConfirmUpdateOpen(true);
+                        }}
+                        disabled={
+                          !uploadedProgramme?._id ||
+                          !todoDownloaded ||
+                          programmeUpdateConfirmed ||
+                          weeklyControlData?.isProjectEnded
+                        }
+                        sx={{
+                          bgcolor: COLORS.blue,
+                          color: "#fff",
+                          textTransform: "none",
+                          px: 3,
+                          py: 1.25,
+                          borderRadius: "8px",
+                          fontSize: "13px",
+                          fontWeight: 500,
+                          "&:hover": { bgcolor: COLORS.blueHover },
+                          "&.Mui-disabled": {
+                            bgcolor: COLORS.disabledBlue,
+                            color: "#fff",
+                          },
+                        }}
+                      >
+                        {programmeUpdateConfirmed
+                          ? "Programme Update Confirmed"
+                          : "Confirm Programme Update"}
+                      </Button>
                     ) : (
                       <Button
                         onClick={handleMarkCloseOutEligible}
                         disabled={
                           user?.role !== "admin" ||
                           !uploadedProgramme?._id ||
+                          !programmeUpdateConfirmed ||
                           markingCloseOut ||
                           weeklyActionStats.openRequired > 0 ||
                           unassignedActivityCount > 0 ||
@@ -8330,6 +8445,150 @@ const AdminProjectWorkspace = () => {
               ) : (
                 "Update"
               )}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* MS-05 point 3: the Planner's confirmation that the programme has
+            been updated from the Planner To-Do. A note is required, and held
+            to the same minimum as a closure narrative — a bare tick would let
+            the gate be cleared without anyone reading the To-Do. */}
+        <Dialog
+          open={confirmUpdateOpen}
+          onClose={() => !confirmingUpdate && setConfirmUpdateOpen(false)}
+          maxWidth="sm"
+          fullWidth
+          slotProps={{
+            paper: {
+              sx: {
+                bgcolor: COLORS.bgSecondary,
+                border: `1px solid ${COLORS.border}`,
+                borderRadius: "12px",
+              },
+            },
+          }}
+        >
+          <DialogTitle
+            sx={{
+              color: COLORS.textPrimary,
+              fontSize: "18px",
+              fontWeight: 600,
+              pb: 1,
+            }}
+          >
+            Confirm Programme Update
+          </DialogTitle>
+          <DialogContent sx={{ px: 3, pb: 1 }}>
+            <Typography
+              sx={{ color: COLORS.textSecondary, fontSize: "14px", mb: 2 }}
+            >
+              Confirm that you have updated the programme in response to the
+              Planner To-Do for this week. The PM cannot mark the week Close-Out
+              Eligible until this is recorded.
+            </Typography>
+
+            {confirmUpdateError && (
+              <Box
+                sx={{
+                  mb: 2,
+                  px: 2,
+                  py: 1.5,
+                  bgcolor: "rgba(239, 68, 68, 0.15)",
+                  border: `1px solid ${COLORS.red}`,
+                  borderRadius: "8px",
+                }}
+              >
+                <Typography sx={{ color: COLORS.red, fontSize: "13px" }}>
+                  {confirmUpdateError}
+                </Typography>
+              </Box>
+            )}
+
+            <Typography
+              sx={{
+                color: COLORS.textSecondary,
+                fontSize: "12px",
+                fontWeight: 500,
+                mb: 0.5,
+              }}
+            >
+              What did you update? <span style={{ color: COLORS.red }}>*</span>
+            </Typography>
+            <TextField
+              fullWidth
+              multiline
+              rows={4}
+              autoFocus
+              value={confirmUpdateNote}
+              onChange={(e) => {
+                setConfirmUpdateNote(e.target.value);
+                setConfirmUpdateError("");
+              }}
+              disabled={confirmingUpdate}
+              placeholder="Describe the changes made to the programme..."
+              helperText={`At least 10 characters — ${confirmUpdateNote.trim().length}/10`}
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  bgcolor: COLORS.bgPrimary,
+                  borderRadius: "8px",
+                  "& fieldset": { borderColor: COLORS.border },
+                  "&:hover fieldset": { borderColor: COLORS.border },
+                  "&.Mui-focused fieldset": {
+                    borderColor: COLORS.blue,
+                    borderWidth: 1,
+                  },
+                },
+                "& .MuiOutlinedInput-input": {
+                  color: COLORS.textPrimary,
+                  fontSize: "14px",
+                },
+                "& .MuiFormHelperText-root": {
+                  color: COLORS.textMuted,
+                  ml: 0,
+                  mt: 0.75,
+                },
+              }}
+            />
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 3, pt: 1 }}>
+            <Button
+              onClick={() => setConfirmUpdateOpen(false)}
+              disabled={confirmingUpdate}
+              sx={{
+                color: COLORS.textSecondary,
+                textTransform: "none",
+                fontSize: "14px",
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleConfirmProgrammeUpdate}
+              disabled={
+                confirmingUpdate || confirmUpdateNote.trim().length < 10
+              }
+              startIcon={
+                confirmingUpdate ? (
+                  <CircularProgress size={14} sx={{ color: "inherit" }} />
+                ) : null
+              }
+              sx={{
+                bgcolor: COLORS.blue,
+                color: "#fff",
+                textTransform: "none",
+                px: 3,
+                py: 1,
+                borderRadius: "8px",
+                fontSize: "14px",
+                fontWeight: 500,
+                "&:hover": { bgcolor: COLORS.blueHover },
+                "&.Mui-disabled": {
+                  bgcolor: COLORS.disabledBlue,
+                  color: "rgba(255, 255, 255, 0.5)",
+                },
+              }}
+            >
+              {confirmingUpdate ? "Confirming..." : "Confirm"}
             </Button>
           </DialogActions>
         </Dialog>

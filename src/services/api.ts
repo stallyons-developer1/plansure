@@ -190,6 +190,17 @@ export const programmeAPI = {
     return response.data;
   },
 
+  /* The Planner's confirmation that the programme has been updated from the
+     Planner To-Do — the final gate before the PM can mark the week Close-Out
+     Eligible. */
+  confirmProgrammeUpdate: async (programmeId: string, note: string) => {
+    const response = await api.post(
+      `/programmes/${programmeId}/confirm-programme-update`,
+      { note },
+    );
+    return response.data;
+  },
+
   /* Move the project on from a closed week. Server-side because every account
      on the project has to see the same handover, not just whoever clicked. */
   acknowledgeClose: async (programmeId: string) => {
