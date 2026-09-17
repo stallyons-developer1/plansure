@@ -347,6 +347,10 @@ const PlannerProjectWorkspace = () => {
   const [supersededClosedCount, setSupersededClosedCount] = useState<
     number | null
   >(null);
+  /* Which project week the superseded programme was. closedWeeks counts inside
+     that one programme, and every week gets its own — so it cannot say which
+     week of the project has just finished. */
+  const [supersededWeek, setSupersededWeek] = useState<number | null>(null);
   const [weeksStatus, setWeeksStatus] = useState<{
     totalWeeks: number;
     currentWeekNumber: number;
@@ -741,9 +745,11 @@ const PlannerProjectWorkspace = () => {
           setWeeklyControlData(null);
           setClosedWeekAck(null);
           setSupersededClosedCount(programme.closedWeeks?.length ?? 0);
+          setSupersededWeek(programme.weekNumber ?? null);
           return;
         }
         setSupersededClosedCount(null);
+        setSupersededWeek(null);
         setClosedWeekAck(programme.pendingCloseAckWeek ?? null);
         setProgrammeAnchor(programme.lookaheadStartDate || null);
         setUploaderName(programme.uploadedBy?.name || "");
@@ -836,10 +842,12 @@ const PlannerProjectWorkspace = () => {
           if (programme.awaitingNextUpload && user?.role === "admin") {
             setClosedWeekAck(null);
             setSupersededClosedCount(programme.closedWeeks?.length ?? 0);
+            setSupersededWeek(programme.weekNumber ?? null);
             setIsLoadingProgramme(false);
             return;
           }
           setSupersededClosedCount(null);
+          setSupersededWeek(null);
           setClosedWeekAck(programme.pendingCloseAckWeek ?? null);
           setProgrammeAnchor(programme.lookaheadStartDate || null);
           // Also set here: this is the load path that populates the workspace,
@@ -1031,6 +1039,7 @@ const PlannerProjectWorkspace = () => {
 
   const headerWeekNum =
     programmeWeek ??
+    (supersededWeek !== null ? supersededWeek + 1 : null) ??
     (weekIsReadOnly
       ? lastClosedWeek || 1
       : (weeksStatus?.weeks?.find((w) => !w.isClosed)?.weekNumber ??
@@ -1041,7 +1050,9 @@ const PlannerProjectWorkspace = () => {
     ? weekIsReadOnly
       ? programmeWeek
       : programmeWeek - 1
-    : (weeksStatus?.closedWeeksCount ?? supersededClosedCount ?? 0);
+    : supersededWeek !== null
+      ? supersededWeek
+      : (weeksStatus?.closedWeeksCount ?? supersededClosedCount ?? 0);
 
   /* Closing a week, locking it and moving the project on are PM decisions,
      and the client's PM is the Admin account. The API refuses these for
@@ -1099,13 +1110,15 @@ const PlannerProjectWorkspace = () => {
 
         // The refetch above carries pendingCloseAckWeek; set it here too so
         // the closer sees the prompt without waiting for another round trip.
-        setClosedWeekAck(weekNumber);
+        setClosedWeekAck(uploadedProgramme?.weekNumber ?? weekNumber);
 
         if (response1.isLastWeek || response2.isLastWeek) {
           setCycleStage("execution");
           setCurrentStep(4);
           setUploadedProgramme((prev) =>
-            prev ? { ...prev, cycleStatus: "Close-Out Eligible" } : null,
+            prev
+              ? { ...prev, cycleStatus: "Close-Out Eligible", isLocked: true }
+              : null,
           );
         } else if (response1.isFullyClosed || response2.isFullyClosed) {
           setIsWeekClosed(true);
@@ -1117,7 +1130,7 @@ const PlannerProjectWorkspace = () => {
           setCycleStage("draft");
           setCurrentStep(0);
           setUploadedProgramme((prev) =>
-            prev ? { ...prev, cycleStatus: "Draft" } : null,
+            prev ? { ...prev, cycleStatus: "Draft", isLocked: true } : null,
           );
         }
       }

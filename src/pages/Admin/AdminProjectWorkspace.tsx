@@ -343,6 +343,10 @@ const AdminProjectWorkspace = () => {
   const [supersededClosedCount, setSupersededClosedCount] = useState<
     number | null
   >(null);
+  /* Which project week the superseded programme was. closedWeeks counts inside
+     that one programme, and every week gets its own — so it cannot say which
+     week of the project has just finished. */
+  const [supersededWeek, setSupersededWeek] = useState<number | null>(null);
   const [weeksStatus, setWeeksStatus] = useState<{
     totalWeeks: number;
     currentWeekNumber: number;
@@ -746,9 +750,11 @@ const AdminProjectWorkspace = () => {
           setWeeklyControlData(null);
           setClosedWeekAck(null);
           setSupersededClosedCount(programme.closedWeeks?.length ?? 0);
+          setSupersededWeek(programme.weekNumber ?? null);
           return;
         }
         setSupersededClosedCount(null);
+        setSupersededWeek(null);
         setClosedWeekAck(programme.pendingCloseAckWeek ?? null);
         setProgrammeAnchor(programme.lookaheadStartDate || null);
         setUploaderName(programme.uploadedBy?.name || "");
@@ -842,10 +848,12 @@ const AdminProjectWorkspace = () => {
           if (programme.awaitingNextUpload && user?.role === "admin") {
             setClosedWeekAck(null);
             setSupersededClosedCount(programme.closedWeeks?.length ?? 0);
+            setSupersededWeek(programme.weekNumber ?? null);
             setIsLoadingProgramme(false);
             return;
           }
           setSupersededClosedCount(null);
+          setSupersededWeek(null);
           setClosedWeekAck(programme.pendingCloseAckWeek ?? null);
           setProgrammeAnchor(programme.lookaheadStartDate || null);
           // Also set here: this is the load path that populates the workspace,
@@ -1059,6 +1067,7 @@ const AdminProjectWorkspace = () => {
 
   const headerWeekNum =
     programmeWeek ??
+    (supersededWeek !== null ? supersededWeek + 1 : null) ??
     (weekIsReadOnly
       ? lastClosedWeek || 1
       : (weeksStatus?.weeks?.find((w) => !w.isClosed)?.weekNumber ??
@@ -1069,7 +1078,9 @@ const AdminProjectWorkspace = () => {
     ? weekIsReadOnly
       ? programmeWeek
       : programmeWeek - 1
-    : (weeksStatus?.closedWeeksCount ?? supersededClosedCount ?? 0);
+    : supersededWeek !== null
+      ? supersededWeek
+      : (weeksStatus?.closedWeeksCount ?? supersededClosedCount ?? 0);
 
   /* Closing a week, locking it and moving the project on are PM decisions,
      and the client's PM is the Admin account. The API refuses these for
