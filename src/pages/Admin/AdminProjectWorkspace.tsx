@@ -5772,7 +5772,9 @@ const AdminProjectWorkspace = () => {
                 {uploadedProgramme?.cycleStatus === "Closed" || isWeekClosed
                   ? "This week is closed and locked. No changes allowed."
                   : uploadedProgramme?.cycleStatus === "Close-Out Eligible"
-                    ? "Week is ready for close-out. Generate exports and close the week."
+                    ? canRunWeekClosure
+                      ? "Week is ready for close-out. Generate exports and close the week."
+                      : "Week is ready for close-out. The PM will close and lock it."
                     : cycleStage === "draft"
                       ? "Programme uploaded. Review activities and open the planning meeting."
                       : cycleStage === "meetingOpen"
@@ -5844,32 +5846,34 @@ const AdminProjectWorkspace = () => {
                     </Box>
                   </Box>
                   <Box sx={{ display: "flex", gap: 2 }}>
-                    <Button
-                      onClick={handleFinalClose}
-                      disabled={!canRunWeekClosure}
-                      title={
-                        canRunWeekClosure
-                          ? ""
-                          : "Only the PM can close and lock a week."
-                      }
-                      sx={{
-                        bgcolor: COLORS.green,
-                        color: "#fff",
-                        textTransform: "none",
-                        px: 3,
-                        py: 1,
-                        borderRadius: "8px",
-                        fontSize: "13px",
-                        fontWeight: 500,
-                        "&:hover": { bgcolor: "#16a34a" },
-                        "&.Mui-disabled": {
-                          bgcolor: COLORS.bgTertiary,
-                          color: COLORS.textMuted,
-                        },
-                      }}
-                    >
-                      Close & Lock Week
-                    </Button>
+                    {canRunWeekClosure && (
+                      <Button
+                        onClick={handleFinalClose}
+                        disabled={!canRunWeekClosure}
+                        title={
+                          canRunWeekClosure
+                            ? ""
+                            : "Only the PM can close and lock a week."
+                        }
+                        sx={{
+                          bgcolor: COLORS.green,
+                          color: "#fff",
+                          textTransform: "none",
+                          px: 3,
+                          py: 1,
+                          borderRadius: "8px",
+                          fontSize: "13px",
+                          fontWeight: 500,
+                          "&:hover": { bgcolor: "#16a34a" },
+                          "&.Mui-disabled": {
+                            bgcolor: COLORS.bgTertiary,
+                            color: COLORS.textMuted,
+                          },
+                        }}
+                      >
+                        Close & Lock Week
+                      </Button>
+                    )}
                   </Box>
                 </Box>
               ) : cycleStage === "execution" ? (
@@ -6769,6 +6773,12 @@ const AdminProjectWorkspace = () => {
                     ) : canConfirmProgrammeUpdate ? (
                       <Button
                         onClick={() => {
+                          if (
+                            !todoDownloaded ||
+                            programmeUpdateConfirmed ||
+                            weeklyActionStats.openRequired > 0
+                          )
+                            return;
                           setConfirmUpdateError("");
                           setConfirmUpdateOpen(true);
                         }}
@@ -6776,6 +6786,7 @@ const AdminProjectWorkspace = () => {
                           !uploadedProgramme?._id ||
                           !todoDownloaded ||
                           programmeUpdateConfirmed ||
+                          weeklyActionStats.openRequired > 0 ||
                           weeklyControlData?.isProjectEnded
                         }
                         sx={{
@@ -6789,8 +6800,8 @@ const AdminProjectWorkspace = () => {
                           fontWeight: 500,
                           "&:hover": { bgcolor: COLORS.blueHover },
                           "&.Mui-disabled": {
-                            bgcolor: COLORS.disabledBlue,
-                            color: "#fff",
+                            bgcolor: COLORS.bgTertiary,
+                            color: COLORS.textMuted,
                           },
                         }}
                       >
