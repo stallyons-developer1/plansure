@@ -1027,6 +1027,7 @@ const PlannerProjectWorkspace = () => {
   /* On a finished week the header names that week, not the one the project has
      moved on to — a Planner reading a closed Week 1 should not see "Week 2". */
   const programmeWeek = uploadedProgramme?.weekNumber;
+  const closedWeekLabel = programmeWeek ?? closedWeekAck ?? 0;
 
   const headerWeekNum =
     programmeWeek ??
@@ -5672,7 +5673,7 @@ const PlannerProjectWorkspace = () => {
                       fontWeight: 500,
                     }}
                   >
-                    Proejct locked.
+                    Week locked.
                   </Typography>
                 </Box>
               ) : uploadedProgramme?.cycleStatus === "Close-Out Eligible" ? (
@@ -8503,7 +8504,7 @@ const PlannerProjectWorkspace = () => {
                 mb: 1,
               }}
             >
-              Week {closedWeekAck} Closed
+              Week {closedWeekLabel} Closed
             </Typography>
             {(() => {
               const isLast =
@@ -8519,7 +8520,7 @@ const PlannerProjectWorkspace = () => {
                       mb: 3,
                     }}
                   >
-                    Week {closedWeekAck} is closed and locked.{" "}
+                    Week {closedWeekLabel} is closed and locked.{" "}
                     {isLast
                       ? "The programme is now fully closed."
                       : canRunWeekClosure
@@ -8548,7 +8549,7 @@ const PlannerProjectWorkspace = () => {
                       ? "Close"
                       : isLast
                         ? "Done"
-                        : `Move to Week ${(closedWeekAck ?? 0) + 1}`}
+                        : `Move to Week ${closedWeekLabel + 1}`}
                   </Button>
                 </>
               );
