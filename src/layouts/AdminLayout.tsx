@@ -25,6 +25,7 @@ import {
   HomeOutlined as DashboardIcon,
   NotificationsOutlined as NotificationsIcon,
   Logout as LogoutIcon,
+  SettingsOutlined as SettingsIcon,
   Menu as MenuIcon,
   PeopleOutlined as UsersIcon,
   DescriptionOutlined as AuditIcon,
@@ -441,13 +442,21 @@ const AdminLayout = ({
                   sx={{
                     color: COLORS.textMuted,
                     fontSize: "0.75rem",
-                    textTransform: "capitalize",
                   }}
                 >
-                  {user?.role || "Admin"}
+                  {user?.isSuperAdmin ? "Super Admin" : "PM"}
                 </Typography>
               </Box>
             </Box>
+            <IconButton
+              onClick={() => navigate("/admin/settings")}
+              sx={{
+                color: COLORS.textMuted,
+                "&:hover": { color: COLORS.blue },
+              }}
+            >
+              <SettingsIcon fontSize="small" />
+            </IconButton>
             <IconButton
               onClick={handleLogoutClick}
               sx={{
