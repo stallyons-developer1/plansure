@@ -407,6 +407,9 @@ const PlannerProjectWorkspace = () => {
     cycleStatus: string;
     isLocked: boolean;
     overrideReason?: string;
+    /* Which week of the project's cycle this programme is. Sequential and set
+       at upload — the only project-level week number there is. */
+    weekNumber?: number;
     /* MS-05 point 3: the Planner's confirmation gate. */
     plannerTodoGenerated?: boolean;
     programmeUpdateConfirmedAt?: string | null;
@@ -761,6 +764,7 @@ const PlannerProjectWorkspace = () => {
             programme.extractedData?.totalActivities || activities.length,
           cycleStatus: programme.cycleStatus || "Draft",
           isLocked: programme.isLocked || false,
+          weekNumber: programme.weekNumber,
           plannerTodoGenerated: programme.plannerTodoGenerated || false,
           programmeUpdateConfirmedAt:
             programme.programmeUpdateConfirmedAt || null,
@@ -858,6 +862,7 @@ const PlannerProjectWorkspace = () => {
               programme.extractedData?.totalActivities || activities.length,
             cycleStatus: programme.cycleStatus || "Draft",
             isLocked: programme.isLocked || false,
+            weekNumber: programme.weekNumber,
             plannerTodoGenerated: programme.plannerTodoGenerated || false,
             programmeUpdateConfirmedAt:
               programme.programmeUpdateConfirmedAt || null,
@@ -1021,13 +1026,21 @@ const PlannerProjectWorkspace = () => {
 
   /* On a finished week the header names that week, not the one the project has
      moved on to — a Planner reading a closed Week 1 should not see "Week 2". */
-  const headerWeekNum = weekIsReadOnly
-    ? lastClosedWeek || 1
-    : (weeksStatus?.weeks?.find((w) => !w.isClosed)?.weekNumber ??
-      weeksStatus?.totalWeeks ??
-      (supersededClosedCount !== null ? supersededClosedCount + 1 : 1));
-  const headerClosedCount =
-    weeksStatus?.closedWeeksCount ?? supersededClosedCount ?? 0;
+  const programmeWeek = uploadedProgramme?.weekNumber;
+
+  const headerWeekNum =
+    programmeWeek ??
+    (weekIsReadOnly
+      ? lastClosedWeek || 1
+      : (weeksStatus?.weeks?.find((w) => !w.isClosed)?.weekNumber ??
+        weeksStatus?.totalWeeks ??
+        (supersededClosedCount !== null ? supersededClosedCount + 1 : 1)));
+
+  const headerClosedCount = programmeWeek
+    ? weekIsReadOnly
+      ? programmeWeek
+      : programmeWeek - 1
+    : (weeksStatus?.closedWeeksCount ?? supersededClosedCount ?? 0);
 
   /* Closing a week, locking it and moving the project on are PM decisions,
      and the client's PM is the Admin account. The API refuses these for
@@ -2137,6 +2150,7 @@ const PlannerProjectWorkspace = () => {
             programme.extractedData?.totalActivities || activities.length,
           cycleStatus: programme.cycleStatus || "Draft",
           isLocked: programme.isLocked || false,
+          weekNumber: programme.weekNumber,
           plannerTodoGenerated: programme.plannerTodoGenerated || false,
           programmeUpdateConfirmedAt:
             programme.programmeUpdateConfirmedAt || null,
@@ -5877,49 +5891,53 @@ const PlannerProjectWorkspace = () => {
                               fontSize: "12px",
                             }}
                           >
-                            Close Week will be enabled once the PM marks this
-                            week as eligible for close-out.
+                            Only the PM can close and lock the week.
                           </Typography>
                         </Box>
                       )}
 
-                      <Button
-                        onClick={() => {
-                          if (weekPendingClose)
-                            handleCloseSpecificWeek(weekPendingClose);
-                        }}
-                        disabled={
-                          !canRunWeekClosure ||
-                          closingWeek !== null ||
-                          !weekPendingClose ||
-                          uploadedProgramme?.cycleStatus !==
-                            "Close-Out Eligible" ||
-                          weeklyControlData?.isProjectEnded
-                        }
-                        sx={{
-                          bgcolor: COLORS.green,
-                          color: "#fff",
-                          textTransform: "none",
-                          px: 3,
-                          py: 1,
-                          borderRadius: "8px",
-                          fontSize: "13px",
-                          fontWeight: 500,
-                          "&:hover": { bgcolor: "#16a34a" },
-                          "&.Mui-disabled": {
-                            bgcolor: "#3a3a3a",
-                            color: "#666",
-                          },
-                        }}
-                      >
-                        {closingWeek !== null ? (
-                          <CircularProgress size={18} sx={{ color: "#fff" }} />
-                        ) : weeklyControlData?.isProjectEnded ? (
-                          "Project Ended"
-                        ) : (
-                          "Close Current Week"
-                        )}
-                      </Button>
+                      {canRunWeekClosure && (
+                        <Button
+                          onClick={() => {
+                            if (weekPendingClose)
+                              handleCloseSpecificWeek(weekPendingClose);
+                          }}
+                          disabled={
+                            !canRunWeekClosure ||
+                            closingWeek !== null ||
+                            !weekPendingClose ||
+                            uploadedProgramme?.cycleStatus !==
+                              "Close-Out Eligible" ||
+                            weeklyControlData?.isProjectEnded
+                          }
+                          sx={{
+                            bgcolor: COLORS.green,
+                            color: "#fff",
+                            textTransform: "none",
+                            px: 3,
+                            py: 1,
+                            borderRadius: "8px",
+                            fontSize: "13px",
+                            fontWeight: 500,
+                            "&:hover": { bgcolor: "#16a34a" },
+                            "&.Mui-disabled": {
+                              bgcolor: "#3a3a3a",
+                              color: "#666",
+                            },
+                          }}
+                        >
+                          {closingWeek !== null ? (
+                            <CircularProgress
+                              size={18}
+                              sx={{ color: "#fff" }}
+                            />
+                          ) : weeklyControlData?.isProjectEnded ? (
+                            "Project Ended"
+                          ) : (
+                            "Close Current Week"
+                          )}
+                        </Button>
+                      )}
                       {!weeksStatus?.weeks.find((w) => w.canClose) &&
                         !weeklyControlData?.isProjectEnded &&
                         (() => {
@@ -6397,7 +6415,7 @@ const PlannerProjectWorkspace = () => {
                     mb: 1,
                   }}
                 >
-                  Project Closed & Locked
+                  Week Closed & Locked
                 </Typography>
                 <Typography
                   sx={{
@@ -6406,7 +6424,8 @@ const PlannerProjectWorkspace = () => {
                     mb: uploadedProgramme?.overrideReason ? 1 : 0,
                   }}
                 >
-                  This project has been closed. No further changes allowed.
+                  This week has been closed and locked. It stays available to
+                  view, but nothing can be changed.
                 </Typography>
                 {uploadedProgramme?.overrideReason && (
                   <Typography

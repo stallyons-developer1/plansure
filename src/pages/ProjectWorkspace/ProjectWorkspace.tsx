@@ -206,6 +206,10 @@ const ProjectWorkspace = () => {
   const [activitiesPage, setActivitiesPage] = useState(1);
   const [uploaderName, setUploaderName] = useState("");
   const [programmeName, setProgrammeName] = useState("");
+  /* Which week of the project's cycle the current programme is. Sequential and
+     set at upload — weeks-status counts within one programme and restarts at 1
+     for every new week, so it cannot answer this. */
+  const [programmeWeek, setProgrammeWeek] = useState<number | null>(null);
   const activitiesPerPage = 20;
 
   const [project, setProject] = useState<ProjectData | null>(null);
@@ -254,14 +258,18 @@ const ProjectWorkspace = () => {
      calendar count from the programme start, which on a project whose
      activities have not begun stays at 1 however many weeks are closed — it
      is a last resort, not the source of truth. */
+  /* Upload refuses unless the previous week is closed, so weekNumber - 1
+     weeks are closed by definition. */
   const headerWeekNum =
+    programmeWeek ??
     weeksStatus?.weeks?.find((w) => !w.isClosed)?.weekNumber ??
     weeksStatus?.totalWeeks ??
     (supersededClosedCount !== null
       ? supersededClosedCount + 1
       : (weeklyControl?.weekInfo?.currentWeekNumber ?? 1));
-  const headerClosedCount =
-    weeksStatus?.closedWeeksCount ?? supersededClosedCount ?? 0;
+  const headerClosedCount = programmeWeek
+    ? programmeWeek - 1
+    : (weeksStatus?.closedWeeksCount ?? supersededClosedCount ?? 0);
 
   const isActionFromClosedWeek = (action: {
     createdAt?: string;
@@ -349,6 +357,7 @@ const ProjectWorkspace = () => {
             return;
           }
           setSupersededClosedCount(null);
+          setProgrammeWeek(programme.weekNumber ?? null);
           const activitiesData = programme.extractedData?.activities || [];
 
           setActivities(activitiesData);
