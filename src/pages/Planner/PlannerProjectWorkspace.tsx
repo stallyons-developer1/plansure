@@ -732,7 +732,7 @@ const PlannerProjectWorkspace = () => {
         const programme = response.programme;
         /* Superseded by an acknowledged closure: the workspace waits for the
            next upload rather than showing the closed week's programme. */
-        if (programme.awaitingNextUpload) {
+        if (programme.awaitingNextUpload && user?.role === "admin") {
           setUploadedProgramme(null);
           setLookaheadData(null);
           setWeeklyControlData(null);
@@ -829,7 +829,7 @@ const PlannerProjectWorkspace = () => {
         const response = await programmeAPI.getByProject(projectId);
         if (response.success && response.programme) {
           const programme = response.programme;
-          if (programme.awaitingNextUpload) {
+          if (programme.awaitingNextUpload && user?.role === "admin") {
             setClosedWeekAck(null);
             setSupersededClosedCount(programme.closedWeeks?.length ?? 0);
             setIsLoadingProgramme(false);
@@ -1008,10 +1008,24 @@ const PlannerProjectWorkspace = () => {
      next programme is not uploaded, the superseded programme's closed-week
      count carries it. Falls back to 1 only on a project with no programme at
      all, where every account agrees anyway. */
-  const headerWeekNum =
-    weeksStatus?.weeks?.find((w) => !w.isClosed)?.weekNumber ??
-    weeksStatus?.totalWeeks ??
-    (supersededClosedCount !== null ? supersededClosedCount + 1 : 1);
+  /* A week is finished once the programme is locked, whatever its cycleStatus
+     reads — close-week sets isLocked without moving to "Closed". */
+  const weekIsReadOnly =
+    !!uploadedProgramme?.isLocked ||
+    uploadedProgramme?.cycleStatus === "Closed" ||
+    isWeekClosed;
+
+  const lastClosedWeek = weeksStatus?.weeks
+    ?.filter((w) => w.isClosed)
+    .reduce((latest, w) => Math.max(latest, w.weekNumber), 0);
+
+  /* On a finished week the header names that week, not the one the project has
+     moved on to — a Planner reading a closed Week 1 should not see "Week 2". */
+  const headerWeekNum = weekIsReadOnly
+    ? lastClosedWeek || 1
+    : (weeksStatus?.weeks?.find((w) => !w.isClosed)?.weekNumber ??
+      weeksStatus?.totalWeeks ??
+      (supersededClosedCount !== null ? supersededClosedCount + 1 : 1));
   const headerClosedCount =
     weeksStatus?.closedWeeksCount ?? supersededClosedCount ?? 0;
 
@@ -1273,13 +1287,6 @@ const PlannerProjectWorkspace = () => {
 
   /* Stage 3 -> Stage 4. This is a deliberate governance decision by the PM,
      so it gets its own control rather than riding on the Weekly Plan download. */
-  /* A week is finished once the programme is locked, whatever its cycleStatus
-     reads — close-week sets isLocked without moving to "Closed". */
-  const weekIsReadOnly =
-    !!uploadedProgramme?.isLocked ||
-    uploadedProgramme?.cycleStatus === "Closed" ||
-    isWeekClosed;
-
   const programmeUpdateConfirmed =
     !!uploadedProgramme?.programmeUpdateConfirmedAt;
   const todoDownloaded = !!uploadedProgramme?.plannerTodoGenerated;
