@@ -146,7 +146,10 @@ const UserManagement = () => {
     }
     /* A User is scoped to the projects they are granted, so inviting one
        without any would create an account that can see nothing. */
-    if (selectedRole === "User" && inviteProjects.length === 0) {
+    if (
+      (selectedRole === "User" || selectedRole === "Admin") &&
+      inviteProjects.length === 0
+    ) {
       setInviteError("Select at least one project for this user.");
       return;
     }
@@ -159,7 +162,9 @@ const UserManagement = () => {
         name: inviteName,
         email: inviteEmail,
         role: selectedRole.toLowerCase(),
-        ...(selectedRole === "User" ? { projectIds: inviteProjects } : {}),
+        ...(selectedRole === "User" || selectedRole === "Admin"
+          ? { projectIds: inviteProjects }
+          : {}),
       });
 
       if (response.success) {
@@ -212,7 +217,10 @@ const UserManagement = () => {
 
   const handleSaveChanges = async () => {
     if (!editingUser || !editName.trim()) return;
-    if (editRole === "user" && editProjects.length === 0) {
+    if (
+      (editRole === "user" || editRole === "admin") &&
+      editProjects.length === 0
+    ) {
       setEditError("Select at least one project for this user.");
       return;
     }
@@ -225,7 +233,9 @@ const UserManagement = () => {
         name: editName,
         role: editRole,
         status: editStatus,
-        ...(editRole === "user" ? { projects: editProjects } : {}),
+        ...(editRole === "user" || editRole === "admin"
+          ? { projects: editProjects }
+          : {}),
       });
 
       const usersRes = await userAPI.getAll();
@@ -868,6 +878,8 @@ const UserManagement = () => {
                         fontSize: "13px",
                         fontWeight: 500,
                         minWidth: "70px",
+                        whiteSpace: "nowrap",
+                        textAlign: "center",
                       }}
                     >
                       {formatRole(user.role, user.isSuperAdmin)}
@@ -1185,9 +1197,8 @@ const UserManagement = () => {
                     flex: 1,
                   }}
                 >
-                  Runs the governance cycle — PM Override, mark a week
-                  Close-Out Eligible, close and lock it, and move the project
-                  on.
+                  Runs the governance cycle — PM Override, mark a week Close-Out
+                  Eligible, close and lock it, and move the project on.
                 </Typography>
               </Box>
 
@@ -1285,7 +1296,7 @@ const UserManagement = () => {
 
           {/* Project access is scoped per user, so it is only asked for once
               the User role is chosen. Multiple projects can be granted. */}
-          {selectedRole === "User" && (
+          {(selectedRole === "User" || selectedRole === "Admin") && (
             <Box sx={{ mt: 2 }}>
               <Typography
                 sx={{
@@ -1644,9 +1655,8 @@ const UserManagement = () => {
                     flex: 1,
                   }}
                 >
-                  Runs the governance cycle — PM Override, mark a week
-                  Close-Out Eligible, close and lock it, and move the project
-                  on.
+                  Runs the governance cycle — PM Override, mark a week Close-Out
+                  Eligible, close and lock it, and move the project on.
                 </Typography>
               </Box>
 
@@ -1739,7 +1749,7 @@ const UserManagement = () => {
 
           {/* Same project scoping as the invite dialog, so access can be
               corrected after the fact. */}
-          {editRole === "user" && (
+          {(editRole === "user" || editRole === "admin") && (
             <Box sx={{ mt: 2 }}>
               <Typography
                 sx={{
