@@ -61,7 +61,7 @@ const baseInputStyles = {
       WebkitBoxShadow: `0 0 0 100px ${COLORS.bgSecondary} inset`,
       WebkitTextFillColor: COLORS.textPrimary,
       caretColor: COLORS.textPrimary,
-      borderRadius: "inherit",
+      borderRadius: 0,
     },
     "&:-webkit-autofill:hover": {
       WebkitBoxShadow: `0 0 0 100px ${COLORS.bgSecondary} inset`,
