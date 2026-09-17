@@ -1273,6 +1273,13 @@ const PlannerProjectWorkspace = () => {
 
   /* Stage 3 -> Stage 4. This is a deliberate governance decision by the PM,
      so it gets its own control rather than riding on the Weekly Plan download. */
+  /* A week is finished once the programme is locked, whatever its cycleStatus
+     reads — close-week sets isLocked without moving to "Closed". */
+  const weekIsReadOnly =
+    !!uploadedProgramme?.isLocked ||
+    uploadedProgramme?.cycleStatus === "Closed" ||
+    isWeekClosed;
+
   const programmeUpdateConfirmed =
     !!uploadedProgramme?.programmeUpdateConfirmedAt;
   const todoDownloaded = !!uploadedProgramme?.plannerTodoGenerated;
@@ -2595,7 +2602,7 @@ const PlannerProjectWorkspace = () => {
                   mb: 2,
                 }}
               >
-                {uploadedProgramme?.cycleStatus === "Closed" || isWeekClosed
+                {weekIsReadOnly
                   ? "This week is closed and locked. No changes allowed."
                   : cycleStage === "execution"
                     ? "Execution in progress. Manage the cycle from the Weekly Control tab."
@@ -2606,7 +2613,7 @@ const PlannerProjectWorkspace = () => {
                         : "Open the planning meeting to begin. You can upload the programme once the meeting is open."}
               </Typography>
               {uploadedProgramme?.cycleStatus === "Closed" ||
-              isWeekClosed ? null : (
+              weekIsReadOnly ? null : (
                 <Button
                   onClick={
                     cycleStage === "execution"
@@ -5606,7 +5613,7 @@ const PlannerProjectWorkspace = () => {
                   mb: 2,
                 }}
               >
-                {uploadedProgramme?.cycleStatus === "Closed" || isWeekClosed
+                {weekIsReadOnly
                   ? "This week is closed and locked. No changes allowed."
                   : uploadedProgramme?.cycleStatus === "Close-Out Eligible"
                     ? canRunWeekClosure
@@ -5619,7 +5626,7 @@ const PlannerProjectWorkspace = () => {
                         : "Execution in progress. Monitor activities and actions."}
               </Typography>
               {/* Closed Stage - Show locked message */}
-              {uploadedProgramme?.cycleStatus === "Closed" || isWeekClosed ? (
+              {weekIsReadOnly ? (
                 <Box
                   sx={{
                     bgcolor: "rgba(107, 114, 128, 0.1)",
@@ -6352,7 +6359,7 @@ const PlannerProjectWorkspace = () => {
 
         {activeTab === 5 && (
           <Box>
-            {isWeekClosed ? (
+            {weekIsReadOnly ? (
               <Box
                 sx={{
                   bgcolor: COLORS.bgSecondary,
