@@ -581,6 +581,9 @@ const PlannerProjectWorkspace = () => {
       }
     }
     setClosedWeekAck(null);
+    const finishedWeek = uploadedProgramme?.weekNumber ?? closedWeekAck ?? null;
+    setSupersededWeek(finishedWeek);
+    setSupersededClosedCount(finishedWeek);
     /* No local week counter to bump: acknowledge-close records the handover
        and the header reads it back from the server. */
     setMeetingOpenLocal(false);
