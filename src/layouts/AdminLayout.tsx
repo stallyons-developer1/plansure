@@ -256,22 +256,20 @@ const AdminLayout = ({
     },
   ];
 
-  const adminItems = user?.isSuperAdmin
-    ? [
-        {
-          text: "User Management",
-          icon: <UsersIcon />,
-          path: "/admin/users",
-          isCustomIcon: false,
-        },
-        {
-          text: "Audit Logs",
-          icon: <AuditIcon />,
-          path: "/admin/audit-logs",
-          isCustomIcon: false,
-        },
-      ]
-    : [];
+  const adminItems = [
+    {
+      text: "User Management",
+      icon: <UsersIcon />,
+      path: "/admin/users",
+      isCustomIcon: false,
+    },
+    {
+      text: "Audit Logs",
+      icon: <AuditIcon />,
+      path: "/admin/audit-logs",
+      isCustomIcon: false,
+    },
+  ];
 
   const renderIcon = (item: {
     isCustomIcon: boolean;
