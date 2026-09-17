@@ -81,9 +81,11 @@ const PageFallback = () => (
 const ProtectedRoute = ({
   children,
   allowedRoles,
+  superAdminOnly,
 }: {
   children: React.ReactNode;
   allowedRoles?: string[];
+  superAdminOnly?: boolean;
 }) => {
   const { isAuthenticated, user, logout } = useAuth();
 
@@ -94,6 +96,12 @@ const ProtectedRoute = ({
   if (allowedRoles && user && !allowedRoles.includes(user.role)) {
     void logout();
     return <Navigate to="/login" replace />;
+  }
+
+  /* Owner-only screens. Sent back to the dashboard rather than signed out —
+     a PM reaching one of these has a valid session, just not the standing. */
+  if (superAdminOnly && !user?.isSuperAdmin) {
+    return <Navigate to="/admin" replace />;
   }
 
   return <>{children}</>;
@@ -223,7 +231,7 @@ function App() {
         <Route
           path="/admin/users"
           element={
-            <ProtectedRoute allowedRoles={["admin"]}>
+            <ProtectedRoute allowedRoles={["admin"]} superAdminOnly>
               <UserManagement />
             </ProtectedRoute>
           }
@@ -232,7 +240,7 @@ function App() {
         <Route
           path="/admin/audit-logs"
           element={
-            <ProtectedRoute allowedRoles={["admin"]}>
+            <ProtectedRoute allowedRoles={["admin"]} superAdminOnly>
               <AuditLogs />
             </ProtectedRoute>
           }

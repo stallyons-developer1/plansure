@@ -255,20 +255,22 @@ const AdminLayout = ({
     },
   ];
 
-  const adminItems = [
-    {
-      text: "User Management",
-      icon: <UsersIcon />,
-      path: "/admin/users",
-      isCustomIcon: false,
-    },
-    {
-      text: "Audit Logs",
-      icon: <AuditIcon />,
-      path: "/admin/audit-logs",
-      isCustomIcon: false,
-    },
-  ];
+  const adminItems = user?.isSuperAdmin
+    ? [
+        {
+          text: "User Management",
+          icon: <UsersIcon />,
+          path: "/admin/users",
+          isCustomIcon: false,
+        },
+        {
+          text: "Audit Logs",
+          icon: <AuditIcon />,
+          path: "/admin/audit-logs",
+          isCustomIcon: false,
+        },
+      ]
+    : [];
 
   const renderIcon = (item: {
     isCustomIcon: boolean;
@@ -399,7 +401,7 @@ const AdminLayout = ({
         {renderMenuSection("MAIN", mainMenuItems)}
         {renderMenuSection("WEEKLY CONTROL", weeklyControlItems)}
         {renderMenuSection("GOVERNANCE", governanceItems)}
-        {renderMenuSection("ADMIN", adminItems)}
+        {adminItems.length > 0 && renderMenuSection("ADMIN", adminItems)}
 
         <Box sx={{ flexGrow: 1 }} />
 

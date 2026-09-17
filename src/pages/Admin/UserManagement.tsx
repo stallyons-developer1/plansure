@@ -35,6 +35,8 @@ interface User {
   initials: string;
   email: string;
   role: "admin" | "planner" | "user";
+  /* Set on exactly one admin account — the owner. */
+  isSuperAdmin?: boolean;
   projectAccess: string;
   projectIds?: string[];
   /* Only what an admin granted directly — projectIds also carries access
@@ -298,8 +300,12 @@ const UserManagement = () => {
   const plannerCount = users.filter((u) => u.role === "planner").length;
   const userCount = users.filter((u) => u.role === "user").length;
 
-  const formatRole = (role: string) =>
-    role.charAt(0).toUpperCase() + role.slice(1);
+  /* An "admin" account is a PM to the people using this. The Super Admin is
+     the one account carrying the isSuperAdmin flag. */
+  const formatRole = (role: string, isSuperAdmin?: boolean) => {
+    if (role === "admin") return isSuperAdmin ? "Super Admin" : "PM";
+    return role.charAt(0).toUpperCase() + role.slice(1);
+  };
   const formatStatus = (status: string) =>
     status.charAt(0).toUpperCase() + status.slice(1);
   const formatLastLogin = (lastLogin: string | null) => {
@@ -864,7 +870,7 @@ const UserManagement = () => {
                         minWidth: "70px",
                       }}
                     >
-                      {formatRole(user.role)}
+                      {formatRole(user.role, user.isSuperAdmin)}
                     </Box>
                   </Box>
 
@@ -1170,7 +1176,7 @@ const UserManagement = () => {
                     fontWeight: 600,
                   }}
                 >
-                  Admin
+                  PM
                 </Box>
                 <Typography
                   sx={{
@@ -1179,8 +1185,9 @@ const UserManagement = () => {
                     flex: 1,
                   }}
                 >
-                  Full access — manage users, configure projects, override
-                  transitions, and access audit logs.
+                  Runs the governance cycle — PM Override, mark a week
+                  Close-Out Eligible, close and lock it, and move the project
+                  on.
                 </Typography>
               </Box>
 
@@ -1628,7 +1635,7 @@ const UserManagement = () => {
                     fontWeight: 600,
                   }}
                 >
-                  Admin
+                  PM
                 </Box>
                 <Typography
                   sx={{
@@ -1637,8 +1644,9 @@ const UserManagement = () => {
                     flex: 1,
                   }}
                 >
-                  Full access — manage users, configure projects, override
-                  transitions, and access audit logs.
+                  Runs the governance cycle — PM Override, mark a week
+                  Close-Out Eligible, close and lock it, and move the project
+                  on.
                 </Typography>
               </Box>
 

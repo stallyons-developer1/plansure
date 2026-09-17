@@ -14,6 +14,10 @@ interface User {
   name: string;
   email: string;
   role: UserRole;
+  /* The owner account. A flag rather than a role: the client's PM is an admin
+     account, and every governance check already reads role === "admin", so a
+     role above it would exclude the owner from all of them. */
+  isSuperAdmin?: boolean;
 }
 
 interface LoginResponse {
@@ -58,6 +62,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             name: response.user.name,
             email: response.user.email,
             role: response.user.role as UserRole,
+            isSuperAdmin: !!response.user.isSuperAdmin,
           };
 
           setUser(userData);
