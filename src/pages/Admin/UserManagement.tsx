@@ -144,16 +144,6 @@ const UserManagement = () => {
     if (!inviteName || !inviteEmail || !selectedRole) {
       return;
     }
-    /* A User is scoped to the projects they are granted, so inviting one
-       without any would create an account that can see nothing. */
-    if (
-      (selectedRole === "User" || selectedRole === "Admin") &&
-      inviteProjects.length === 0
-    ) {
-      setInviteError("Select at least one project for this user.");
-      return;
-    }
-
     setInviteLoading(true);
     setInviteError("");
 
@@ -217,14 +207,6 @@ const UserManagement = () => {
 
   const handleSaveChanges = async () => {
     if (!editingUser || !editName.trim()) return;
-    if (
-      (editRole === "user" || editRole === "admin") &&
-      editProjects.length === 0
-    ) {
-      setEditError("Select at least one project for this user.");
-      return;
-    }
-
     setEditLoading(true);
     setEditError("");
 
@@ -1306,10 +1288,7 @@ const UserManagement = () => {
                   mb: 0.5,
                 }}
               >
-                Project Access{" "}
-                <Box component="span" sx={{ color: COLORS.red }}>
-                  *
-                </Box>
+                Project Access
               </Typography>
               <Select
                 multiple
@@ -1394,7 +1373,7 @@ const UserManagement = () => {
               <Typography
                 sx={{ color: COLORS.textMuted, fontSize: "12px", mt: 0.5 }}
               >
-                Select at least one project this user may view.
+                Optional — projects can be granted later.
               </Typography>
             </Box>
           )}
@@ -1759,10 +1738,7 @@ const UserManagement = () => {
                   mb: 0.5,
                 }}
               >
-                Project Access{" "}
-                <Box component="span" sx={{ color: COLORS.red }}>
-                  *
-                </Box>
+                Project Access
               </Typography>
               <Select
                 multiple
