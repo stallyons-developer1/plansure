@@ -26,6 +26,7 @@ import {
 } from "@mui/icons-material";
 import AdminLayout from "../../layouts/AdminLayout";
 import { COLORS } from "../../constants/colors";
+import { useAuth } from "../../context/AuthContext";
 import editIcon from "../../assets/tabler_edit.png";
 import { userAPI, projectAPI } from "../../services/api";
 
@@ -81,6 +82,7 @@ const getAvatarStyle = (role: string) => {
 };
 
 const UserManagement = () => {
+  const { user } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [inviteLoading, setInviteLoading] = useState(false);
@@ -403,46 +405,48 @@ const UserManagement = () => {
           </Box>
         </Box>
 
-        <Box
-          sx={{
-            bgcolor: COLORS.bgSecondary,
-            border: `1px solid ${COLORS.border}`,
-            borderRadius: "12px",
-            p: 2.5,
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
-          }}
-        >
-          <Box>
-            <Typography
-              sx={{ color: COLORS.textSecondary, fontSize: "14px", mb: 1 }}
-            >
-              admins
-            </Typography>
-            <Typography
-              sx={{
-                color: COLORS.textPrimary,
-                fontSize: "32px",
-                fontWeight: 700,
-              }}
-            >
-              {adminCount}
-            </Typography>
-          </Box>
+        {user?.isSuperAdmin && (
           <Box
             sx={{
-              bgcolor: `${COLORS.green}15`,
-              borderRadius: "8px",
-              p: 1.5,
+              bgcolor: COLORS.bgSecondary,
+              border: `1px solid ${COLORS.border}`,
+              borderRadius: "12px",
+              p: 2.5,
               display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
+              justifyContent: "space-between",
+              alignItems: "flex-start",
             }}
           >
-            <AdminIcon sx={{ color: COLORS.green, fontSize: 24 }} />
+            <Box>
+              <Typography
+                sx={{ color: COLORS.textSecondary, fontSize: "14px", mb: 1 }}
+              >
+                admins
+              </Typography>
+              <Typography
+                sx={{
+                  color: COLORS.textPrimary,
+                  fontSize: "32px",
+                  fontWeight: 700,
+                }}
+              >
+                {adminCount}
+              </Typography>
+            </Box>
+            <Box
+              sx={{
+                bgcolor: `${COLORS.green}15`,
+                borderRadius: "8px",
+                p: 1.5,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <AdminIcon sx={{ color: COLORS.green, fontSize: 24 }} />
+            </Box>
           </Box>
-        </Box>
+        )}
 
         <Box
           sx={{
@@ -1138,51 +1142,56 @@ const UserManagement = () => {
             <Box
               sx={{ display: "flex", flexDirection: "column", gap: 1.5, mt: 1 }}
             >
-              <Box
-                onClick={() => {
-                  setSelectedRole("Admin");
-                  setInviteProjects([]);
-                }}
-                sx={{
-                  display: "flex",
-                  alignItems: "flex-start",
-                  gap: 2,
-                  p: 2,
-                  bgcolor: COLORS.bgPrimary,
-                  border: `1px solid ${selectedRole === "Admin" ? COLORS.blue : COLORS.white}`,
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  transition: "border-color 0.2s ease",
-                  "&:hover": {
-                    borderColor:
-                      selectedRole === "Admin" ? COLORS.blue : COLORS.textMuted,
-                  },
-                }}
-              >
+              {user?.isSuperAdmin && (
                 <Box
+                  onClick={() => {
+                    setSelectedRole("Admin");
+                    setInviteProjects([]);
+                  }}
                   sx={{
-                    bgcolor: "rgba(239, 68, 68, 0.15)",
-                    color: "#ef4444",
-                    px: 1,
-                    py: 0.5,
-                    borderRadius: "4px",
-                    fontSize: "12px",
-                    fontWeight: 600,
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: 2,
+                    p: 2,
+                    bgcolor: COLORS.bgPrimary,
+                    border: `1px solid ${selectedRole === "Admin" ? COLORS.blue : COLORS.white}`,
+                    borderRadius: "8px",
+                    cursor: "pointer",
+                    transition: "border-color 0.2s ease",
+                    "&:hover": {
+                      borderColor:
+                        selectedRole === "Admin"
+                          ? COLORS.blue
+                          : COLORS.textMuted,
+                    },
                   }}
                 >
-                  PM
+                  <Box
+                    sx={{
+                      bgcolor: "rgba(239, 68, 68, 0.15)",
+                      color: "#ef4444",
+                      px: 1,
+                      py: 0.5,
+                      borderRadius: "4px",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                    }}
+                  >
+                    PM
+                  </Box>
+                  <Typography
+                    sx={{
+                      color: COLORS.textSecondary,
+                      fontSize: "13px",
+                      flex: 1,
+                    }}
+                  >
+                    Runs the governance cycle — PM Override, mark a week
+                    Close-Out Eligible, close and lock it, and move the project
+                    on.
+                  </Typography>
                 </Box>
-                <Typography
-                  sx={{
-                    color: COLORS.textSecondary,
-                    fontSize: "13px",
-                    flex: 1,
-                  }}
-                >
-                  Runs the governance cycle — PM Override, mark a week Close-Out
-                  Eligible, close and lock it, and move the project on.
-                </Typography>
-              </Box>
+              )}
 
               <Box
                 onClick={() => {
@@ -1596,48 +1605,51 @@ const UserManagement = () => {
             <Box
               sx={{ display: "flex", flexDirection: "column", gap: 1.5, mt: 1 }}
             >
-              <Box
-                onClick={() => setEditRole("admin")}
-                sx={{
-                  display: "flex",
-                  alignItems: "flex-start",
-                  gap: 2,
-                  p: 2,
-                  bgcolor: COLORS.bgPrimary,
-                  border: `1px solid ${editRole === "admin" ? COLORS.blue : COLORS.white}`,
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  transition: "border-color 0.2s ease",
-                  "&:hover": {
-                    borderColor:
-                      editRole === "admin" ? COLORS.blue : COLORS.textMuted,
-                  },
-                }}
-              >
+              {user?.isSuperAdmin && (
                 <Box
+                  onClick={() => setEditRole("admin")}
                   sx={{
-                    bgcolor: "rgba(239, 68, 68, 0.15)",
-                    color: "#ef4444",
-                    px: 1,
-                    py: 0.5,
-                    borderRadius: "4px",
-                    fontSize: "12px",
-                    fontWeight: 600,
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: 2,
+                    p: 2,
+                    bgcolor: COLORS.bgPrimary,
+                    border: `1px solid ${editRole === "admin" ? COLORS.blue : COLORS.white}`,
+                    borderRadius: "8px",
+                    cursor: "pointer",
+                    transition: "border-color 0.2s ease",
+                    "&:hover": {
+                      borderColor:
+                        editRole === "admin" ? COLORS.blue : COLORS.textMuted,
+                    },
                   }}
                 >
-                  PM
+                  <Box
+                    sx={{
+                      bgcolor: "rgba(239, 68, 68, 0.15)",
+                      color: "#ef4444",
+                      px: 1,
+                      py: 0.5,
+                      borderRadius: "4px",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                    }}
+                  >
+                    PM
+                  </Box>
+                  <Typography
+                    sx={{
+                      color: COLORS.textSecondary,
+                      fontSize: "13px",
+                      flex: 1,
+                    }}
+                  >
+                    Runs the governance cycle — PM Override, mark a week
+                    Close-Out Eligible, close and lock it, and move the project
+                    on.
+                  </Typography>
                 </Box>
-                <Typography
-                  sx={{
-                    color: COLORS.textSecondary,
-                    fontSize: "13px",
-                    flex: 1,
-                  }}
-                >
-                  Runs the governance cycle — PM Override, mark a week Close-Out
-                  Eligible, close and lock it, and move the project on.
-                </Typography>
-              </Box>
+              )}
 
               <Box
                 onClick={() => setEditRole("planner")}
