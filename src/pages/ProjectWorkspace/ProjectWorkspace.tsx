@@ -239,6 +239,10 @@ const ProjectWorkspace = () => {
   const [supersededClosedCount, setSupersededClosedCount] = useState<
     number | null
   >(null);
+  /* Which project week the superseded programme was. closedWeeks counts inside
+     that one programme and every week gets its own, so it cannot say which week
+     of the project has just finished. */
+  const [supersededWeek, setSupersededWeek] = useState<number | null>(null);
   const [weeksStatus, setWeeksStatus] = useState<{
     totalWeeks?: number;
     closedWeeksCount?: number;
@@ -262,14 +266,18 @@ const ProjectWorkspace = () => {
      weeks are closed by definition. */
   const headerWeekNum =
     programmeWeek ??
+    (supersededWeek !== null ? supersededWeek + 1 : null) ??
     weeksStatus?.weeks?.find((w) => !w.isClosed)?.weekNumber ??
     weeksStatus?.totalWeeks ??
     (supersededClosedCount !== null
       ? supersededClosedCount + 1
       : (weeklyControl?.weekInfo?.currentWeekNumber ?? 1));
+
   const headerClosedCount = programmeWeek
     ? programmeWeek - 1
-    : (weeksStatus?.closedWeeksCount ?? supersededClosedCount ?? 0);
+    : supersededWeek !== null
+      ? supersededWeek
+      : (weeksStatus?.closedWeeksCount ?? supersededClosedCount ?? 0);
 
   const isActionFromClosedWeek = (action: {
     createdAt?: string;
@@ -353,10 +361,13 @@ const ProjectWorkspace = () => {
           if (programme.awaitingNextUpload) {
             setActivities([]);
             setProgrammeName("");
+            setProgrammeWeek(null);
             setSupersededClosedCount(programme.closedWeeks?.length ?? 0);
+            setSupersededWeek(programme.weekNumber ?? null);
             return;
           }
           setSupersededClosedCount(null);
+          setSupersededWeek(null);
           setProgrammeWeek(programme.weekNumber ?? null);
           const activitiesData = programme.extractedData?.activities || [];
 
