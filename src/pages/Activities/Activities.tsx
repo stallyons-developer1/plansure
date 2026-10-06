@@ -11,6 +11,7 @@ import type { SelectChangeEvent } from "@mui/material/Select";
 import { KeyboardArrowDown as ArrowDownIcon } from "@mui/icons-material";
 import DashboardLayout from "../../layouts/DashboardLayout";
 import ActivitiesLookahead from "../../components/ActivitiesLookahead";
+import ActionDetailsDialog from "../../components/ActionDetailsDialog";
 import type { Activity } from "../../components/ActivitiesTable";
 import { COLORS } from "../../constants/colors";
 import { projectAPI, programmeAPI, actionAPI } from "../../services/api";
@@ -239,6 +240,7 @@ const Activities = () => {
   const [weeks, setWeeks] = useState<WeekData[]>([]);
   const [lastUpdated, setLastUpdated] = useState<string>("");
   const [programmeId, setProgrammeId] = useState<string>("");
+  const [actionDetailId, setActionDetailId] = useState<string | null>(null);
   const [programmeActions, setProgrammeActions] = useState<Action[]>([]);
 
   useEffect(() => {
@@ -366,7 +368,7 @@ const Activities = () => {
               weekEnd.setDate(weekStartDate.getDate() + 6);
 
               const formatDate = (d: Date) =>
-                `${String(d.getDate()).padStart(2, "0")} ${d.toLocaleString("en-US", { month: "short" })}`;
+                `${String(d.getDate()).padStart(2, "0")} ${d.toLocaleString("en-GB", { month: "short" })}`;
 
               generatedWeeks.push({
                 week: i + 1,
@@ -520,8 +522,28 @@ const Activities = () => {
           activities={activities}
           weeks={weeks}
           lastUpdated={lastUpdated}
+          onActionClick={(a) => setActionDetailId(a._id)}
         />
       )}
+
+      {/* A User has no Actions tab of their own, so this is where they close
+          the work assigned to them. */}
+      <ActionDetailsDialog
+        open={actionDetailId !== null}
+        actionId={actionDetailId}
+        onCompleted={async () => {
+          if (!programmeId) return;
+          try {
+            const response = await actionAPI.getByProgramme(programmeId);
+            if (response.success) {
+              setProgrammeActions(response.actions);
+            }
+          } catch (err) {
+            console.error("Failed to refresh actions:", err);
+          }
+        }}
+        onClose={() => setActionDetailId(null)}
+      />
     </DashboardLayout>
   );
 };

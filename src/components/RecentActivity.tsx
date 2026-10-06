@@ -107,7 +107,7 @@ const formatTimestamp = (timestamp: string) => {
   const diffMs = now.getTime() - date.getTime();
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-  const timeStr = date.toLocaleTimeString("en-US", {
+  const timeStr = date.toLocaleTimeString("en-GB", {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
@@ -118,13 +118,13 @@ const formatTimestamp = (timestamp: string) => {
   } else if (diffDays === 1) {
     return `Yesterday at ${timeStr}`;
   } else if (diffDays < 7) {
-    const dayName = date.toLocaleDateString("en-US", { weekday: "short" });
+    const dayName = date.toLocaleDateString("en-GB", { weekday: "short" });
     const dayNum = date.getDate();
-    const month = date.toLocaleDateString("en-US", { month: "short" });
+    const month = date.toLocaleDateString("en-GB", { month: "short" });
     return `${dayName} ${dayNum} ${month} at ${timeStr}`;
   } else {
     const dayNum = date.getDate();
-    const month = date.toLocaleDateString("en-US", { month: "short" });
+    const month = date.toLocaleDateString("en-GB", { month: "short" });
     return `${dayNum} ${month} at ${timeStr}`;
   }
 };

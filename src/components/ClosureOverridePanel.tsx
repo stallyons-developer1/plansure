@@ -390,7 +390,7 @@ const ClosureOverridePanel = ({
                   </Box>
                 )}
 
-                {/* Upload a program button - shown when meeting is open; sends
+                {/* Upload a programme button - shown when meeting is open; sends
                     the user to the selected project's Programme Upload tab. */}
                 {cycleStatus === "Meeting Open" && (
                   <Box
@@ -413,7 +413,7 @@ const ClosureOverridePanel = ({
                     }}
                   >
                     <Typography sx={{ fontSize: "14px", fontWeight: 500 }}>
-                      Upload a program
+                      Upload a programme
                     </Typography>
                   </Box>
                 )}

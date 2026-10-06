@@ -54,8 +54,14 @@ const PlannerNotifications = lazy(
   () => import("./pages/Planner/PlannerNotifications"),
 );
 const PlannerSettings = lazy(() => import("./pages/Planner/PlannerSettings"));
+const PlannerUserManagement = lazy(
+  () => import("./pages/Planner/PlannerUserManagement"),
+);
 const AdminSettings = lazy(() => import("./pages/Admin/AdminSettings"));
 const UserSettings = lazy(() => import("./pages/Dashboard/UserSettings"));
+const UserUserManagement = lazy(
+  () => import("./pages/Dashboard/UserUserManagement"),
+);
 const UserGovernanceDashboard = lazy(
   () => import("./pages/Dashboard/UserGovernanceDashboard"),
 );
@@ -348,6 +354,15 @@ function App() {
         />
 
         <Route
+          path="/planner/users"
+          element={
+            <ProtectedRoute allowedRoles={["planner"]}>
+              <PlannerUserManagement />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
           path="/planner/settings"
           element={
             <ProtectedRoute allowedRoles={["planner"]}>
@@ -415,6 +430,15 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={["user"]}>
               <UserNotifications />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/dashboard/users"
+          element={
+            <ProtectedRoute allowedRoles={["user"]}>
+              <UserUserManagement />
             </ProtectedRoute>
           }
         />

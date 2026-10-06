@@ -165,7 +165,7 @@ const PlannerNotifications = () => {
 
     if (diffDays === 0) return "Today";
     if (diffDays === 1) return "Yesterday";
-    return date.toLocaleDateString("en-US", {
+    return date.toLocaleDateString("en-GB", {
       month: "short",
       day: "numeric",
       year: "numeric",

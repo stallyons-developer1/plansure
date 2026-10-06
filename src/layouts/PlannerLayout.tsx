@@ -27,6 +27,7 @@ import {
   Logout as LogoutIcon,
   Menu as MenuIcon,
   SettingsOutlined as SettingsIcon,
+  PeopleOutlined as UsersIcon,
 } from "@mui/icons-material";
 import { useAuth } from "../context/AuthContext";
 import { COLORS } from "../constants/colors";
@@ -205,7 +206,7 @@ const PlannerLayout = ({
 
   const weeklyControlItems = [
     {
-      text: "Programs Upload",
+      text: "Programme Upload",
       iconSrc: uploadIcon,
       path: "/planner/programs-upload",
       isCustomIcon: true,
@@ -251,6 +252,18 @@ const PlannerLayout = ({
       path: "/planner/export",
       isCustomIcon: true,
       iconSize: { width: 16, height: 20 },
+    },
+  ];
+
+  /* A Planner may bring in other Planners and Users, so they get the same
+     screen the PM uses — narrowed to the accounts they invited. Its own
+     section, matching the Admin sidebar, rather than buried under Governance. */
+  const adminItems = [
+    {
+      text: "User Management",
+      icon: <UsersIcon />,
+      path: "/planner/users",
+      isCustomIcon: false,
     },
   ];
 
@@ -383,6 +396,7 @@ const PlannerLayout = ({
         {renderMenuSection("MAIN", mainMenuItems)}
         {renderMenuSection("WEEKLY CONTROL", weeklyControlItems)}
         {renderMenuSection("GOVERNANCE", governanceItems)}
+        {renderMenuSection("ADMIN", adminItems)}
 
         <Box sx={{ flexGrow: 1 }} />
 

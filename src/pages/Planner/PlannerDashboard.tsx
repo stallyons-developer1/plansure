@@ -51,6 +51,9 @@ interface DashboardStats {
   };
   activities: {
     total: number;
+    /* Activities whose start date falls inside the six-week window — the
+       figure the Activities table shows, and what the card reports. */
+    inLookahead: number;
     green: number;
     amber: number;
     red: number;
@@ -656,7 +659,7 @@ const PlannerDashboard = () => {
                   mb: 0.5,
                 }}
               >
-                Total Activities
+                Activities in Lookahead
               </Typography>
               <Typography
                 sx={{
@@ -667,7 +670,7 @@ const PlannerDashboard = () => {
                   mb: 0.5,
                 }}
               >
-                {stats?.activities.total || 0}
+                {stats?.activities.inLookahead || 0}
               </Typography>
               <Box
                 sx={{

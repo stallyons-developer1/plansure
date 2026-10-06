@@ -362,6 +362,9 @@ export const userAPI = {
     name: string;
     email: string;
     role: string;
+    /* Only meaningful with role "admin", and only honoured by the server when
+       the person sending the invitation is a Super Admin themselves. */
+    isSuperAdmin?: boolean;
     projectId?: string;
     projectIds?: string[];
   }) => {
@@ -373,11 +376,16 @@ export const userAPI = {
     status?: string;
     role?: string;
     search?: string;
+    /* Narrows the list to the accounts the caller invited. The server ignores
+       it for admins, who manage everyone. Left off by the assignee dropdowns,
+       which need the whole active list. */
+    managedOnly?: boolean;
   }) => {
     const params = new URLSearchParams();
     if (filters?.status) params.append("status", filters.status);
     if (filters?.role) params.append("role", filters.role);
     if (filters?.search) params.append("search", filters.search);
+    if (filters?.managedOnly) params.append("managedOnly", "true");
     const response = await api.get(`/users?${params.toString()}`);
     return response.data;
   },

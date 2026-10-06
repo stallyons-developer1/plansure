@@ -114,7 +114,7 @@ const ProgramsUpload = () => {
 
   return (
     <PlannerLayout
-      title="Programs Upload"
+      title="Programme Upload"
       subtitle="Upload master schedule PDF"
     >
       <Box sx={{ maxWidth: "100%", overflow: "hidden" }}>
@@ -253,7 +253,7 @@ const ProgramsUpload = () => {
               mb: 0.5,
             }}
           >
-            Upload Programs PDF
+            Upload Programme PDF
           </Typography>
           <Typography
             sx={{

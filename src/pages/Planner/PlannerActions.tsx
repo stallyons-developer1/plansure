@@ -87,6 +87,10 @@ interface User {
   email: string;
   role: string;
   status: string;
+  /* Projects the account can reach — granted directly or through an action
+     already assigned to them. A Super Admin carries allProjects instead. */
+  projectIds?: string[];
+  allProjects?: boolean;
 }
 
 interface Programme {
@@ -180,6 +184,14 @@ const PlannerActions = () => {
     hasPrevPage: false,
   });
   const [users, setUsers] = useState<User[]>([]);
+  /* An action can only be handed to someone who can actually see the project
+     it sits on, so the list narrows to the project chosen on the form. */
+  const assignableUsers = users.filter(
+    (u) =>
+      u.allProjects ||
+      !formData.selectedProject ||
+      (u.projectIds || []).includes(formData.selectedProject),
+  );
 
   const fetchActions = async () => {
     try {
@@ -240,12 +252,11 @@ const PlannerActions = () => {
           const usersRes = await userAPI.getAll({ status: "active" });
           // The signed-in planner stays in the list so they can assign an
           // action to themselves; the Admin pages already allow this.
+          /* Planners run the work and Users own the actions handed to
+             them, so both belong here. Admins are left out on purpose. */
           const activeUsers = (usersRes.users || []).filter(
             (u: User) =>
-              u.role === "planner" &&
-              u.status === "active",
-            //Exclude the signed-in planner
-            // && u._id !== user?.id,
+              ["planner", "user"].includes(u.role) && u.status === "active",
           );
           setUsers(activeUsers);
         } catch (userError) {}
@@ -2163,11 +2174,11 @@ const PlannerActions = () => {
                   }}
                 >
                   <MenuItem value="" disabled>
-                    {users.length === 0
+                    {assignableUsers.length === 0
                       ? "No users available"
                       : "Select assignee..."}
                   </MenuItem>
-                  {users.map((user) => (
+                  {assignableUsers.map((user) => (
                     <MenuItem key={user._id} value={user._id}>
                       {user.name}
                     </MenuItem>

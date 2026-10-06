@@ -207,7 +207,7 @@ const AdminLayout = ({
 
   const weeklyControlItems = [
     {
-      text: "Programs Upload",
+      text: "Programme Upload",
       iconSrc: uploadIcon,
       path: "/admin/programs-upload",
       isCustomIcon: true,

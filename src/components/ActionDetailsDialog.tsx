@@ -5,17 +5,26 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
+  DialogActions,
   IconButton,
   CircularProgress,
+  Button,
+  TextField,
 } from "@mui/material";
 import { Close as CloseIcon } from "@mui/icons-material";
 import { COLORS } from "../constants/colors";
 import { actionAPI } from "../services/api";
+import { useAuth } from "../context/AuthContext";
 
 /*
- * Read-only view of a single action, in the same field order as the Edit
- * Action dialog. Shared by the Audit Logs event list and the Activities &
- * Lookahead table so both show the record identically.
+ * View of a single action, in the same field order as the Edit Action dialog.
+ * Shared by the Audit Logs event list and the Activities & Lookahead table so
+ * both show the record identically.
+ *
+ * Pass allowComplete to let the owner close it from here. That is how a User
+ * completes their own work: they have no Actions tab of their own, and the
+ * server has always permitted the assignee to close an action whatever their
+ * role — only the screens were missing the control.
  */
 
 interface ActionDetail {
@@ -32,7 +41,9 @@ interface ActionDetail {
   overrideReason?: string;
   overriddenAt?: string;
   overriddenBy?: { name?: string };
-  assignee?: { name?: string };
+  assignee?: { _id?: string; name?: string };
+  createdBy?: { _id?: string; name?: string };
+  isFromClosedWeek?: boolean;
   linkedActivity?: { activityId?: string; activityName?: string };
   linkedActivityOwnerName?: string;
 }
@@ -42,14 +53,14 @@ const formatStamp = (value?: string) => {
   if (!value) return "-";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
-  return `${date.toLocaleDateString("en-US", {
+  return `${date.toLocaleDateString("en-GB", {
     month: "short",
     day: "numeric",
     year: "numeric",
-  })} ${date.toLocaleTimeString("en-US", {
+  })} ${date.toLocaleTimeString("en-GB", {
     hour: "2-digit",
     minute: "2-digit",
-    hour12: true,
+    hour12: false,
   })}`;
 };
 
@@ -131,17 +142,63 @@ const ActionDetailsDialog = ({
   open,
   actionId,
   subtitle,
+  allowComplete = false,
+  onCompleted,
   onClose,
 }: {
   open: boolean;
   actionId: string | null;
   /* Optional context line, e.g. the audit event that led here. */
   subtitle?: string;
+  /* Off by default so the Audit Logs view stays a record, not a control. */
+  allowComplete?: boolean;
+  onCompleted?: () => void;
   onClose: () => void;
 }) => {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [action, setAction] = useState<ActionDetail | null>(null);
+  const [note, setNote] = useState("");
+  const [completing, setCompleting] = useState(false);
+  const [completeError, setCompleteError] = useState("");
+
+  /* Mirrors the server's test — the person it was given to, or the person who
+     raised it; an admin may close any action — so the button only appears when
+     it will work. The server stays the authority: a closed week or a PM
+     Override is refused there, and the reason is shown below. */
+  const isOwner =
+    !!user &&
+    (action?.assignee?._id === user.id || action?.createdBy?._id === user.id);
+  const canComplete =
+    allowComplete &&
+    !!action &&
+    action.status !== "Completed" &&
+    action.status !== "PM Override" &&
+    !action.isFromClosedWeek &&
+    (isOwner || user?.role === "admin");
+
+  const handleComplete = async () => {
+    if (!actionId) return;
+    setCompleting(true);
+    setCompleteError("");
+    try {
+      const response = await actionAPI.complete(actionId, note);
+      if (response?.success) {
+        onCompleted?.();
+        onClose();
+      } else {
+        setCompleteError("This action could not be completed.");
+      }
+    } catch (err) {
+      const message =
+        (err as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message || "This action could not be completed.";
+      setCompleteError(message);
+    } finally {
+      setCompleting(false);
+    }
+  };
 
   useEffect(() => {
     if (!open || !actionId) return;
@@ -151,6 +208,8 @@ const ActionDetailsDialog = ({
       setLoading(true);
       setError("");
       setAction(null);
+      setNote("");
+      setCompleteError("");
       try {
         const response = await actionAPI.getById(actionId);
         if (cancelled) return;
@@ -159,10 +218,18 @@ const ActionDetailsDialog = ({
         } else {
           setError("This action could not be loaded.");
         }
-      } catch {
-        // Most often the action was deleted after the event was recorded.
+      } catch (err) {
         if (!cancelled) {
-          setError("This action no longer exists.");
+          /* A refused request is not a missing one. Saying "no longer exists"
+             for a 403 sent people looking for a deleted record that was
+             sitting right there in the list. */
+          const status = (err as { response?: { status?: number } })?.response
+            ?.status;
+          setError(
+            status === 403
+              ? "You do not have access to this action."
+              : "This action no longer exists.",
+          );
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -324,9 +391,94 @@ const ActionDetailsDialog = ({
                   : [["Created", formatStamp(action.createdAt)]]
               }
             />
+            {canComplete && (
+              <Box>
+                <Typography
+                  sx={{
+                    color: COLORS.border,
+                    fontSize: "12px",
+                    fontWeight: 500,
+                    mb: 0.5,
+                  }}
+                >
+                  Completion Note
+                </Typography>
+                <TextField
+                  fullWidth
+                  multiline
+                  rows={3}
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder="What was done, and what evidence supports it?"
+                  sx={{
+                    "& .MuiOutlinedInput-root": {
+                      bgcolor: COLORS.bgPrimary,
+                      borderRadius: "8px",
+                      "& fieldset": { borderColor: COLORS.white },
+                      "&:hover fieldset": { borderColor: COLORS.textMuted },
+                      "&.Mui-focused fieldset": { borderColor: COLORS.blue },
+                    },
+                    "& .MuiOutlinedInput-input": {
+                      color: COLORS.textPrimary,
+                      fontSize: "14px",
+                    },
+                  }}
+                />
+                {completeError && (
+                  <Typography
+                    sx={{ color: "#ef4444", fontSize: "13px", mt: 1 }}
+                  >
+                    {completeError}
+                  </Typography>
+                )}
+              </Box>
+            )}
           </Box>
         ) : null}
       </DialogContent>
+      {canComplete && (
+        <DialogActions sx={{ px: 3, py: 2, gap: 1.5 }}>
+          <Button
+            onClick={onClose}
+            sx={{
+              color: COLORS.white,
+              bgcolor: COLORS.bgPrimary,
+              border: `1px solid ${COLORS.white}`,
+              borderRadius: "8px",
+              textTransform: "none",
+              px: 3,
+              py: 1,
+              fontSize: "14px",
+              fontWeight: 400,
+              "&:hover": { bgcolor: COLORS.bgTertiary },
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleComplete}
+            disabled={completing}
+            sx={{
+              color: COLORS.white,
+              bgcolor: COLORS.green,
+              borderRadius: "8px",
+              textTransform: "none",
+              px: 3,
+              py: 1,
+              fontSize: "14px",
+              fontWeight: 500,
+              "&:hover": { bgcolor: "#16a34a" },
+              "&.Mui-disabled": { bgcolor: COLORS.green, opacity: 0.7 },
+            }}
+          >
+            {completing ? (
+              <CircularProgress size={20} sx={{ color: COLORS.white }} />
+            ) : (
+              "Mark as Complete"
+            )}
+          </Button>
+        </DialogActions>
+      )}
     </Dialog>
   );
 };

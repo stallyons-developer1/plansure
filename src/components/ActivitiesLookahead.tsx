@@ -10,7 +10,7 @@ import {
 import { Search as SearchIcon } from "@mui/icons-material";
 import { COLORS } from "../constants/colors";
 import ActivitiesTable from "./ActivitiesTable";
-import type { Activity } from "./ActivitiesTable";
+import type { Activity, ActivityAction } from "./ActivitiesTable";
 import AdminActivitiesSummary from "./AdminActivitiesSummary";
 
 interface WeekData {
@@ -25,7 +25,9 @@ interface ActivitiesLookaheadProps {
   weeks: WeekData[];
   lastUpdated: string;
   onAssignClick?: (activity: Activity) => void;
-  onActionClick?: () => void;
+  /* Carries the action through so a caller can open it, rather than only
+     knowing that something was clicked. */
+  onActionClick?: (action: ActivityAction) => void;
   onReassignClick?: (action: {
     _id: string;
     title: string;

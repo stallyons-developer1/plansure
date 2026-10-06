@@ -27,6 +27,7 @@ import {
   Logout as LogoutIcon,
   Menu as MenuIcon,
   SettingsOutlined as SettingsIcon,
+  PeopleOutlined as UsersIcon,
 } from "@mui/icons-material";
 import { useAuth } from "../context/AuthContext";
 import { notificationAPI } from "../services/api";
@@ -200,6 +201,17 @@ const DashboardLayout = ({
     },
   ];
 
+  /* A User may invite other Users, so they get the same screen — narrowed to
+     the accounts they invited. Its own section, matching the Admin sidebar. */
+  const adminItems = [
+    {
+      text: "User Management",
+      icon: <UsersIcon />,
+      path: "/dashboard/users",
+      isCustomIcon: false,
+    },
+  ];
+
   const renderIcon = (item: any) => {
     if (item.isCustomIcon) {
       return (
@@ -336,6 +348,69 @@ const DashboardLayout = ({
           </Typography>
           <List disablePadding>
             {viewMenuItems.map((item) => (
+              <ListItem key={item.text} disablePadding sx={{ mb: 0.5 }}>
+                <ListItemButton
+                  onClick={() => navigate(item.path)}
+                  sx={{
+                    borderRadius: 2,
+                    bgcolor: isActive(item.path)
+                      ? COLORS.blueBgMedium
+                      : "transparent",
+                    "&:hover": {
+                      bgcolor: isActive(item.path)
+                        ? COLORS.blueBgHover
+                        : COLORS.whiteHover,
+                    },
+                  }}
+                >
+                  <ListItemIcon
+                    sx={{
+                      minWidth: 25,
+                      color: isActive(item.path)
+                        ? COLORS.blue
+                        : COLORS.textMuted,
+                    }}
+                  >
+                    {renderIcon(item)}
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={item.text}
+                    slotProps={{
+                      primary: {
+                        sx: {
+                          fontSize: "12px",
+                          "@media (min-width: 1920px)": {
+                            fontSize: "14px",
+                          },
+                          fontWeight: isActive(item.path) ? 500 : 500,
+                          color: isActive(item.path)
+                            ? COLORS.blue
+                            : COLORS.border,
+                          whiteSpace: "nowrap",
+                        },
+                      },
+                    }}
+                  />
+                </ListItemButton>
+              </ListItem>
+            ))}
+          </List>
+        </Box>
+
+        <Box sx={{ px: 2, pt: 3 }}>
+          <Typography
+            sx={{
+              color: COLORS.border,
+              fontSize: "12px",
+              fontWeight: 500,
+              letterSpacing: "0.1em",
+              mb: 1,
+            }}
+          >
+            ADMIN
+          </Typography>
+          <List disablePadding>
+            {adminItems.map((item) => (
               <ListItem key={item.text} disablePadding sx={{ mb: 0.5 }}>
                 <ListItemButton
                   onClick={() => navigate(item.path)}

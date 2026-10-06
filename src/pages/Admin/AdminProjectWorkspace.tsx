@@ -81,7 +81,7 @@ const defaultDashboardData = {
 
 const steps = [
   "Open Meeting",
-  "Upload a program",
+  "Upload a programme",
   "Execution",
   "Close-Out Eligible",
   "Closed",
@@ -164,15 +164,15 @@ const formatAuditStamp = (value?: string): string => {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  const datePart = date.toLocaleDateString("en-US", {
+  const datePart = date.toLocaleDateString("en-GB", {
     month: "short",
     day: "numeric",
     year: "numeric",
   });
-  const timePart = date.toLocaleTimeString("en-US", {
+  const timePart = date.toLocaleTimeString("en-GB", {
     hour: "2-digit",
     minute: "2-digit",
-    hour12: true,
+    hour12: false,
   });
   return `${datePart} ${timePart}`;
 };
@@ -726,9 +726,12 @@ const AdminProjectWorkspace = () => {
       try {
         const response = await userAPI.getAll({ status: "active" });
         if (response.success) {
+          /* Planners run the work and Users own the actions handed to
+             them, so both belong here. Admins are left out on purpose. */
           const activeUsers = (response.users || []).filter(
             (user: { role: string; status: string }) =>
-              user.role === "planner" && user.status === "active",
+              ["planner", "user"].includes(user.role) &&
+              user.status === "active",
           );
           setUsers(activeUsers);
         }
@@ -3245,7 +3248,7 @@ const AdminProjectWorkspace = () => {
                     mb: 2.5,
                   }}
                 >
-                  Upload Programs PDF
+                  Upload Programme PDF
                 </Typography>
 
                 <Box

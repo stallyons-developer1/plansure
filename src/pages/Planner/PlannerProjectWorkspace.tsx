@@ -81,7 +81,7 @@ const defaultDashboardData = {
 
 const steps = [
   "Open Meeting",
-  "Upload a program",
+  "Upload a programme",
   "Execution",
   "Close-Out Eligible",
   "Closed",
@@ -164,15 +164,15 @@ const formatAuditStamp = (value?: string): string => {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  const datePart = date.toLocaleDateString("en-US", {
+  const datePart = date.toLocaleDateString("en-GB", {
     month: "short",
     day: "numeric",
     year: "numeric",
   });
-  const timePart = date.toLocaleTimeString("en-US", {
+  const timePart = date.toLocaleTimeString("en-GB", {
     hour: "2-digit",
     minute: "2-digit",
-    hour12: true,
+    hour12: false,
   });
   return `${datePart} ${timePart}`;
 };
@@ -719,9 +719,11 @@ const PlannerProjectWorkspace = () => {
         if (response.success) {
           // The signed-in planner stays in the list so they can assign an
           // action to themselves; the Admin workspace already allows this.
+          /* Planners run the work and Users own the actions handed to
+             them, so both belong here. Admins are left out on purpose. */
           const activeUsers = (response.users || []).filter(
             (u: { _id: string; role: string; status: string }) =>
-              u.role === "planner" && u.status === "active",
+              ["planner", "user"].includes(u.role) && u.status === "active",
             //Exclude the signed-in planner
             // && u._id !== user?.id,
           );
@@ -3199,7 +3201,7 @@ const PlannerProjectWorkspace = () => {
                     mb: 2.5,
                   }}
                 >
-                  Upload Programs PDF
+                  Upload Programme PDF
                 </Typography>
 
                 <Box

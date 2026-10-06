@@ -68,6 +68,10 @@ interface User {
   email: string;
   role: string;
   status: string;
+  /* Projects the account can reach — granted directly or through an action
+     already assigned to them. A Super Admin carries allProjects instead. */
+  projectIds?: string[];
+  allProjects?: boolean;
 }
 
 interface Action {
@@ -322,12 +326,16 @@ const AdminActivities = () => {
       try {
         const res = await userAPI.getAll({ status: "active" });
         if (res.success) {
-          const activePlanners = (res.users || []).filter(
+          /* Planners run the work and Users own the actions handed to them,
+             so both belong here. Admins are left out on purpose: the PM
+             assigns and overrides, and owning the action as well would blur
+             who is accountable for closing it. */
+          const assignable = (res.users || []).filter(
             (user: User) =>
-              user.role === "planner" &&
+              ["planner", "user"].includes(user.role) &&
               user.status === "active",
           );
-          setUsers(activePlanners);
+          setUsers(assignable);
         }
       } catch (error) {
         console.error("Error fetching users:", error);
@@ -385,7 +393,15 @@ const AdminActivities = () => {
     );
   };
 
-  const assignableUsers = users.filter((u) => u.status === "active");
+  /* An action can only be handed to someone who can actually see the project
+     it sits on, so the list narrows to the project in view. */
+  const assignableUsers = users.filter(
+    (u) =>
+      u.status === "active" &&
+      (u.allProjects ||
+        !selectedProjectId ||
+        (u.projectIds || []).includes(selectedProjectId)),
+  );
 
   useEffect(() => {
     if (activities.length > 0 && programmeActions.length > 0) {
@@ -476,7 +492,7 @@ const AdminActivities = () => {
               const isCurrent = i === 0;
 
               const formatDate = (d: Date) =>
-                `${String(d.getDate()).padStart(2, "0")} ${d.toLocaleString("en-US", { month: "short" })}`;
+                `${String(d.getDate()).padStart(2, "0")} ${d.toLocaleString("en-GB", { month: "short" })}`;
 
               generatedWeeks.push({
                 week: i + 1,

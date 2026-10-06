@@ -89,6 +89,10 @@ interface User {
   email: string;
   role: string;
   status: string;
+  /* Projects the account can reach — granted directly or through an action
+     already assigned to them. A Super Admin carries allProjects instead. */
+  projectIds?: string[];
+  allProjects?: boolean;
 }
 
 interface Programme {
@@ -184,6 +188,14 @@ const AdminActions = () => {
     hasPrevPage: false,
   });
   const [users, setUsers] = useState<User[]>([]);
+  /* An action can only be handed to someone who can actually see the project
+     it sits on, so the list narrows to the project chosen on the form. */
+  const assignableUsers = users.filter(
+    (u) =>
+      u.allProjects ||
+      !formData.selectedProject ||
+      (u.projectIds || []).includes(formData.selectedProject),
+  );
 
   const fetchActions = async (projectId?: string) => {
     try {
@@ -241,8 +253,14 @@ const AdminActions = () => {
           }
         }
 
+        /* Planners run the work and Users own the actions handed to them,
+           so both belong here. Admins are left out on purpose: the PM assigns
+           and overrides, and owning the action as well would blur who is
+           accountable for closing it. */
         const activeUsers = (usersRes.users || []).filter(
-          (user: User) => user.role === "planner" && user.status === "active",
+          (user: User) =>
+            ["planner", "user"].includes(user.role) &&
+            user.status === "active",
         );
         setUsers(activeUsers);
 
@@ -2357,11 +2375,11 @@ const AdminActions = () => {
                   }}
                 >
                   <MenuItem value="" disabled>
-                    {users.length === 0
+                    {assignableUsers.length === 0
                       ? "No users available"
                       : "Select assignee..."}
                   </MenuItem>
-                  {users.map((user) => (
+                  {assignableUsers.map((user) => (
                     <MenuItem key={user._id} value={user._id}>
                       {user.name}
                     </MenuItem>
