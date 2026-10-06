@@ -124,7 +124,9 @@ const UserManagementView = ({
   const [editRole, setEditRole] = useState<"admin" | "planner" | "user">(
     "user",
   );
-  const [editStatus, setEditStatus] = useState<"active" | "blocked">("active");
+  const [editStatus, setEditStatus] = useState<
+    "active" | "blocked" | "pending"
+  >("active");
   const [editProjects, setEditProjects] = useState<string[]>([]);
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState("");
@@ -216,7 +218,16 @@ const UserManagementView = ({
     setEditName(user.name);
     setEditEmail(user.email);
     setEditRole(user.role);
-    setEditStatus(user.status === "blocked" ? "blocked" : "active");
+    /* Carried across as it stands. Collapsing anything that was not blocked
+       into "active" quietly activated a pending account the moment someone
+       corrected a name on it, before the invitation had been accepted. */
+    setEditStatus(
+      user.status === "blocked"
+        ? "blocked"
+        : user.status === "pending"
+          ? "pending"
+          : "active",
+    );
     /* Only the directly granted projects are editable here — access derived
        from assigned actions is computed on read and is not stored. */
     setEditProjects(user.grantedProjectIds || []);
@@ -1712,23 +1723,25 @@ const UserManagementView = ({
                 mt: 2,
               }}
             >
-              Email Address <span style={{ color: COLORS.red }}>*</span>
+              Email Address
             </Typography>
+            {/* The address identifies the account and the invitation is tied to
+                it, so it is shown rather than edited — a new address means a
+                new invitation. */}
             <Box
               component="input"
               type="email"
-              placeholder="e.g. john.smith@company.com"
+              readOnly
               value={editEmail}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                setEditEmail(e.target.value)
-              }
+              title="The email address cannot be changed. Invite the person again under a new address."
               sx={{
                 width: "100%",
                 padding: "12px 14px",
                 background: COLORS.bgPrimary,
                 border: `1px solid ${COLORS.white}`,
                 borderRadius: "8px",
-                color: COLORS.textPrimary,
+                color: COLORS.textMuted,
+                cursor: "not-allowed",
                 fontSize: "14px",
                 outline: "none",
                 boxSizing: "border-box",
@@ -2001,8 +2014,18 @@ const UserManagementView = ({
               Status <span style={{ color: COLORS.red }}>*</span>
             </Typography>
             <Box sx={{ display: "flex", gap: 2, mt: 1 }}>
+              {/* An account stays Pending until the person accepts; only they
+                  can end that, so it is shown rather than offered. */}
               <Box
-                onClick={() => setEditStatus("active")}
+                onClick={() => {
+                  if (editStatus === "pending") return;
+                  setEditStatus("active");
+                }}
+                title={
+                  editStatus === "pending"
+                    ? "Waiting for the invitation to be accepted"
+                    : undefined
+                }
                 sx={{
                   flex: 1,
                   display: "flex",
@@ -2011,13 +2034,23 @@ const UserManagementView = ({
                   gap: 1,
                   p: 1.5,
                   bgcolor: COLORS.bgPrimary,
-                  border: `1px solid ${editStatus === "active" ? COLORS.green : COLORS.white}`,
+                  border: `1px solid ${
+                    editStatus === "pending"
+                      ? COLORS.amber
+                      : editStatus === "active"
+                        ? COLORS.green
+                        : COLORS.white
+                  }`,
                   borderRadius: "8px",
-                  cursor: "pointer",
+                  cursor: editStatus === "pending" ? "default" : "pointer",
                   transition: "border-color 0.2s ease",
                   "&:hover": {
                     borderColor:
-                      editStatus === "active" ? COLORS.green : COLORS.textMuted,
+                      editStatus === "pending"
+                        ? COLORS.amber
+                        : editStatus === "active"
+                          ? COLORS.green
+                          : COLORS.textMuted,
                   },
                 }}
               >
@@ -2026,20 +2059,23 @@ const UserManagementView = ({
                     width: 10,
                     height: 10,
                     borderRadius: "50%",
-                    bgcolor: COLORS.green,
+                    bgcolor:
+                      editStatus === "pending" ? COLORS.amber : COLORS.green,
                   }}
                 />
                 <Typography
                   sx={{
                     color:
-                      editStatus === "active"
-                        ? COLORS.green
-                        : COLORS.textSecondary,
+                      editStatus === "pending"
+                        ? COLORS.amber
+                        : editStatus === "active"
+                          ? COLORS.green
+                          : COLORS.textSecondary,
                     fontSize: "14px",
                     fontWeight: 500,
                   }}
                 >
-                  Active
+                  {editStatus === "pending" ? "Pending" : "Active"}
                 </Typography>
               </Box>
               <Box

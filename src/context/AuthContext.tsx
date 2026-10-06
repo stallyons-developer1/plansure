@@ -3,6 +3,7 @@ import {
   useContext,
   useState,
   useCallback,
+  useEffect,
   type ReactNode,
 } from "react";
 import { authAPI } from "../services/api";
@@ -49,6 +50,54 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   });
 
   const [isLoading, setIsLoading] = useState(false);
+
+  /* The cached copy is written at sign-in and nowhere else, so a role changed
+     afterwards left the screens showing one thing and the server enforcing
+     another — the account looked like an admin until it signed out and back
+     in. Re-reading the profile on load, and whenever the tab is brought back
+     to the front, keeps the two in step. */
+  useEffect(() => {
+    if (!token) return;
+
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const profile = await authAPI.getProfile();
+        if (cancelled || !profile?._id) return;
+        setUser((prev) => {
+          const next: User = {
+            id: profile._id,
+            name: profile.name,
+            email: profile.email,
+            role: profile.role as UserRole,
+            isSuperAdmin: !!profile.isSuperAdmin,
+          };
+          if (
+            prev &&
+            prev.role === next.role &&
+            prev.isSuperAdmin === next.isSuperAdmin &&
+            prev.name === next.name &&
+            prev.email === next.email
+          ) {
+            return prev;
+          }
+          localStorage.setItem("plansure_user", JSON.stringify(next));
+          return next;
+        });
+      } catch {
+        // An expired or revoked token is handled by the API layer; nothing to
+        // do here beyond leaving the cached copy alone.
+      }
+    };
+
+    refresh();
+    const onFocus = () => refresh();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [token]);
 
   const login = useCallback(
     async (email: string, password: string): Promise<LoginResponse> => {

@@ -399,6 +399,7 @@ export const userAPI = {
     id: string,
     data: {
       name?: string;
+      email?: string;
       role?: string;
       projects?: string[];
       status?: string;
