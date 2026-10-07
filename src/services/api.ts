@@ -367,6 +367,8 @@ export const userAPI = {
     isSuperAdmin?: boolean;
     projectId?: string;
     projectIds?: string[];
+    /* A project and the role held on it, one entry each. */
+    memberships?: { project: string; role: string }[];
   }) => {
     const response = await api.post("/users/invite", data);
     return response.data;
@@ -402,6 +404,7 @@ export const userAPI = {
       email?: string;
       role?: string;
       projects?: string[];
+      memberships?: { project: string; role: string }[];
       status?: string;
     },
   ) => {
@@ -419,8 +422,9 @@ export const userAPI = {
     return response.data;
   },
 
-  resendInvite: async (id: string) => {
-    const response = await api.post(`/users/${id}/resend-invite`);
+  /** Omit the role to resend every outstanding invitation for the account. */
+  resendInvite: async (id: string, role?: string) => {
+    const response = await api.post(`/users/${id}/resend-invite`, { role });
     return response.data;
   },
 };
@@ -481,8 +485,11 @@ export const actionAPI = {
   },
 
   /** Toggles completion. `reason` is an optional note explaining the outcome. */
-  complete: async (id: string, reason?: string) => {
-    const response = await api.patch(`/actions/${id}/complete`, { reason });
+  complete: async (id: string, reason?: string, completionDate?: string) => {
+    const response = await api.patch(`/actions/${id}/complete`, {
+      reason,
+      completionDate,
+    });
     return response.data;
   },
 

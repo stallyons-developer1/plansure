@@ -81,9 +81,7 @@ const ActivitiesSummary = ({
                 bgcolor: COLORS.green,
               }}
             />
-            <Typography
-              sx={{ color: COLORS.textSecondary, fontSize: "13px" }}
-            >
+            <Typography sx={{ color: COLORS.textSecondary, fontSize: "13px" }}>
               Green:
             </Typography>
             <Typography
@@ -105,9 +103,7 @@ const ActivitiesSummary = ({
                 bgcolor: COLORS.amber,
               }}
             />
-            <Typography
-              sx={{ color: COLORS.textSecondary, fontSize: "13px" }}
-            >
+            <Typography sx={{ color: COLORS.textSecondary, fontSize: "13px" }}>
               Amber:
             </Typography>
             <Typography
@@ -129,9 +125,7 @@ const ActivitiesSummary = ({
                 bgcolor: COLORS.red,
               }}
             />
-            <Typography
-              sx={{ color: COLORS.textSecondary, fontSize: "13px" }}
-            >
+            <Typography sx={{ color: COLORS.textSecondary, fontSize: "13px" }}>
               Red:
             </Typography>
             <Typography
@@ -162,9 +156,7 @@ const ActivitiesSummary = ({
                 height: 18,
               }}
             />
-            <Typography
-              sx={{ color: COLORS.textSecondary, fontSize: "13px" }}
-            >
+            <Typography sx={{ color: COLORS.textSecondary, fontSize: "13px" }}>
               Blocked:
             </Typography>
             <Typography

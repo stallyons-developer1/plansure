@@ -160,6 +160,12 @@ const PlannerActions = () => {
   const [actionToComplete, setActionToComplete] = useState<Action | null>(null);
   const [completeLoading, setCompleteLoading] = useState(false);
   const [completeNote, setCompleteNote] = useState("");
+  /* Rob asked for the date the work was actually finished, which is often
+     before anyone gets to the app. Today is the common case, so it starts
+     there. */
+  const [completeDate, setCompleteDate] = useState(
+    new Date().toLocaleDateString("en-CA"),
+  );
 
   const [formData, setFormData] = useState({
     selectedProject: "",
@@ -489,6 +495,7 @@ const PlannerActions = () => {
     setCompleteConfirmOpen(false);
     setActionToComplete(null);
     setCompleteNote("");
+    setCompleteDate(new Date().toLocaleDateString("en-CA"));
   };
 
   const handleConfirmComplete = async () => {
@@ -499,6 +506,7 @@ const PlannerActions = () => {
       const response = await actionAPI.complete(
         actionToComplete._id,
         completeNote,
+        completeDate,
       );
       if (response.success) {
         await fetchActions();
@@ -1361,11 +1369,11 @@ const PlannerActions = () => {
                         title={
                           action.status === "Completed"
                             ? "Already completed"
-                                : action.status === "PM Override"
-                                  ? "Force-closed by PM Override — cannot be completed"
-                            : !canCompleteAction(action)
-                              ? "Only the assignee or the person who raised it can complete this action"
-                              : "Mark as complete"
+                            : action.status === "PM Override"
+                              ? "Force-closed by PM Override — cannot be completed"
+                              : !canCompleteAction(action)
+                                ? "Only the assignee or the person who raised it can complete this action"
+                                : "Mark as complete"
                         }
                         sx={{
                           width: 18,
@@ -3077,6 +3085,52 @@ const PlannerActions = () => {
               }}
             />
           </Box>
+          <Box sx={{ mt: 2 }}>
+            <Typography
+              sx={{
+                color: COLORS.textSecondary,
+                fontSize: "12px",
+                fontWeight: 500,
+                mb: 0.5,
+              }}
+            >
+              Completion Date{" "}
+              <Box component="span" sx={{ color: COLORS.red }}>
+                *
+              </Box>
+            </Typography>
+            <TextField
+              fullWidth
+              type="date"
+              value={completeDate}
+              onChange={(e) => setCompleteDate(e.target.value)}
+              slotProps={{
+                htmlInput: { max: new Date().toLocaleDateString("en-CA") },
+              }}
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  bgcolor: COLORS.bgPrimary,
+                  borderRadius: "8px",
+                  "& fieldset": { borderColor: COLORS.border },
+                  "&:hover fieldset": { borderColor: COLORS.border },
+                  "&.Mui-focused fieldset": {
+                    borderColor: COLORS.blue,
+                    borderWidth: 1,
+                  },
+                },
+                "& .MuiOutlinedInput-input": {
+                  color: completeDate ? COLORS.textPrimary : COLORS.textMuted,
+                  fontSize: "14px",
+                  py: 1.2,
+                  "&::-webkit-calendar-picker-indicator": {
+                    filter: "invert(1)",
+                    cursor: "pointer",
+                    opacity: 0.6,
+                  },
+                },
+              }}
+            />
+          </Box>
         </DialogContent>
 
         <DialogActions
@@ -3108,7 +3162,11 @@ const PlannerActions = () => {
           </Button>
           <Button
             onClick={handleConfirmComplete}
-            disabled={completeLoading || completeNote.trim().length < 10}
+            disabled={
+              completeLoading ||
+              completeNote.trim().length < 10 ||
+              !completeDate
+            }
             sx={{
               color: COLORS.white,
               bgcolor: COLORS.green,

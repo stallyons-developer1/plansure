@@ -715,69 +715,69 @@ const DashboardLayout = ({
                 </Box>
               ) : (
                 notifications.map((notification) => (
-                <Box
-                  key={notification._id}
-                  onClick={() => handleNotificationItemClick(notification)}
-                  sx={{
-                    p: 2,
-                    borderBottom: `1px solid ${COLORS.border}`,
-                    cursor: "pointer",
-                    bgcolor: notification.isRead
-                      ? "transparent"
-                      : "rgba(59, 130, 246, 0.05)",
-                    "&:hover": {
-                      bgcolor: COLORS.bgTertiary,
-                    },
-                  }}
-                >
                   <Box
+                    key={notification._id}
+                    onClick={() => handleNotificationItemClick(notification)}
                     sx={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "flex-start",
-                      mb: 0.5,
+                      p: 2,
+                      borderBottom: `1px solid ${COLORS.border}`,
+                      cursor: "pointer",
+                      bgcolor: notification.isRead
+                        ? "transparent"
+                        : "rgba(59, 130, 246, 0.05)",
+                      "&:hover": {
+                        bgcolor: COLORS.bgTertiary,
+                      },
                     }}
                   >
-                    <Typography
+                    <Box
                       sx={{
-                        color: COLORS.textPrimary,
-                        fontWeight: notification.isRead ? 400 : 600,
-                        fontSize: "14px",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "flex-start",
+                        mb: 0.5,
                       }}
                     >
-                      {notification.title}
-                    </Typography>
-                    {!notification.isRead && (
-                      <Box
+                      <Typography
                         sx={{
-                          width: 8,
-                          height: 8,
-                          borderRadius: "50%",
-                          bgcolor: COLORS.blue,
-                          flexShrink: 0,
-                          mt: 0.5,
+                          color: COLORS.textPrimary,
+                          fontWeight: notification.isRead ? 400 : 600,
+                          fontSize: "14px",
                         }}
-                      />
-                    )}
+                      >
+                        {notification.title}
+                      </Typography>
+                      {!notification.isRead && (
+                        <Box
+                          sx={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: "50%",
+                            bgcolor: COLORS.blue,
+                            flexShrink: 0,
+                            mt: 0.5,
+                          }}
+                        />
+                      )}
+                    </Box>
+                    <Typography
+                      sx={{
+                        color: COLORS.textMuted,
+                        fontSize: "13px",
+                        mb: 0.5,
+                      }}
+                    >
+                      {notification.message}
+                    </Typography>
+                    <Typography
+                      sx={{
+                        color: COLORS.textMuted,
+                        fontSize: "12px",
+                      }}
+                    >
+                      {timeAgo(notification.createdAt)}
+                    </Typography>
                   </Box>
-                  <Typography
-                    sx={{
-                      color: COLORS.textMuted,
-                      fontSize: "13px",
-                      mb: 0.5,
-                    }}
-                  >
-                    {notification.message}
-                  </Typography>
-                  <Typography
-                    sx={{
-                      color: COLORS.textMuted,
-                      fontSize: "12px",
-                    }}
-                  >
-                    {timeAgo(notification.createdAt)}
-                  </Typography>
-                </Box>
                 ))
               )}
             </Box>

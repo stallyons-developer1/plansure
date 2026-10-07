@@ -73,7 +73,10 @@ const UserExports = () => {
   const columns = "1.2fr 1.6fr 0.8fr 1.4fr 0.9fr 0.7fr";
 
   return (
-    <DashboardLayout title="Exports" subtitle="View and download issued outputs">
+    <DashboardLayout
+      title="Exports"
+      subtitle="View and download issued outputs"
+    >
       <Box
         sx={{
           bgcolor: COLORS.bgSecondary,
@@ -132,9 +135,7 @@ const UserExports = () => {
               </Box>
             ) : exports.length === 0 ? (
               <Box sx={{ py: 6, textAlign: "center" }}>
-                <Typography
-                  sx={{ color: COLORS.textMuted, fontSize: "14px" }}
-                >
+                <Typography sx={{ color: COLORS.textMuted, fontSize: "14px" }}>
                   No exports have been issued yet
                 </Typography>
               </Box>
@@ -199,7 +200,9 @@ const UserExports = () => {
                   </Box>
                   <Box
                     onClick={() =>
-                      downloadingId ? null : handleDownload(row._id, row.fileName)
+                      downloadingId
+                        ? null
+                        : handleDownload(row._id, row.fileName)
                     }
                     sx={{
                       display: "flex",

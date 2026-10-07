@@ -177,7 +177,6 @@ const entityTypes = [
   "System",
 ];
 
-
 const AuditLogs = () => {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);

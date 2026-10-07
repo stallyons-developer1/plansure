@@ -54,7 +54,14 @@ const ProjectHeader = ({
         }}
       >
         <Box>
-          <Box sx={{ display: "flex", alignItems: "center", mb: 0.75, flexWrap: "wrap" }}>
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              mb: 0.75,
+              flexWrap: "wrap",
+            }}
+          >
             <Typography
               component="span"
               sx={{
@@ -62,7 +69,9 @@ const ProjectHeader = ({
                 fontSize: { xs: "11px", sm: "12px" },
                 fontWeight: 400,
                 cursor: breadcrumb.onClick ? "pointer" : "default",
-                "&:hover": breadcrumb.onClick ? { textDecoration: "underline" } : {},
+                "&:hover": breadcrumb.onClick
+                  ? { textDecoration: "underline" }
+                  : {},
               }}
               onClick={breadcrumb.onClick}
             >
@@ -165,12 +174,14 @@ const ProjectHeader = ({
           </Box>
           <Box
             sx={{
-              bgcolor: (currentStep === 2 || currentStep === 3)
-                ? COLORS.blueBgMedium
-                : COLORS.bgTertiary,
-              color: (currentStep === 2 || currentStep === 3)
-                ? COLORS.blue
-                : COLORS.textSecondary,
+              bgcolor:
+                currentStep === 2 || currentStep === 3
+                  ? COLORS.blueBgMedium
+                  : COLORS.bgTertiary,
+              color:
+                currentStep === 2 || currentStep === 3
+                  ? COLORS.blue
+                  : COLORS.textSecondary,
               px: { xs: 1.5, sm: 2.5 },
               py: { xs: 0.75, sm: 1 },
               borderRadius: "10px",
@@ -179,9 +190,10 @@ const ProjectHeader = ({
               letterSpacing: "0.5px",
               textTransform: "uppercase",
               whiteSpace: "nowrap",
-              border: (currentStep === 2 || currentStep === 3)
-                ? `1px solid ${COLORS.blue}`
-                : "none",
+              border:
+                currentStep === 2 || currentStep === 3
+                  ? `1px solid ${COLORS.blue}`
+                  : "none",
             }}
           >
             {steps[currentStep - 1]}

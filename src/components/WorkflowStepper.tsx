@@ -67,7 +67,11 @@ const StepIndicator = ({
   </Box>
 );
 
-const WorkflowStepper = ({ steps, currentStep, onStepClick }: WorkflowStepperProps) => {
+const WorkflowStepper = ({
+  steps,
+  currentStep,
+  onStepClick,
+}: WorkflowStepperProps) => {
   return (
     <Box
       sx={{

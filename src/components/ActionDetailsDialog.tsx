@@ -45,7 +45,6 @@ interface ActionDetail {
   createdBy?: { _id?: string; name?: string };
   isFromClosedWeek?: boolean;
   linkedActivity?: { activityId?: string; activityName?: string };
-  linkedActivityOwnerName?: string;
 }
 
 /* "Aug 19, 2026 03:00 PM" — matches the workspace dialogs. */
@@ -160,6 +159,11 @@ const ActionDetailsDialog = ({
   const [error, setError] = useState("");
   const [action, setAction] = useState<ActionDetail | null>(null);
   const [note, setNote] = useState("");
+  /* The date the work was finished, which is often before anyone opens this
+     dialog. Starts at today, the common case. */
+  const [completeDate, setCompleteDate] = useState(
+    new Date().toLocaleDateString("en-CA"),
+  );
   const [completing, setCompleting] = useState(false);
   const [completeError, setCompleteError] = useState("");
 
@@ -183,7 +187,7 @@ const ActionDetailsDialog = ({
     setCompleting(true);
     setCompleteError("");
     try {
-      const response = await actionAPI.complete(actionId, note);
+      const response = await actionAPI.complete(actionId, note, completeDate);
       if (response?.success) {
         onCompleted?.();
         onClose();
@@ -209,6 +213,7 @@ const ActionDetailsDialog = ({
       setError("");
       setAction(null);
       setNote("");
+      setCompleteDate(new Date().toLocaleDateString("en-CA"));
       setCompleteError("");
       try {
         const response = await actionAPI.getById(actionId);
@@ -313,9 +318,7 @@ const ActionDetailsDialog = ({
             </Typography>
           </Box>
         ) : action ? (
-          <Box
-            sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}
-          >
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
             <ReadOnlyField
               label="Linked Activity"
               value={action.linkedActivity?.activityName}
@@ -352,10 +355,6 @@ const ActionDetailsDialog = ({
               sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}
             >
               <ReadOnlyField label="Status" value={action.status} />
-              <ReadOnlyField
-                label="Owner"
-                value={action.linkedActivityOwnerName || "Unassigned"}
-              />
             </Box>
 
             {/* Optional note captured when the action was completed. Shown
@@ -424,6 +423,47 @@ const ActionDetailsDialog = ({
                     },
                   }}
                 />
+                <Typography
+                  sx={{
+                    color: COLORS.border,
+                    fontSize: "12px",
+                    fontWeight: 500,
+                    mb: 0.5,
+                    mt: 2,
+                  }}
+                >
+                  Completion Date
+                </Typography>
+                <TextField
+                  fullWidth
+                  type="date"
+                  value={completeDate}
+                  onChange={(e) => setCompleteDate(e.target.value)}
+                  slotProps={{
+                    htmlInput: { max: new Date().toLocaleDateString("en-CA") },
+                  }}
+                  sx={{
+                    "& .MuiOutlinedInput-root": {
+                      bgcolor: COLORS.bgPrimary,
+                      borderRadius: "8px",
+                      "& fieldset": { borderColor: COLORS.white },
+                      "&:hover fieldset": { borderColor: COLORS.textMuted },
+                      "&.Mui-focused fieldset": { borderColor: COLORS.blue },
+                    },
+                    "& .MuiOutlinedInput-input": {
+                      color: completeDate
+                        ? COLORS.textPrimary
+                        : COLORS.textMuted,
+                      fontSize: "14px",
+                      py: 1.2,
+                      "&::-webkit-calendar-picker-indicator": {
+                        filter: "invert(1)",
+                        cursor: "pointer",
+                        opacity: 0.6,
+                      },
+                    },
+                  }}
+                />
                 {completeError && (
                   <Typography
                     sx={{ color: "#ef4444", fontSize: "13px", mt: 1 }}
@@ -457,7 +497,7 @@ const ActionDetailsDialog = ({
           </Button>
           <Button
             onClick={handleComplete}
-            disabled={completing}
+            disabled={completing || !completeDate}
             sx={{
               color: COLORS.white,
               bgcolor: COLORS.green,

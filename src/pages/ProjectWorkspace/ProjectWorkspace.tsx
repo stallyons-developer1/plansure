@@ -236,6 +236,12 @@ const ProjectWorkspace = () => {
     title: string;
   } | null>(null);
   const [completeNote, setCompleteNote] = useState("");
+  /* Rob asked for the date the work was actually finished, which is often
+     before anyone gets to the app. Today is the common case, so it starts
+     there. */
+  const [completeDate, setCompleteDate] = useState(
+    new Date().toLocaleDateString("en-CA"),
+  );
   const [completeLoading, setCompleteLoading] = useState(false);
 
   const handleOpenCompleteConfirm = (action: {
@@ -244,6 +250,7 @@ const ProjectWorkspace = () => {
   }) => {
     setActionToComplete(action);
     setCompleteNote("");
+    setCompleteDate(new Date().toLocaleDateString("en-CA"));
     setCompleteConfirmOpen(true);
   };
 
@@ -251,6 +258,7 @@ const ProjectWorkspace = () => {
     setCompleteConfirmOpen(false);
     setActionToComplete(null);
     setCompleteNote("");
+    setCompleteDate(new Date().toLocaleDateString("en-CA"));
   };
 
   const handleConfirmComplete = async () => {
@@ -260,6 +268,7 @@ const ProjectWorkspace = () => {
       const response = await actionAPI.complete(
         actionToComplete._id,
         completeNote,
+        completeDate,
       );
       if (response?.success) {
         if (programmeId) {
@@ -1494,7 +1503,11 @@ const ProjectWorkspace = () => {
               new Date(a.dueDate) < today;
 
             const stats = [
-              { label: "Total", value: projectActions.length, color: COLORS.textPrimary },
+              {
+                label: "Total",
+                value: projectActions.length,
+                color: COLORS.textPrimary,
+              },
               {
                 label: "Open",
                 value: projectActions.filter((a) => a.status === "Open").length,
@@ -1577,7 +1590,11 @@ const ProjectWorkspace = () => {
                       }}
                     >
                       <Typography
-                        sx={{ color: stat.color, fontSize: 24, fontWeight: 600 }}
+                        sx={{
+                          color: stat.color,
+                          fontSize: 24,
+                          fontWeight: 600,
+                        }}
                       >
                         {stat.value}
                       </Typography>
@@ -1875,7 +1892,8 @@ const ProjectWorkspace = () => {
             const abs = weeklyControl?.actionsByStatus;
             const req = weeklyControl?.requiredActionsByStatus;
             const info = weeklyControl?.weekInfo;
-            const cycleStatus = st?.cycleStatus || steps[currentStep - 1] || "-";
+            const cycleStatus =
+              st?.cycleStatus || steps[currentStep - 1] || "-";
             const canStart = currentStep === 2;
             const openRequired = (req?.open ?? 0) + (req?.inProgress ?? 0);
 
@@ -1894,36 +1912,89 @@ const ProjectWorkspace = () => {
             };
 
             const stats = [
-              { label: "Cycle Status", value: cycleStatus, color: COLORS.textPrimary },
-              { label: "In Lookahead", value: st?.inLookahead ?? 0, color: COLORS.blue },
+              {
+                label: "Cycle Status",
+                value: cycleStatus,
+                color: COLORS.textPrimary,
+              },
+              {
+                label: "In Lookahead",
+                value: st?.inLookahead ?? 0,
+                color: COLORS.blue,
+              },
               { label: "Ready", value: st?.ready ?? 0, color: COLORS.green },
-              { label: "Completed", value: st?.complete ?? 0, color: COLORS.blue },
+              {
+                label: "Completed",
+                value: st?.complete ?? 0,
+                color: COLORS.blue,
+              },
               { label: "Blocked", value: st?.blocked ?? 0, color: COLORS.red },
-              { label: "Open Actions", value: st?.openActions ?? 0, color: COLORS.blue },
+              {
+                label: "Open Actions",
+                value: st?.openActions ?? 0,
+                color: COLORS.blue,
+              },
               { label: "Overdue", value: st?.overdue ?? 0, color: COLORS.red },
               {
                 label: "Ready to Close",
                 value: st?.readyToClose ?? "-",
-                color:
-                  st?.readyToClose === "Yes" ? COLORS.green : COLORS.red,
+                color: st?.readyToClose === "Yes" ? COLORS.green : COLORS.red,
               },
             ];
 
             /* Colours and wording taken from the Planner's chart so the two
                are the same picture. */
             const ragBands = [
-              { label: "Green", value: rag?.green ?? 0, color: "#22C55E", tooltip: "Ready - Activities that are ready to proceed" },
-              { label: "Amber", value: rag?.amber ?? 0, color: "#F59E0B", tooltip: "At Risk - Activities that are at risk or overdue" },
-              { label: "Red", value: rag?.red ?? 0, color: "#EF4444", tooltip: "Blocked - Activities that are blocked" },
+              {
+                label: "Green",
+                value: rag?.green ?? 0,
+                color: "#22C55E",
+                tooltip: "Ready - Activities that are ready to proceed",
+              },
+              {
+                label: "Amber",
+                value: rag?.amber ?? 0,
+                color: "#F59E0B",
+                tooltip: "At Risk - Activities that are at risk or overdue",
+              },
+              {
+                label: "Red",
+                value: rag?.red ?? 0,
+                color: "#EF4444",
+                tooltip: "Blocked - Activities that are blocked",
+              },
             ];
             const grey = rag?.grey ?? 0;
             const ragTotal = ragBands.reduce((sum, d) => sum + d.value, 0);
 
             const bars = [
-              { label: "Open", value: abs?.open ?? 0, color: COLORS.blue, tooltip: "Open - Actions that are newly created and need to be addressed" },
-              { label: "Ready", value: abs?.inProgress ?? 0, color: COLORS.amber, tooltip: "Ready - Actions that are currently in progress" },
-              { label: "Completed", value: abs?.closed ?? 0, color: COLORS.green, tooltip: "Completed - Actions that have been successfully completed" },
-              { label: "Overdue", value: abs?.overdue ?? 0, color: COLORS.red, tooltip: "Overdue - Actions that are past their due date and need immediate attention" },
+              {
+                label: "Open",
+                value: abs?.open ?? 0,
+                color: COLORS.blue,
+                tooltip:
+                  "Open - Actions that are newly created and need to be addressed",
+              },
+              {
+                label: "Ready",
+                value: abs?.inProgress ?? 0,
+                color: COLORS.amber,
+                tooltip: "Ready - Actions that are currently in progress",
+              },
+              {
+                label: "Completed",
+                value: abs?.closed ?? 0,
+                color: COLORS.green,
+                tooltip:
+                  "Completed - Actions that have been successfully completed",
+              },
+              {
+                label: "Overdue",
+                value: abs?.overdue ?? 0,
+                color: COLORS.red,
+                tooltip:
+                  "Overdue - Actions that are past their due date and need immediate attention",
+              },
             ];
             const maxValue = Math.max(...bars.map((b) => b.value), 1);
             const yAxisMax = Math.max(Math.ceil(maxValue * 1.2), 4);
@@ -2169,7 +2240,11 @@ const ProjectWorkspace = () => {
                         ))}
                       </Box>
                       <Box
-                        sx={{ flex: 1, display: "flex", flexDirection: "column" }}
+                        sx={{
+                          flex: 1,
+                          display: "flex",
+                          flexDirection: "column",
+                        }}
                       >
                         <Box
                           sx={{
@@ -2270,7 +2345,12 @@ const ProjectWorkspace = () => {
                 <Box sx={panel}>
                   <Typography sx={heading}>Cycle Control</Typography>
                   <Typography
-                    sx={{ color: COLORS.textSecondary, fontSize: 13, mt: -1.5, mb: 2 }}
+                    sx={{
+                      color: COLORS.textSecondary,
+                      fontSize: 13,
+                      mt: -1.5,
+                      mb: 2,
+                    }}
                   >
                     {currentStep >= 3
                       ? "Execution in progress. Monitor activities and actions."
@@ -2507,6 +2587,52 @@ const ProjectWorkspace = () => {
               }}
             />
           </Box>
+          <Box sx={{ mt: 2 }}>
+            <Typography
+              sx={{
+                color: COLORS.textSecondary,
+                fontSize: "12px",
+                fontWeight: 500,
+                mb: 0.5,
+              }}
+            >
+              Completion Date{" "}
+              <Box component="span" sx={{ color: COLORS.red }}>
+                *
+              </Box>
+            </Typography>
+            <TextField
+              fullWidth
+              type="date"
+              value={completeDate}
+              onChange={(e) => setCompleteDate(e.target.value)}
+              slotProps={{
+                htmlInput: { max: new Date().toLocaleDateString("en-CA") },
+              }}
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  bgcolor: COLORS.bgPrimary,
+                  borderRadius: "8px",
+                  "& fieldset": { borderColor: COLORS.border },
+                  "&:hover fieldset": { borderColor: COLORS.border },
+                  "&.Mui-focused fieldset": {
+                    borderColor: COLORS.blue,
+                    borderWidth: 1,
+                  },
+                },
+                "& .MuiOutlinedInput-input": {
+                  color: completeDate ? COLORS.textPrimary : COLORS.textMuted,
+                  fontSize: "14px",
+                  py: 1.2,
+                  "&::-webkit-calendar-picker-indicator": {
+                    filter: "invert(1)",
+                    cursor: "pointer",
+                    opacity: 0.6,
+                  },
+                },
+              }}
+            />
+          </Box>
         </DialogContent>
 
         <DialogActions sx={{ px: 3, py: 2, gap: 1.5 }}>
@@ -2529,7 +2655,11 @@ const ProjectWorkspace = () => {
           </Button>
           <Button
             onClick={handleConfirmComplete}
-            disabled={completeLoading || completeNote.trim().length < 10}
+            disabled={
+              completeLoading ||
+              completeNote.trim().length < 10 ||
+              !completeDate
+            }
             sx={{
               color: COLORS.white,
               bgcolor: COLORS.green,

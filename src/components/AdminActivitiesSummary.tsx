@@ -81,9 +81,7 @@ const AdminActivitiesSummary = ({
                 bgcolor: COLORS.green,
               }}
             />
-            <Typography
-              sx={{ color: COLORS.textSecondary, fontSize: "13px" }}
-            >
+            <Typography sx={{ color: COLORS.textSecondary, fontSize: "13px" }}>
               Ready:
             </Typography>
             <Typography
@@ -105,9 +103,7 @@ const AdminActivitiesSummary = ({
                 bgcolor: COLORS.amber,
               }}
             />
-            <Typography
-              sx={{ color: COLORS.textSecondary, fontSize: "13px" }}
-            >
+            <Typography sx={{ color: COLORS.textSecondary, fontSize: "13px" }}>
               At Risk:
             </Typography>
             <Typography
@@ -129,9 +125,7 @@ const AdminActivitiesSummary = ({
                 bgcolor: COLORS.blue,
               }}
             />
-            <Typography
-              sx={{ color: COLORS.textSecondary, fontSize: "13px" }}
-            >
+            <Typography sx={{ color: COLORS.textSecondary, fontSize: "13px" }}>
               Complete:
             </Typography>
             <Typography
@@ -162,9 +156,7 @@ const AdminActivitiesSummary = ({
                 height: 18,
               }}
             />
-            <Typography
-              sx={{ color: COLORS.textSecondary, fontSize: "13px" }}
-            >
+            <Typography sx={{ color: COLORS.textSecondary, fontSize: "13px" }}>
               Blocked:
             </Typography>
             <Typography

@@ -272,7 +272,7 @@ const PlannerProjectWorkspace = () => {
     // PM Override is terminal: the action was force-closed against a recorded
     // reason, so it cannot then be marked complete by anyone, admins included.
     if (action.status === "PM Override") return false;
-    if (user?.role === "admin") return true;
+    if (roleHere === "admin") return true;
     const userId = String(user?.id || "");
     if (!userId) return false;
     return (
@@ -281,16 +281,29 @@ const PlannerProjectWorkspace = () => {
     );
   };
 
+  const [project, setProject] = useState<ProjectData | null>(null);
+  /* The role held on this project, which is not the role the account carries
+     elsewhere: one person can run this programme and only watch the next.
+     Falls back to the account's own role so an older response, or a screen
+     opened before the project loads, behaves as it always did. */
+  const roleHere: string | undefined =
+    (project as { myRole?: string } | null)?.myRole ?? user?.role;
+
   /* PM Override belongs to the PM, and the client's PM is the Admin account.
      A force-close is taken over somebody else's work, so unlike a normal
      closure it is not bound to the assignee. Mirrors canForceClose on the
      backend, and canPmOverride in the Admin workspace. */
-  const canPmOverride = user?.role === "admin";
+  /* Raising, reassigning and editing an action belong to whoever runs this
+     project. The API refuses the rest; this keeps the controls off a screen
+     that cannot use them, which matters now the same account can be a Planner
+     here and only a User on the next project. */
+  const canManageActions = roleHere === "admin" || roleHere === "planner";
+
+  const canPmOverride = roleHere === "admin";
 
   /* The open actions the PM may force-close. */
   const isMineToOverride = (action: { status: string }) =>
     isOverridableAction(action) && canPmOverride;
-  const [project, setProject] = useState<ProjectData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState(() => {
     const params = new URLSearchParams(location.search);
@@ -486,6 +499,12 @@ const PlannerProjectWorkspace = () => {
   } | null>(null);
   const [completeLoading, setCompleteLoading] = useState(false);
   const [completeNote, setCompleteNote] = useState("");
+  /* Rob asked for the date the work was actually finished, which is often
+     before anyone gets to the app. Today is the common case, so it starts
+     there. */
+  const [completeDate, setCompleteDate] = useState(
+    new Date().toLocaleDateString("en-CA"),
+  );
   const [users, setUsers] = useState<
     Array<{ _id: string; name: string; email: string; role: string }>
   >([]);
@@ -744,7 +763,7 @@ const PlannerProjectWorkspace = () => {
         const programme = response.programme;
         /* Superseded by an acknowledged closure: the workspace waits for the
            next upload rather than showing the closed week's programme. */
-        if (programme.awaitingNextUpload && user?.role === "admin") {
+        if (programme.awaitingNextUpload && roleHere === "admin") {
           setUploadedProgramme(null);
           setLookaheadData(null);
           setWeeklyControlData(null);
@@ -844,7 +863,7 @@ const PlannerProjectWorkspace = () => {
         const response = await programmeAPI.getByProject(projectId);
         if (response.success && response.programme) {
           const programme = response.programme;
-          if (programme.awaitingNextUpload && user?.role === "admin") {
+          if (programme.awaitingNextUpload && roleHere === "admin") {
             setClosedWeekAck(null);
             setSupersededClosedCount(programme.closedWeeks?.length ?? 0);
             setSupersededWeek(programme.weekNumber ?? null);
@@ -1063,7 +1082,7 @@ const PlannerProjectWorkspace = () => {
      and the client's PM is the Admin account. The API refuses these for
      anyone else, so the controls are withheld here rather than failing on
      click. */
-  const canRunWeekClosure = user?.role === "admin";
+  const canRunWeekClosure = roleHere === "admin";
 
   const weekPendingClose = weeksStatus?.weeks.find(
     (w) => w.canClose,
@@ -1324,7 +1343,7 @@ const PlannerProjectWorkspace = () => {
   const todoDownloaded = !!uploadedProgramme?.plannerTodoGenerated;
   /* The Planner gives this confirmation; it is their assertion about their own
      work, so it sits where their Mark Close-Out Eligible button used to be. */
-  const canConfirmProgrammeUpdate = user?.role === "planner";
+  const canConfirmProgrammeUpdate = roleHere === "planner";
 
   const handleConfirmProgrammeUpdate = async () => {
     if (!uploadedProgramme?._id || confirmingUpdate) return;
@@ -1579,6 +1598,7 @@ const PlannerProjectWorkspace = () => {
     setCompleteConfirmOpen(false);
     setActionToComplete(null);
     setCompleteNote("");
+    setCompleteDate(new Date().toLocaleDateString("en-CA"));
   };
 
   const handleConfirmComplete = async () => {
@@ -1589,6 +1609,7 @@ const PlannerProjectWorkspace = () => {
       const response = await actionAPI.complete(
         actionToComplete._id,
         completeNote,
+        completeDate,
       );
       if (response.success) {
         if (projectId) {
@@ -2356,15 +2377,12 @@ const PlannerProjectWorkspace = () => {
       (weeklyControlData?.requiredActionsByStatus?.inProgress || 0),
   };
 
-  /* The activity's owner, looked up from the lookahead. Used read-only by the
-     Assign and Edit dialogs; lists that carry no owner resolve through here. */
+  /* The activity's owner, looked up from the lookahead, for lists and the
+     activity panel. The action dialogs no longer show it — Rob: "I think the
+     assignee is everything we need". */
   const ownerNameForActivity = (activityId?: string) =>
     lookaheadData?.activities?.find((a) => a.activityId === activityId)
       ?.ownerName || uploaderName;
-
-  const editingActionOwnerName = ownerNameForActivity(
-    editingAction?.linkedActivity,
-  );
 
   const handleStepClick = (_stepNumber: number) => {};
 
@@ -3800,34 +3818,44 @@ const PlannerProjectWorkspace = () => {
                 <Box sx={{ mb: 3 }}>
                   <ActivitiesTable
                     activities={pageItems}
-                    onAssignClick={(a) =>
-                      openAssignChoice({
-                        id: a.id,
-                        name: a.name,
-                        startDate: a.startDate,
-                        endDate: a.endDate,
-                        ownerName: a.owner?.name,
-                      })
+                    onAssignClick={
+                      !canManageActions
+                        ? undefined
+                        : (a) =>
+                            openAssignChoice({
+                              id: a.id,
+                              name: a.name,
+                              startDate: a.startDate,
+                              endDate: a.endDate,
+                              ownerName: a.owner?.name,
+                            })
                     }
-                    onAddActionClick={(a) =>
-                      handleOpenAssignModal({
-                        activityId: a.id,
-                        activityName: a.name,
-                        startDate: toDateInputFormat(a.startDate),
-                        finishDate: toDateInputFormat(a.endDate),
-                      })
+                    onAddActionClick={
+                      !canManageActions
+                        ? undefined
+                        : (a) =>
+                            handleOpenAssignModal({
+                              activityId: a.id,
+                              activityName: a.name,
+                              startDate: toDateInputFormat(a.startDate),
+                              finishDate: toDateInputFormat(a.endDate),
+                            })
                     }
                     onActionClick={(action) => setActionDetailId(action._id)}
-                    onReassignClick={(a) => {
-                      const action = projectActions.find(
-                        (ac) => ac._id === a._id,
-                      );
-                      handleOpenReassign({
-                        _id: a._id,
-                        title: a.title,
-                        assignee: action?.assignee,
-                      });
-                    }}
+                    onReassignClick={
+                      !canManageActions
+                        ? undefined
+                        : (a) => {
+                            const action = projectActions.find(
+                              (ac) => ac._id === a._id,
+                            );
+                            handleOpenReassign({
+                              _id: a._id,
+                              title: a.title,
+                              assignee: action?.assignee,
+                            });
+                          }
+                    }
                     currentPage={activitiesPage}
                     totalPages={totalPages}
                     totalActivities={mapped.length}
@@ -4429,94 +4457,97 @@ const PlannerProjectWorkspace = () => {
                             gap: 1.5,
                           }}
                         >
-                          <Box
-                            component="img"
-                            src={editIcon}
-                            onClick={() => {
-                              if (cycleStage !== "execution") {
-                                setToastMessage(
-                                  "Execution has not started yet. Please start execution first.",
-                                );
-                                setToastOpen(true);
-                                return;
-                              }
-                              if (action.status === "Completed") return;
-                              if (isActionFromClosedWeek(action)) {
-                                setToastMessage(
-                                  "Cannot edit action from a closed week.",
-                                );
-                                setToastOpen(true);
-                                return;
-                              }
-                              handleEditClick(
-                                {
-                                  id: action._id.slice(-6).toUpperCase(),
-                                  title: action.title,
-                                  description:
-                                    (
-                                      action as unknown as {
-                                        description?: string;
-                                      }
-                                    ).description || "",
-                                  linkedActivity:
-                                    action.linkedActivity?.activityId || "",
-                                  type: action.type,
-                                  assignee: {
-                                    initials: action.assignee?.name
-                                      ? getInitials(action.assignee.name)
-                                      : "NA",
-                                    name: action.assignee?.name || "Unassigned",
+                          {canManageActions && (
+                            <Box
+                              component="img"
+                              src={editIcon}
+                              onClick={() => {
+                                if (cycleStage !== "execution") {
+                                  setToastMessage(
+                                    "Execution has not started yet. Please start execution first.",
+                                  );
+                                  setToastOpen(true);
+                                  return;
+                                }
+                                if (action.status === "Completed") return;
+                                if (isActionFromClosedWeek(action)) {
+                                  setToastMessage(
+                                    "Cannot edit action from a closed week.",
+                                  );
+                                  setToastOpen(true);
+                                  return;
+                                }
+                                handleEditClick(
+                                  {
+                                    id: action._id.slice(-6).toUpperCase(),
+                                    title: action.title,
+                                    description:
+                                      (
+                                        action as unknown as {
+                                          description?: string;
+                                        }
+                                      ).description || "",
+                                    linkedActivity:
+                                      action.linkedActivity?.activityId || "",
+                                    type: action.type,
+                                    assignee: {
+                                      initials: action.assignee?.name
+                                        ? getInitials(action.assignee.name)
+                                        : "NA",
+                                      name:
+                                        action.assignee?.name || "Unassigned",
+                                    },
+                                    assigneeId:
+                                      (
+                                        action.assignee as unknown as {
+                                          _id?: string;
+                                        }
+                                      )?._id || "",
+                                    dueDate: action.dueDate
+                                      ? new Date(action.dueDate)
+                                          .toISOString()
+                                          .split("T")[0]
+                                      : "",
+                                    status: action.status,
+                                    priority: action.priority,
+                                    createdAt: action.createdAt,
+                                    updatedAt: action.updatedAt,
+                                    overrideReason: action.overrideReason,
                                   },
-                                  assigneeId:
-                                    (
-                                      action.assignee as unknown as {
-                                        _id?: string;
-                                      }
-                                    )?._id || "",
-                                  dueDate: action.dueDate
-                                    ? new Date(action.dueDate)
-                                        .toISOString()
-                                        .split("T")[0]
-                                    : "",
-                                  status: action.status,
-                                  priority: action.priority,
-                                  createdAt: action.createdAt,
-                                  updatedAt: action.updatedAt,
-                                  overrideReason: action.overrideReason,
-                                },
-                                index,
-                                action._id,
-                              );
-                            }}
-                            title={
-                              action.status === "Completed"
-                                ? "Cannot edit completed action"
-                                : isActionFromClosedWeek(action)
-                                  ? "Cannot edit action from closed week"
-                                  : "Edit action"
-                            }
-                            sx={{
-                              width: 16,
-                              height: 16,
-                              cursor:
-                                action.status === "Completed" ||
-                                isActionFromClosedWeek(action)
-                                  ? "not-allowed"
-                                  : "pointer",
-                              opacity:
-                                action.status === "Completed" ||
-                                isActionFromClosedWeek(action)
-                                  ? 0.3
-                                  : 0.7,
-                              "&:hover": {
+                                  index,
+                                  action._id,
+                                );
+                              }}
+                              title={
+                                action.status === "Completed"
+                                  ? "Cannot edit completed action"
+                                  : isActionFromClosedWeek(action)
+                                    ? "Cannot edit action from closed week"
+                                    : "Edit action"
+                              }
+                              sx={{
+                                width: 16,
+                                height: 16,
+                                cursor:
+                                  action.status === "Completed" ||
+                                  isActionFromClosedWeek(action)
+                                    ? "not-allowed"
+                                    : "pointer",
                                 opacity:
                                   action.status === "Completed" ||
                                   isActionFromClosedWeek(action)
                                     ? 0.3
-                                    : 1,
-                              },
-                            }}
-                          />
+                                    : 0.7,
+                                "&:hover": {
+                                  opacity:
+                                    action.status === "Completed" ||
+                                    isActionFromClosedWeek(action)
+                                      ? 0.3
+                                      : 1,
+                                },
+                              }}
+                            />
+                          )}
                           <Box
                             component="img"
                             src={viewIcon}
@@ -5577,14 +5608,17 @@ const PlannerProjectWorkspace = () => {
                 weeklyPlanPreview={weeklyControlData?.weeklyPlanPreview || []}
                 plannerToDo={weeklyControlData?.plannerToDo || []}
                 showPlannerTabs
-                onAssignClick={(activity) =>
-                  openAssignChoice({
-                    id: activity.activityId,
-                    name: activity.activityName,
-                    startDate: activity.startDate || "",
-                    endDate: activity.finishDate || "",
-                    ownerName: ownerNameForActivity(activity.activityId),
-                  })
+                onAssignClick={
+                  !canManageActions
+                    ? undefined
+                    : (activity) =>
+                        openAssignChoice({
+                          id: activity.activityId,
+                          name: activity.activityName,
+                          startDate: activity.startDate || "",
+                          endDate: activity.finishDate || "",
+                          ownerName: ownerNameForActivity(activity.activityId),
+                        })
                 }
                 onUnblockClick={async (activityId) => {
                   const progId =
@@ -6597,7 +6631,7 @@ const PlannerProjectWorkspace = () => {
                       ? programmeUpdateConfirmed
                         ? "Programme update confirmed. The PM can now mark this week Close-Out Eligible."
                         : "Download the Planner To-Do file, then confirm the programme update to enable the next close-out step for the PM."
-                      : user?.role !== "admin"
+                      : roleHere !== "admin"
                         ? "Only the PM can mark a week Close-Out Eligible."
                         : !programmeUpdateConfirmed
                           ? "Waiting for the Planner to confirm the programme update."
@@ -6680,7 +6714,7 @@ const PlannerProjectWorkspace = () => {
                     <Button
                       onClick={handleMarkCloseOutEligible}
                       disabled={
-                        user?.role !== "admin" ||
+                        roleHere !== "admin" ||
                         !uploadedProgramme?._id ||
                         !programmeUpdateConfirmed ||
                         markingCloseOut ||
@@ -8116,41 +8150,6 @@ const PlannerProjectWorkspace = () => {
                     </MenuItem>
                   </Select>
                 </Box>
-                <Box>
-                  <Typography
-                    sx={{
-                      color: COLORS.textSecondary,
-                      fontSize: "12px",
-                      fontWeight: 500,
-                      mb: 0.5,
-                    }}
-                  >
-                    Owner
-                  </Typography>
-                  {/* Padding, font size and line height match the Select
-                      beside it, so the two boxes are the same height. */}
-                  <Box
-                    sx={{
-                      bgcolor: COLORS.bgPrimary,
-                      borderRadius: "8px",
-                      border: `1px solid ${COLORS.border}`,
-                      px: 1.75,
-                      py: 1.2,
-                    }}
-                  >
-                    <Typography
-                      sx={{
-                        color: editingActionOwnerName
-                          ? COLORS.textPrimary
-                          : COLORS.textMuted,
-                        fontSize: "14px",
-                        lineHeight: "1.4375em",
-                      }}
-                    >
-                      {editingActionOwnerName || "Unassigned"}
-                    </Typography>
-                  </Box>
-                </Box>
               </Box>
 
               {/* Evidence / correspondence. Only meaningful for a PM Override,
@@ -8711,6 +8710,52 @@ const PlannerProjectWorkspace = () => {
                 }}
               />
             </Box>
+            <Box sx={{ mt: 2 }}>
+              <Typography
+                sx={{
+                  color: COLORS.textSecondary,
+                  fontSize: "12px",
+                  fontWeight: 500,
+                  mb: 0.5,
+                }}
+              >
+                Completion Date{" "}
+                <Box component="span" sx={{ color: COLORS.red }}>
+                  *
+                </Box>
+              </Typography>
+              <TextField
+                fullWidth
+                type="date"
+                value={completeDate}
+                onChange={(e) => setCompleteDate(e.target.value)}
+                slotProps={{
+                  htmlInput: { max: new Date().toLocaleDateString("en-CA") },
+                }}
+                sx={{
+                  "& .MuiOutlinedInput-root": {
+                    bgcolor: COLORS.bgPrimary,
+                    borderRadius: "8px",
+                    "& fieldset": { borderColor: COLORS.border },
+                    "&:hover fieldset": { borderColor: COLORS.border },
+                    "&.Mui-focused fieldset": {
+                      borderColor: COLORS.blue,
+                      borderWidth: 1,
+                    },
+                  },
+                  "& .MuiOutlinedInput-input": {
+                    color: completeDate ? COLORS.textPrimary : COLORS.textMuted,
+                    fontSize: "14px",
+                    py: 1.2,
+                    "&::-webkit-calendar-picker-indicator": {
+                      filter: "invert(1)",
+                      cursor: "pointer",
+                      opacity: 0.6,
+                    },
+                  },
+                }}
+              />
+            </Box>
           </DialogContent>
 
           <DialogActions
@@ -8742,7 +8787,11 @@ const PlannerProjectWorkspace = () => {
             </Button>
             <Button
               onClick={handleConfirmComplete}
-              disabled={completeLoading || completeNote.trim().length < 10}
+              disabled={
+                completeLoading ||
+                completeNote.trim().length < 10 ||
+                !completeDate
+              }
               sx={{
                 color: COLORS.white,
                 bgcolor: COLORS.green,
