@@ -43,6 +43,7 @@ import {
   actionAPI,
 } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
+import { canBeAssigned } from "../../utils/assignees";
 
 interface Action {
   _id: string;
@@ -265,7 +266,7 @@ const AdminActions = () => {
            accountable for closing it. */
         const activeUsers = (usersRes.users || []).filter(
           (user: User) =>
-            ["planner", "user"].includes(user.role) && user.status === "active",
+            canBeAssigned(user) && user.status === "active",
         );
         setUsers(activeUsers);
 

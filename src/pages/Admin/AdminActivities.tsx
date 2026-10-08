@@ -31,6 +31,7 @@ import {
   userAPI,
   actionAPI,
 } from "../../services/api";
+import { canBeAssigned } from "../../utils/assignees";
 
 interface Project {
   _id: string;
@@ -332,7 +333,7 @@ const AdminActivities = () => {
              who is accountable for closing it. */
           const assignable = (res.users || []).filter(
             (user: User) =>
-              ["planner", "user"].includes(user.role) &&
+              canBeAssigned(user) &&
               user.status === "active",
           );
           setUsers(assignable);

@@ -943,21 +943,25 @@ const ActivityRow = ({
                           e.stopPropagation();
                           onAddActionClick(activity);
                         }}
+                        /* Solid rather than tinted: this sits under a list
+                           of actions already raised, where a faint outline
+                           read as part of the list instead of the way to add
+                           to it. */
                         sx={{
-                          fontSize: "11px",
+                          fontSize: "12px",
                           fontWeight: 500,
-                          color: COLORS.blue,
+                          color: "#fff",
                           textTransform: "none",
-                          bgcolor: COLORS.blueBgLight,
-                          border: `1px solid ${COLORS.blue}30`,
+                          bgcolor: COLORS.blue,
                           borderRadius: "6px",
-                          px: 1.5,
-                          py: 0.3,
+                          px: 2,
+                          py: 0.6,
                           minWidth: "auto",
-                          "&:hover": { bgcolor: COLORS.blueBgMedium },
+                          boxShadow: "none",
+                          "&:hover": { bgcolor: COLORS.blueHover },
                         }}
                       >
-                        + Assign action
+                        + Assign another action
                       </Button>
                     )}
                 </Box>

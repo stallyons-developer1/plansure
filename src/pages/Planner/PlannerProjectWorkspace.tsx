@@ -46,6 +46,7 @@ import AdminActivitiesSummary from "../../components/AdminActivitiesSummary";
 import ActivitiesTable from "../../components/ActivitiesTable";
 import type { Activity } from "../../components/ActivitiesTable";
 import ActionDetailsDialog from "../../components/ActionDetailsDialog";
+import { canBeAssigned, type AssignableUser } from "../../utils/assignees";
 
 interface ProjectData {
   _id: string;
@@ -299,6 +300,12 @@ const PlannerProjectWorkspace = () => {
      here and only a User on the next project. */
   const canManageActions = roleHere === "admin" || roleHere === "planner";
 
+  /* Producing an export is the PM's and the Planner's work. Someone who only
+     watches this project keeps the history below — the SRS grants Users
+     read-only exports — but does not run one off. */
+  const canGenerateExports = canManageActions;
+
+
   const canPmOverride = roleHere === "admin";
 
   /* The open actions the PM may force-close. */
@@ -318,6 +325,12 @@ const PlannerProjectWorkspace = () => {
     return 1;
   });
   const [currentStep, setCurrentStep] = useState(0);
+  /* The role comes from the project, which arrives after the first render, so
+     the tab can be selected before it is known that it should not be offered.
+     Left selected it would render nothing at all. */
+  useEffect(() => {
+    if (!canGenerateExports && activeTab === 5) setActiveTab(0);
+  }, [canGenerateExports, activeTab]);
   const [meetingOpenLocal, setMeetingOpenLocal] = useState(false);
   const [closedWeekAck, setClosedWeekAck] = useState<number | null>(null);
   const [programmeAnchor, setProgrammeAnchor] = useState<string | null>(null);
@@ -738,11 +751,9 @@ const PlannerProjectWorkspace = () => {
         if (response.success) {
           // The signed-in planner stays in the list so they can assign an
           // action to themselves; the Admin workspace already allows this.
-          /* Planners run the work and Users own the actions handed to
-             them, so both belong here. Admins are left out on purpose. */
           const activeUsers = (response.users || []).filter(
-            (u: { _id: string; role: string; status: string }) =>
-              ["planner", "user"].includes(u.role) && u.status === "active",
+            (u: AssignableUser & { _id: string; status: string }) =>
+              u.status === "active" && canBeAssigned(u, projectId),
             //Exclude the signed-in planner
             // && u._id !== user?.id,
           );
@@ -753,7 +764,7 @@ const PlannerProjectWorkspace = () => {
       }
     };
     fetchUsers();
-  }, []);
+  }, [projectId]);
 
   const refetchProgramme = async () => {
     if (!projectId) return;
@@ -2562,7 +2573,9 @@ const PlannerProjectWorkspace = () => {
             <Tab label="Activities & Lookahead" value={2} />
             <Tab label="Actions" value={3} />
             <Tab label="Weekly Control" value={4} />
-            <Tab label="Closure & Export" value={5} />
+            {canGenerateExports && (
+              <Tab label="Closure & Export" value={5} />
+            )}
           </Tabs>
         </Box>
 
@@ -6753,296 +6766,324 @@ const PlannerProjectWorkspace = () => {
                   )}
                 </Box>
 
-                <Box
-                  sx={{
-                    display: "grid",
-                    gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
-                    gap: 3,
-                    mb: 3,
-                  }}
-                >
+                {canGenerateExports ? (
                   <Box
                     sx={{
-                      bgcolor: COLORS.bgSecondary,
-                      border: `1px solid ${COLORS.border}`,
-                      borderRadius: "12px",
-                      p: 3,
+                      display: "grid",
+                      gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
+                      gap: 3,
+                      mb: 3,
                     }}
                   >
                     <Box
                       sx={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        mb: 1,
+                        bgcolor: COLORS.bgSecondary,
+                        border: `1px solid ${COLORS.border}`,
+                        borderRadius: "12px",
+                        p: 3,
                       }}
                     >
-                      <Typography
-                        sx={{
-                          color: COLORS.textPrimary,
-                          fontSize: "14px",
-                          fontWeight: 600,
-                        }}
-                      >
-                        Weekly Plan
-                      </Typography>
                       <Box
                         sx={{
-                          bgcolor: exportGatingStatus.weeklyPlanGated
-                            ? "rgba(239, 68, 68, 0.15)"
-                            : weeklyActionStats.openRequired > 0
-                              ? "rgba(245, 158, 11, 0.15)"
-                              : "rgba(34, 197, 94, 0.15)",
-                          color: exportGatingStatus.weeklyPlanGated
-                            ? COLORS.red
-                            : weeklyActionStats.openRequired > 0
-                              ? COLORS.amber
-                              : COLORS.green,
-                          px: 1.5,
-                          height: 20,
-                          borderRadius: "10px",
-                          fontSize: "12px",
-                          fontWeight: 600,
-                          textAlign: "center",
                           display: "flex",
+                          justifyContent: "space-between",
                           alignItems: "center",
+                          mb: 1,
                         }}
                       >
-                        {exportGatingStatus.weeklyPlanGated
-                          ? "Gated"
-                          : weeklyActionStats.openRequired > 0
-                            ? "Pending"
-                            : "Ready"}
-                      </Box>
-                    </Box>
-                    <Typography
-                      sx={{
-                        color: COLORS.textSecondary,
-                        fontSize: "12px",
-                        mb: 0.5,
-                      }}
-                    >
-                      Actions + Activities (Completed/Blocked)
-                    </Typography>
-                    <Typography
-                      sx={{ color: COLORS.textMuted, fontSize: "12px", mb: 2 }}
-                    >
-                      {exportCounts.weeklyPlanTotal}{" "}
-                      {exportCounts.weeklyPlanTotal === 1 ? "item" : "items"} to
-                      export
-                    </Typography>
-                    <Tooltip
-                      title={
-                        exportGatingStatus.weeklyPlanGated
-                          ? `Not yet available — the current cycle is in ${exportGatingStatus.cycleStatus}.`
-                          : weeklyActionStats.openRequired > 0
-                            ? `${weeklyActionStats.openRequired} required action(s) pending. Complete all required actions to download Weekly Plan.`
-                            : exportCounts.weeklyPlanTotal === 0
-                              ? "No items to export"
-                              : ""
-                      }
-                      placement="top"
-                      arrow
-                      slotProps={{
-                        tooltip: {
-                          sx: {
-                            bgcolor: COLORS.bgSecondary,
-                            color: COLORS.textPrimary,
-                            border: `1px solid ${COLORS.border}`,
-                            fontSize: "12px",
-                            maxWidth: 300,
-                            p: 1,
-                          },
-                        },
-                        arrow: { sx: { color: COLORS.bgSecondary } },
-                      }}
-                    >
-                      <span style={{ width: "100%" }}>
-                        <Button
-                          fullWidth
-                          onClick={handleExportWeeklyPlan}
-                          disabled={
-                            isExporting === "weekly" ||
-                            exportCounts.weeklyPlanTotal === 0 ||
-                            exportGatingStatus.weeklyPlanGated ||
-                            weeklyActionStats.openRequired > 0
-                          }
-                          startIcon={
-                            isExporting === "weekly" ? (
-                              <CircularProgress
-                                size={14}
-                                sx={{ color: "inherit" }}
-                              />
-                            ) : null
-                          }
+                        <Typography
                           sx={{
-                            bgcolor:
+                            color: COLORS.textPrimary,
+                            fontSize: "14px",
+                            fontWeight: 600,
+                          }}
+                        >
+                          Weekly Plan
+                        </Typography>
+                        <Box
+                          sx={{
+                            bgcolor: exportGatingStatus.weeklyPlanGated
+                              ? "rgba(239, 68, 68, 0.15)"
+                              : weeklyActionStats.openRequired > 0
+                                ? "rgba(245, 158, 11, 0.15)"
+                                : "rgba(34, 197, 94, 0.15)",
+                            color: exportGatingStatus.weeklyPlanGated
+                              ? COLORS.red
+                              : weeklyActionStats.openRequired > 0
+                                ? COLORS.amber
+                                : COLORS.green,
+                            px: 1.5,
+                            height: 20,
+                            borderRadius: "10px",
+                            fontSize: "12px",
+                            fontWeight: 600,
+                            textAlign: "center",
+                            display: "flex",
+                            alignItems: "center",
+                          }}
+                        >
+                          {exportGatingStatus.weeklyPlanGated
+                            ? "Gated"
+                            : weeklyActionStats.openRequired > 0
+                              ? "Pending"
+                              : "Ready"}
+                        </Box>
+                      </Box>
+                      <Typography
+                        sx={{
+                          color: COLORS.textSecondary,
+                          fontSize: "12px",
+                          mb: 0.5,
+                        }}
+                      >
+                        Actions + Activities (Completed/Blocked)
+                      </Typography>
+                      <Typography
+                        sx={{
+                          color: COLORS.textMuted,
+                          fontSize: "12px",
+                          mb: 2,
+                        }}
+                      >
+                        {exportCounts.weeklyPlanTotal}{" "}
+                        {exportCounts.weeklyPlanTotal === 1 ? "item" : "items"}{" "}
+                        to export
+                      </Typography>
+                      <Tooltip
+                        title={
+                          exportGatingStatus.weeklyPlanGated
+                            ? `Not yet available — the current cycle is in ${exportGatingStatus.cycleStatus}.`
+                            : weeklyActionStats.openRequired > 0
+                              ? `${weeklyActionStats.openRequired} required action(s) pending. Complete all required actions to download Weekly Plan.`
+                              : exportCounts.weeklyPlanTotal === 0
+                                ? "No items to export"
+                                : ""
+                        }
+                        placement="top"
+                        arrow
+                        slotProps={{
+                          tooltip: {
+                            sx: {
+                              bgcolor: COLORS.bgSecondary,
+                              color: COLORS.textPrimary,
+                              border: `1px solid ${COLORS.border}`,
+                              fontSize: "12px",
+                              maxWidth: 300,
+                              p: 1,
+                            },
+                          },
+                          arrow: { sx: { color: COLORS.bgSecondary } },
+                        }}
+                      >
+                        <span style={{ width: "100%" }}>
+                          <Button
+                            fullWidth
+                            onClick={handleExportWeeklyPlan}
+                            disabled={
+                              isExporting === "weekly" ||
+                              exportCounts.weeklyPlanTotal === 0 ||
                               exportGatingStatus.weeklyPlanGated ||
                               weeklyActionStats.openRequired > 0
-                                ? COLORS.disabledBlue
-                                : COLORS.green,
-                            color: "#fff",
-                            textTransform: "none",
-                            py: 1.25,
-                            borderRadius: "8px",
-                            fontSize: "13px",
-                            fontWeight: 500,
-                            "&:hover": {
+                            }
+                            startIcon={
+                              isExporting === "weekly" ? (
+                                <CircularProgress
+                                  size={14}
+                                  sx={{ color: "inherit" }}
+                                />
+                              ) : null
+                            }
+                            sx={{
                               bgcolor:
                                 exportGatingStatus.weeklyPlanGated ||
                                 weeklyActionStats.openRequired > 0
                                   ? COLORS.disabledBlue
-                                  : "#16a34a",
-                            },
-                            "&:disabled": {
-                              bgcolor: COLORS.disabledBlue,
+                                  : COLORS.green,
                               color: "#fff",
-                            },
+                              textTransform: "none",
+                              py: 1.25,
+                              borderRadius: "8px",
+                              fontSize: "13px",
+                              fontWeight: 500,
+                              "&:hover": {
+                                bgcolor:
+                                  exportGatingStatus.weeklyPlanGated ||
+                                  weeklyActionStats.openRequired > 0
+                                    ? COLORS.disabledBlue
+                                    : "#16a34a",
+                              },
+                              "&:disabled": {
+                                bgcolor: COLORS.disabledBlue,
+                                color: "#fff",
+                              },
+                            }}
+                          >
+                            {isExporting === "weekly"
+                              ? "Exporting..."
+                              : "Download Weekly Plan"}
+                          </Button>
+                        </span>
+                      </Tooltip>
+                    </Box>
+
+                    <Box
+                      sx={{
+                        bgcolor: COLORS.bgSecondary,
+                        border: `1px solid ${COLORS.border}`,
+                        borderRadius: "12px",
+                        p: 3,
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          mb: 1,
+                        }}
+                      >
+                        <Typography
+                          sx={{
+                            color: COLORS.textPrimary,
+                            fontSize: "14px",
+                            fontWeight: 600,
                           }}
                         >
-                          {isExporting === "weekly"
-                            ? "Exporting..."
-                            : "Download Weekly Plan"}
-                        </Button>
-                      </span>
-                    </Tooltip>
+                          Planner To-Do
+                        </Typography>
+                        <Box
+                          sx={{
+                            bgcolor: exportGatingStatus.todoGated
+                              ? "rgba(239, 68, 68, 0.15)"
+                              : "rgba(34, 197, 94, 0.15)",
+                            color: exportGatingStatus.todoGated
+                              ? COLORS.red
+                              : COLORS.green,
+                            px: 1.5,
+                            height: 20,
+                            borderRadius: "10px",
+                            fontSize: "12px",
+                            fontWeight: 600,
+                            textAlign: "center",
+                            display: "flex",
+                            alignItems: "center",
+                          }}
+                        >
+                          {exportGatingStatus.todoGated ? "Gated" : "Ready"}
+                        </Box>
+                      </Box>
+                      <Typography
+                        sx={{
+                          color: COLORS.textSecondary,
+                          fontSize: "12px",
+                          mb: 0.5,
+                        }}
+                      >
+                        Closure narratives and any outstanding follow-on items.
+                      </Typography>
+                      <Typography
+                        sx={{
+                          color: COLORS.textMuted,
+                          fontSize: "12px",
+                          mb: 2,
+                        }}
+                      >
+                        {exportCounts.outstandingActions +
+                          exportCounts.completedActions}{" "}
+                        {exportCounts.outstandingActions +
+                          exportCounts.completedActions ===
+                        1
+                          ? "action"
+                          : "actions"}{" "}
+                        · {exportCounts.outstandingActions} outstanding
+                      </Typography>
+                      <Tooltip
+                        title={
+                          exportGatingStatus.todoGated
+                            ? `Not yet available — the current cycle is in ${exportGatingStatus.cycleStatus}.`
+                            : ""
+                        }
+                        placement="top"
+                        arrow
+                        slotProps={{
+                          tooltip: {
+                            sx: {
+                              bgcolor: COLORS.bgSecondary,
+                              color: COLORS.textPrimary,
+                              border: `1px solid ${COLORS.border}`,
+                              fontSize: "12px",
+                              maxWidth: 300,
+                              p: 1,
+                            },
+                          },
+                          arrow: { sx: { color: COLORS.bgSecondary } },
+                        }}
+                      >
+                        <span style={{ width: "100%" }}>
+                          <Button
+                            fullWidth
+                            onClick={handleExportPlannerTodo}
+                            disabled={
+                              isExporting === "todo" ||
+                              exportGatingStatus.todoGated ||
+                              weeklyActionStats.openRequired > 0
+                            }
+                            startIcon={
+                              isExporting === "todo" ? (
+                                <CircularProgress
+                                  size={14}
+                                  sx={{ color: "inherit" }}
+                                />
+                              ) : null
+                            }
+                            sx={{
+                              bgcolor: exportGatingStatus.todoGated
+                                ? COLORS.disabledBlue
+                                : COLORS.blue,
+                              color: "#fff",
+                              textTransform: "none",
+                              py: 1.25,
+                              borderRadius: "8px",
+                              fontSize: "13px",
+                              fontWeight: 500,
+                              "&:hover": {
+                                bgcolor: exportGatingStatus.todoGated
+                                  ? COLORS.disabledBlue
+                                  : "#2563eb",
+                              },
+                              "&:disabled": {
+                                bgcolor: COLORS.disabledBlue,
+                                color: "#fff",
+                              },
+                            }}
+                          >
+                            {isExporting === "todo"
+                              ? "Exporting..."
+                              : "Download Planner To-Do"}
+                          </Button>
+                        </span>
+                      </Tooltip>
+                    </Box>
                   </Box>
-
+                ) : (
                   <Box
                     sx={{
                       bgcolor: COLORS.bgSecondary,
                       border: `1px solid ${COLORS.border}`,
                       borderRadius: "12px",
                       p: 3,
+                      mb: 3,
                     }}
                   >
-                    <Box
-                      sx={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        mb: 1,
-                      }}
-                    >
-                      <Typography
-                        sx={{
-                          color: COLORS.textPrimary,
-                          fontSize: "14px",
-                          fontWeight: 600,
-                        }}
-                      >
-                        Planner To-Do
-                      </Typography>
-                      <Box
-                        sx={{
-                          bgcolor: exportGatingStatus.todoGated
-                            ? "rgba(239, 68, 68, 0.15)"
-                            : "rgba(34, 197, 94, 0.15)",
-                          color: exportGatingStatus.todoGated
-                            ? COLORS.red
-                            : COLORS.green,
-                          px: 1.5,
-                          height: 20,
-                          borderRadius: "10px",
-                          fontSize: "12px",
-                          fontWeight: 600,
-                          textAlign: "center",
-                          display: "flex",
-                          alignItems: "center",
-                        }}
-                      >
-                        {exportGatingStatus.todoGated ? "Gated" : "Ready"}
-                      </Box>
-                    </Box>
                     <Typography
-                      sx={{
-                        color: COLORS.textSecondary,
-                        fontSize: "12px",
-                        mb: 0.5,
-                      }}
+                      sx={{ color: COLORS.textSecondary, fontSize: "14px" }}
                     >
-                      Closure narratives and any outstanding follow-on items.
+                      Exports on this project are produced by its PM and
+                      Planner. You can download the ones already generated
+                      below.
                     </Typography>
-                    <Typography
-                      sx={{ color: COLORS.textMuted, fontSize: "12px", mb: 2 }}
-                    >
-                      {exportCounts.outstandingActions +
-                        exportCounts.completedActions}{" "}
-                      {exportCounts.outstandingActions +
-                        exportCounts.completedActions ===
-                      1
-                        ? "action"
-                        : "actions"}{" "}
-                      · {exportCounts.outstandingActions} outstanding
-                    </Typography>
-                    <Tooltip
-                      title={
-                        exportGatingStatus.todoGated
-                          ? `Not yet available — the current cycle is in ${exportGatingStatus.cycleStatus}.`
-                          : ""
-                      }
-                      placement="top"
-                      arrow
-                      slotProps={{
-                        tooltip: {
-                          sx: {
-                            bgcolor: COLORS.bgSecondary,
-                            color: COLORS.textPrimary,
-                            border: `1px solid ${COLORS.border}`,
-                            fontSize: "12px",
-                            maxWidth: 300,
-                            p: 1,
-                          },
-                        },
-                        arrow: { sx: { color: COLORS.bgSecondary } },
-                      }}
-                    >
-                      <span style={{ width: "100%" }}>
-                        <Button
-                          fullWidth
-                          onClick={handleExportPlannerTodo}
-                          disabled={
-                            isExporting === "todo" ||
-                            exportGatingStatus.todoGated ||
-                            weeklyActionStats.openRequired > 0
-                          }
-                          startIcon={
-                            isExporting === "todo" ? (
-                              <CircularProgress
-                                size={14}
-                                sx={{ color: "inherit" }}
-                              />
-                            ) : null
-                          }
-                          sx={{
-                            bgcolor: exportGatingStatus.todoGated
-                              ? COLORS.disabledBlue
-                              : COLORS.blue,
-                            color: "#fff",
-                            textTransform: "none",
-                            py: 1.25,
-                            borderRadius: "8px",
-                            fontSize: "13px",
-                            fontWeight: 500,
-                            "&:hover": {
-                              bgcolor: exportGatingStatus.todoGated
-                                ? COLORS.disabledBlue
-                                : "#2563eb",
-                            },
-                            "&:disabled": {
-                              bgcolor: COLORS.disabledBlue,
-                              color: "#fff",
-                            },
-                          }}
-                        >
-                          {isExporting === "todo"
-                            ? "Exporting..."
-                            : "Download Planner To-Do"}
-                        </Button>
-                      </span>
-                    </Tooltip>
                   </Box>
-                </Box>
+                )}
 
                 {(exportGatingStatus.todoGated ||
                   exportGatingStatus.weeklyPlanGated) && (
@@ -9402,8 +9443,9 @@ const PlannerProjectWorkspace = () => {
                 </Box>
               </Box>
 
-              {/* Status | Owner row. Owner is the activity's accountable
-                  person and is shown read-only. */}
+              {/* Status, at half width. The activity's owner used to sit
+                  beside it — Rob: "I think the assignee is everything we
+                  need", and an action carries an assignee of its own. */}
               <Box
                 sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}
               >
@@ -9468,38 +9510,6 @@ const PlannerProjectWorkspace = () => {
                     <MenuItem value="Open">Open</MenuItem>
                     <MenuItem value="In Progress">In Progress</MenuItem>
                   </Select>
-                </Box>
-                <Box>
-                  <Typography
-                    sx={{
-                      color: COLORS.textSecondary,
-                      fontSize: "12px",
-                      fontWeight: 500,
-                      mb: 0.5,
-                    }}
-                  >
-                    Owner
-                  </Typography>
-                  <Box
-                    sx={{
-                      bgcolor: COLORS.bgPrimary,
-                      borderRadius: "8px",
-                      border: `1px solid ${COLORS.border}`,
-                      px: 1.5,
-                      py: 1,
-                    }}
-                  >
-                    <Typography
-                      sx={{
-                        color: assigningActivity?.ownerName
-                          ? COLORS.textPrimary
-                          : COLORS.textMuted,
-                        fontSize: "13px",
-                      }}
-                    >
-                      {assigningActivity?.ownerName || "Unassigned"}
-                    </Typography>
-                  </Box>
                 </Box>
               </Box>
             </Box>

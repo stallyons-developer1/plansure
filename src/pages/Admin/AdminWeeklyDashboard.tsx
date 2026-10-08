@@ -32,6 +32,7 @@ import {
 } from "../../services/api";
 import BlockedActivitiesTable from "../../components/BlockedActivitiesTable";
 import ClosureOverridePanel from "../../components/ClosureOverridePanel";
+import { canBeAssigned } from "../../utils/assignees";
 import {
   BarChart,
   Bar,
@@ -848,7 +849,7 @@ const AdminWeeklyDashboard = () => {
         if (response.success) {
           const activeUsers = (response.users || []).filter(
             (user: { role: string; status: string }) =>
-              ["planner", "user"].includes(user.role) &&
+              canBeAssigned(user) &&
               user.status === "active",
           );
           setTeamMembers(activeUsers);
@@ -867,7 +868,7 @@ const AdminWeeklyDashboard = () => {
         if (response.success) {
           const plannerUsers = (response.users || []).filter(
             (user: { role: string; status: string }) =>
-              ["planner", "user"].includes(user.role) &&
+              canBeAssigned(user) &&
               user.status === "active",
           );
           setUsers(plannerUsers);

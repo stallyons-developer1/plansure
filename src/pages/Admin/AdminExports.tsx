@@ -26,6 +26,9 @@ interface Project {
   name: string;
   phase: string;
   status: string;
+  /* The role held on this project, which is not the same everywhere: the same
+     account can run one and only watch another. */
+  myRole?: string;
 }
 
 interface ExportHistoryItem {
@@ -60,6 +63,14 @@ interface WeeklyActionStats {
 const AdminExports = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
+
+  /* Producing an export is the PM's and the Planner's work. Somebody who only
+     watches this project may still download what has already been produced —
+     the SRS grants Users read-only exports — but not run one off. Judged per
+     project, because the account's own role is the highest it holds anywhere
+     and says nothing about this one. */
+  const roleHere = projects.find((p) => p._id === selectedProjectId)?.myRole;
+  const canGenerate = roleHere === "admin" || roleHere === "planner";
   const [programmeId, setProgrammeId] = useState<string>("");
   const [loadingProjects, setLoadingProjects] = useState(true);
 
@@ -591,7 +602,8 @@ const AdminExports = () => {
             </Box>
           </Box>
 
-          {/* Export Cards */}
+          {/* Export Cards, for whoever may produce one here. */}
+          {canGenerate ? (
           <Box
             sx={{
               display: "grid",
@@ -1013,6 +1025,24 @@ const AdminExports = () => {
               </Button>
             </Box>
           </Box>
+          ) : (
+            <Box
+              sx={{
+                bgcolor: COLORS.bgSecondary,
+                border: `1px solid ${COLORS.border}`,
+                borderRadius: "12px",
+                p: 3,
+                mb: 3,
+              }}
+            >
+              <Typography
+                sx={{ color: COLORS.textSecondary, fontSize: "14px" }}
+              >
+                Exports on this project are produced by its PM and Planner. You
+                can download the ones already generated below.
+              </Typography>
+            </Box>
+          )}
 
           {/* Export History */}
           <Box

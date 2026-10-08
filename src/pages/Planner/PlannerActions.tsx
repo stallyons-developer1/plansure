@@ -41,6 +41,7 @@ import {
   actionAPI,
 } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
+import { canBeAssigned } from "../../utils/assignees";
 
 interface Action {
   _id: string;
@@ -262,7 +263,7 @@ const PlannerActions = () => {
              them, so both belong here. Admins are left out on purpose. */
           const activeUsers = (usersRes.users || []).filter(
             (u: User) =>
-              ["planner", "user"].includes(u.role) && u.status === "active",
+              canBeAssigned(u) && u.status === "active",
           );
           setUsers(activeUsers);
         } catch (userError) {}

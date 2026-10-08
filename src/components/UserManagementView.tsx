@@ -31,7 +31,12 @@ import { useAuth } from "../context/AuthContext";
 
 type Membership = { project: string; role: string };
 
+/* The ladder, strongest first. Nobody hands out a rung above their own. Super
+   Admin is not a place on a project — it reaches every one of them — so it is
+   offered only where a whole account is being created, and choosing it puts
+   the per-project rows aside. */
 const ROLE_CHOICES: { value: string; label: string; level: number }[] = [
+  { value: "SuperAdmin", label: "Super Admin", level: 4 },
   { value: "admin", label: "PM", level: 3 },
   { value: "planner", label: "Planner", level: 2 },
   { value: "user", label: "User", level: 1 },
@@ -43,19 +48,78 @@ const ROLE_CHOICES: { value: string; label: string; level: number }[] = [
  * from the other rows' choices so it cannot be granted twice with two
  * different roles.
  */
+/*
+ * The menu for every dropdown here.
+ *
+ * Capped at three rows because a project list grows without limit and an
+ * uncapped menu runs past the bottom of the modal. The background is set
+ * outright — the default paper is translucent over a dark surface, so the form
+ * behind it showed through the options.
+ */
+const MENU_ROW = 40;
+const selectMenuProps = {
+  slotProps: {
+    paper: {
+      sx: {
+        maxHeight: MENU_ROW * 3 + 8,
+        bgcolor: COLORS.bgSecondary,
+        backgroundImage: "none",
+        border: `1px solid ${COLORS.border}`,
+        "& .MuiMenuItem-root": {
+          color: COLORS.textPrimary,
+          fontSize: "14px",
+          minHeight: MENU_ROW,
+          "&:hover": { bgcolor: COLORS.bgTertiary },
+          "&.Mui-selected": {
+            bgcolor: COLORS.bgTertiary,
+            "&:hover": { bgcolor: COLORS.bgTertiary },
+          },
+        },
+      },
+    },
+  },
+};
+
 const MembershipRows = ({
   projects,
   value,
   onChange,
   maxLevel,
+  allowSuperAdmin = false,
 }: {
-  projects: { _id: string; name: string }[];
+  projects: { _id: string; name: string; myRole?: string }[];
   value: Membership[];
   onChange: (next: Membership[]) => void;
+  /* The ceiling for an account that reaches every project regardless of what
+     it is placed on — an owner. Everyone else is judged project by project. */
   maxLevel: number;
+  /* Editing an account changes its places; it does not make it an owner. That
+     is a decision taken when the account is created. */
+  allowSuperAdmin?: boolean;
 }) => {
   const taken = new Set(value.map((m) => m.project));
-  const roles = ROLE_CHOICES.filter((r) => r.level <= maxLevel);
+
+  /*
+   * Nobody hands out more than they hold, and what they hold is not the same
+   * everywhere: a PM on one project may only be a User on the next, and there
+   * they can pass on nothing but User. So the choices come from the role held
+   * on the project the row names, not from the account's own role, which is
+   * only the strongest it holds anywhere.
+   */
+  const offered = ROLE_CHOICES.filter(
+    (r) => r.value !== "SuperAdmin" || (allowSuperAdmin && maxLevel >= 4),
+  );
+
+  const rolesFor = (projectId: string) => {
+    if (maxLevel >= 4) return offered;
+    /* Before a project is named there is no role to read, and an empty
+       dropdown reads as broken. The account's own level stands in until the
+       project is chosen, at which point the choice is clamped to it. */
+    if (!projectId) return offered.filter((r) => r.level <= maxLevel);
+    const here = projects.find((p) => p._id === projectId)?.myRole;
+    const ceiling = ROLE_CHOICES.find((r) => r.value === here)?.level ?? 0;
+    return offered.filter((r) => r.level <= ceiling);
+  };
 
   const fieldSx = {
     bgcolor: COLORS.bgPrimary,
@@ -76,10 +140,22 @@ const MembershipRows = ({
           <Select
             size="small"
             displayEmpty
+            disabled={row.role === "SuperAdmin"}
+            MenuProps={selectMenuProps}
             value={row.project}
             onChange={(e) => {
+              const project = String(e.target.value);
+              const allowed = rolesFor(project);
               const next = [...value];
-              next[i] = { ...row, project: String(e.target.value) };
+              /* A role carried over from the project chosen before may be more
+                 than can be granted on this one. */
+              next[i] = {
+                ...row,
+                project,
+                role: allowed.some((r) => r.value === row.role)
+                  ? row.role
+                  : allowed[allowed.length - 1]?.value || "user",
+              };
               onChange(next);
             }}
             sx={{ ...fieldSx, flex: 2 }}
@@ -98,6 +174,7 @@ const MembershipRows = ({
 
           <Select
             size="small"
+            MenuProps={selectMenuProps}
             value={row.role}
             onChange={(e) => {
               const next = [...value];
@@ -106,7 +183,7 @@ const MembershipRows = ({
             }}
             sx={{ ...fieldSx, flex: 1 }}
           >
-            {roles.map((r) => (
+            {rolesFor(row.project).map((r) => (
               <MenuItem key={r.value} value={r.value}>
                 {r.label}
               </MenuItem>
@@ -140,7 +217,7 @@ const MembershipRows = ({
           "&.Mui-disabled": { color: COLORS.textMuted },
         }}
       >
-        Add project
+        Assign a Project
       </Button>
     </Box>
   );
@@ -198,6 +275,31 @@ const statusColors: Record<string, { bg: string; color: string; dot: string }> =
     },
   };
 
+/* Named in place. Four values stacked in a card read as a list of unexplained
+   words; what matters is which project is held at which role, and whether its
+   invitation has been taken up. */
+const Field = ({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) => (
+  <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+    <Typography
+      sx={{
+        color: COLORS.textMuted,
+        fontSize: "13px",
+        minWidth: 62,
+        flexShrink: 0,
+      }}
+    >
+      {label}
+    </Typography>
+    {children}
+  </Box>
+);
+
 const getAvatarStyle = (role: string) => {
   switch (role) {
     case "admin":
@@ -233,9 +335,10 @@ const UserManagementView = ({
   const [inviteLoading, setInviteLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [projectFilter, setProjectFilter] = useState("");
-  const [projects, setProjects] = useState<{ _id: string; name: string }[]>([]);
+  const [projects, setProjects] = useState<
+    { _id: string; name: string; myRole?: string }[]
+  >([]);
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
-  const [selectedRole, setSelectedRole] = useState("");
   const [inviteName, setInviteName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   /* Projects granted at invite time. Only offered for the User role — the
@@ -292,17 +395,26 @@ const UserManagementView = ({
     setInviteModalOpen(false);
     setInviteName("");
     setInviteEmail("");
-    setSelectedRole("");
     setInviteMemberships([]);
     setInviteError("");
   };
 
-  const handleSendInvite = async () => {
-    const asSuperAdmin = selectedRole === "SuperAdmin";
-    const rows = inviteMemberships.filter((m) => m.project);
+  /* The submit refused an incomplete form by quietly doing nothing, which
+     reads as a broken button. The same test now holds the button instead. */
+  const inviteIsComplete =
+    inviteName.trim() !== "" &&
+    inviteEmail.trim() !== "" &&
+    (inviteMemberships.some((m) => m.role === "SuperAdmin") ||
+      inviteMemberships.some((m) => m.project));
 
-    /* Either an owner, who holds no per-project rows, or at least one project
-       with a role on it. There is nothing else left to say. */
+  const handleSendInvite = async () => {
+    /* An owner reaches every project, so the rows beside it say nothing and
+       are dropped. Picking it anywhere makes the whole invitation an owner's. */
+    const asSuperAdmin = inviteMemberships.some((m) => m.role === "SuperAdmin");
+    const rows = asSuperAdmin ? [] : inviteMemberships.filter((m) => m.project);
+
+    /* Either an owner, or at least one project with a role on it — an account
+       is what its projects make it, and there is nothing else to say here. */
     if (!inviteName || !inviteEmail || (!asSuperAdmin && rows.length === 0)) {
       return;
     }
@@ -849,7 +961,11 @@ const UserManagementView = ({
                 slotProps: {
                   paper: {
                     sx: {
+                      /* Three rows then scroll — the project list grows without
+                         limit and an uncapped menu runs off the page. */
+                      maxHeight: MENU_ROW * 3 + 8,
                       bgcolor: COLORS.bgSecondary,
+                      backgroundImage: "none",
                       border: `1px solid ${COLORS.border}`,
                       borderRadius: "8px",
                       mt: 0.5,
@@ -1072,7 +1188,6 @@ const UserManagementView = ({
                     {user.email}
                   </Typography>
 
-
                   <Typography
                     sx={{
                       color: COLORS.textSecondary,
@@ -1291,60 +1406,6 @@ const UserManagementView = ({
             />
           </Box>
 
-          {/* A single role across the account no longer decides anything —
-              the role is held per project in the rows below. Only the owner
-              flag is left to choose, and only an owner may grant it. */}
-          {myLevel >= 4 && (
-            <Box
-              onClick={() =>
-                setSelectedRole(
-                  selectedRole === "SuperAdmin" ? "" : "SuperAdmin",
-                )
-              }
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: 2,
-                p: 2,
-                mt: 2,
-                bgcolor: COLORS.bgPrimary,
-                border: `1px solid ${
-                  selectedRole === "SuperAdmin" ? COLORS.blue : COLORS.white
-                }`,
-                borderRadius: "8px",
-                cursor: "pointer",
-                transition: "border-color 0.2s ease",
-                "&:hover": {
-                  borderColor:
-                    selectedRole === "SuperAdmin"
-                      ? COLORS.blue
-                      : COLORS.textMuted,
-                },
-              }}
-            >
-              <Box
-                sx={{
-                  bgcolor: "rgba(239, 68, 68, 0.15)",
-                  color: "#ef4444",
-                  px: 1,
-                  py: 0.5,
-                  borderRadius: "4px",
-                  fontSize: "12px",
-                  fontWeight: 600,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                Super Admin
-              </Box>
-              <Typography
-                sx={{ color: COLORS.textSecondary, fontSize: "13px", flex: 1 }}
-              >
-                Everything a PM can do, across every project, and manages the
-                other admin accounts. Grants no per-project roles.
-              </Typography>
-            </Box>
-          )}
-
           {/* Kept while the per-project model settles.
 
           <Box>
@@ -1554,34 +1615,32 @@ const UserManagementView = ({
           </Box>
           */}
 
-          {/* An owner reaches every project, so there is nothing per-project
-              to set for one. Everyone else gets a row per project. */}
-          {selectedRole !== "SuperAdmin" && (
-            <Box sx={{ mt: 2 }}>
-              <Typography
-                sx={{
-                  color: COLORS.border,
-                  fontSize: "12px",
-                  fontWeight: 500,
-                  mb: 0.5,
-                }}
-              >
-                Project Access
-              </Typography>
-              <MembershipRows
-                projects={projects}
-                value={inviteMemberships}
-                onChange={setInviteMemberships}
-                maxLevel={myLevel}
-              />
-              <Typography
-                sx={{ color: COLORS.textMuted, fontSize: "12px", mt: 0.5 }}
-              >
-                Optional — a project and the role held on it. Add a row per
-                project.
-              </Typography>
-            </Box>
-          )}
+          <Box sx={{ mt: 2 }}>
+            <Typography
+              sx={{
+                color: COLORS.border,
+                fontSize: "12px",
+                fontWeight: 500,
+                mb: 0.5,
+              }}
+            >
+              Project Access
+            </Typography>
+            <MembershipRows
+              projects={projects}
+              value={inviteMemberships}
+              onChange={setInviteMemberships}
+              maxLevel={myLevel}
+              allowSuperAdmin
+            />
+            <Typography
+              sx={{ color: COLORS.textMuted, fontSize: "12px", mt: 0.5 }}
+            >
+              {inviteMemberships.some((m) => m.role === "SuperAdmin")
+                ? "A Super Admin reaches every project, so no project is named here."
+                : "At least one project is required. Add a row per project — each carries its own role."}
+            </Typography>
+          </Box>
         </DialogContent>
         <DialogActions
           sx={{
@@ -1612,7 +1671,7 @@ const UserManagementView = ({
           </Button>
           <Button
             onClick={handleSendInvite}
-            disabled={inviteLoading}
+            disabled={inviteLoading || !inviteIsComplete}
             sx={{
               color: COLORS.white,
               bgcolor: COLORS.blue,
@@ -1627,7 +1686,8 @@ const UserManagementView = ({
               },
               "&.Mui-disabled": {
                 bgcolor: COLORS.blue,
-                opacity: 0.7,
+                color: COLORS.white,
+                opacity: 0.4,
               },
             }}
           >
@@ -2155,7 +2215,7 @@ const UserManagementView = ({
       <Dialog
         open={viewingUser !== null}
         onClose={closeViewingUser}
-        maxWidth="xs"
+        maxWidth="sm"
         fullWidth
         slotProps={{
           backdrop: { sx: { bgcolor: "rgba(0, 0, 0, 0.8)" } },
@@ -2208,8 +2268,8 @@ const UserManagementView = ({
             <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
               {viewingUser.memberships.map((m) => {
                 const state = m.status === "pending" ? "pending" : "active";
-                const busy =
-                  resendingUserId === `${viewingUser._id}:${m.role}`;
+                const busy = resendingUserId === `${viewingUser._id}:${m.role}`;
+
                 return (
                   <Box
                     key={`${m.project}:${m.role}`}
@@ -2221,43 +2281,59 @@ const UserManagementView = ({
                       py: 1.25,
                       display: "flex",
                       flexDirection: "column",
-                      gap: 1,
+                      gap: 0.25,
                     }}
                   >
+                    {/* Project and role on one line, the role against the
+                        right edge where the eye goes to compare one row with
+                        the next. */}
                     <Box
                       sx={{
                         display: "flex",
                         justifyContent: "space-between",
                         alignItems: "center",
-                        gap: 1,
+                        gap: 2,
                       }}
                     >
-                      <Typography
-                        sx={{ color: COLORS.textPrimary, fontSize: "14px" }}
-                      >
-                        {m.projectName || "Project"}
-                      </Typography>
+                      <Field label="Project:">
+                        <Typography
+                          sx={{ color: COLORS.textPrimary, fontSize: "14px" }}
+                        >
+                          {m.projectName || "Project"}
+                        </Typography>
+                      </Field>
+
                       <Box
                         sx={{
-                          bgcolor:
-                            roleColors[m.role]?.bg ||
-                            "rgba(107, 114, 128, 0.15)",
-                          color: roleColors[m.role]?.color || "#6b7280",
-                          px: 2,
-                          py: 0.5,
-                          borderRadius: "20px",
-                          fontSize: "12px",
-                          fontWeight: 500,
-                          whiteSpace: "nowrap",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 1.5,
                         }}
                       >
-                        {formatRole(m.role)}
+                        <Typography
+                          sx={{ color: COLORS.textMuted, fontSize: "13px" }}
+                        >
+                          Role:
+                        </Typography>
+                        <Box
+                          sx={{
+                            bgcolor:
+                              roleColors[m.role]?.bg ||
+                              "rgba(107, 114, 128, 0.15)",
+                            color: roleColors[m.role]?.color || "#6b7280",
+                            px: 2,
+                            py: 0.25,
+                            borderRadius: "20px",
+                            fontSize: "12px",
+                            fontWeight: 500,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {formatRole(m.role)}
+                        </Box>
                       </Box>
                     </Box>
 
-                    {/* Each project is invited for on its own, so each says
-                        where its own invitation got to — and only the ones
-                        still waiting offer to send it again. */}
                     <Box
                       sx={{
                         display: "flex",
@@ -2267,70 +2343,114 @@ const UserManagementView = ({
                         minHeight: 30,
                       }}
                     >
-                      <Box
-                        sx={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 0.75,
-                        }}
-                      >
+                      <Field label="Status:">
                         <Box
                           sx={{
-                            width: 7,
-                            height: 7,
-                            borderRadius: "50%",
-                            bgcolor: statusColors[state].dot,
-                          }}
-                        />
-                        <Typography
-                          sx={{
-                            color: statusColors[state].color,
-                            fontSize: "12px",
-                            fontWeight: 500,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 0.75,
                           }}
                         >
-                          {formatStatus(state)}
-                        </Typography>
-                      </Box>
+                          <Box
+                            sx={{
+                              width: 7,
+                              height: 7,
+                              borderRadius: "50%",
+                              bgcolor: statusColors[state].dot,
+                            }}
+                          />
+                          <Typography
+                            sx={{
+                              color: statusColors[state].color,
+                              fontSize: "13px",
+                              fontWeight: 500,
+                            }}
+                          >
+                            {formatStatus(state)}
+                          </Typography>
+                        </Box>
+                      </Field>
 
-                      {state === "pending" && (
-                        <Button
-                          onClick={() => {
-                            if (blockedReason(viewingUser)) return;
-                            handleResendInvite(viewingUser._id, m.role);
-                          }}
-                          disabled={busy || blockedReason(viewingUser) !== null}
-                          startIcon={
-                            busy ? undefined : (
-                              <SendIcon sx={{ fontSize: 15 }} />
-                            )
-                          }
-                          title={blockedReason(viewingUser) || "Resend Invite"}
-                          sx={{
-                            color: COLORS.blue,
-                            textTransform: "none",
-                            fontSize: "12px",
-                            fontWeight: 500,
-                            minWidth: 0,
-                            px: 1,
-                            py: 0.25,
-                            "&:hover": { bgcolor: "rgba(59, 130, 246, 0.08)" },
-                            "&.Mui-disabled": {
-                              color: COLORS.blue,
-                              opacity: 0.4,
-                            },
-                          }}
+                      {/* Only an invitation still waiting can be sent again. */}
+                      {/* Paired with Role above, so each side of the card
+                          carries two lines rather than leaving a hole beside
+                          an accepted row. */}
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 1.5,
+                        }}
+                      >
+                        <Typography
+                          sx={{ color: COLORS.textMuted, fontSize: "13px" }}
                         >
-                          {busy ? (
-                            <CircularProgress
-                              size={14}
-                              sx={{ color: COLORS.blue }}
-                            />
-                          ) : (
-                            "Resend"
-                          )}
-                        </Button>
-                      )}
+                          Invite:
+                        </Typography>
+                        {state === "active" ? (
+                          <Typography
+                            sx={{
+                              color: COLORS.textSecondary,
+                              fontSize: "13px",
+                            }}
+                          >
+                            Accepted
+                          </Typography>
+                        ) : (
+                          /* Icon and label both stay put while it sends; the
+                             spinner follows the text. A button whose contents
+                             swap mid-click reads as a different button. */
+                          <Button
+                            onClick={() => {
+                              if (blockedReason(viewingUser)) return;
+                              handleResendInvite(viewingUser._id, m.role);
+                            }}
+                            disabled={
+                              busy || blockedReason(viewingUser) !== null
+                            }
+                            startIcon={<SendIcon sx={{ fontSize: 15 }} />}
+                            endIcon={
+                              busy ? (
+                                <CircularProgress
+                                  size={14}
+                                  sx={{ color: COLORS.blue }}
+                                />
+                              ) : undefined
+                            }
+                            title={
+                              blockedReason(viewingUser) || "Resend Invite"
+                            }
+                            sx={{
+                              color: COLORS.blue,
+                              textTransform: "none",
+                              fontSize: "12px",
+                              fontWeight: 500,
+                              minWidth: 0,
+                              /* Pulled back by its own padding so the icon
+                                 starts where the badge does on the line above;
+                                 the button's padding and the row's gap were
+                                 stacking into a hole after the label. */
+                              px: 0.5,
+                              ml: -0.5,
+                              py: 0.25,
+                              "& .MuiButton-startIcon": {
+                                marginRight: "6px",
+                                marginLeft: 0,
+                              },
+                              "& .MuiButton-endIcon": { marginLeft: "6px" },
+                              "&:hover": {
+                                bgcolor: "rgba(59, 130, 246, 0.08)",
+                              },
+                              "&.Mui-disabled": {
+                                color: COLORS.blue,
+                                opacity: 0.4,
+                              },
+                            }}
+                          >
+                            Resend
+                          </Button>
+                        )}
+                      </Box>
                     </Box>
                   </Box>
                 );
